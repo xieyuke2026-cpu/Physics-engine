@@ -59,7 +59,7 @@ check('boot: state is paused', stState().includes('已暂停'), stState());
 check('boot: scene panel visible', doc.getElementById('panelBody').textContent.includes('场景属性'));
 check('boot: toolbar icons rendered (svg)', doc.querySelectorAll('#topbar svg').length >= 8,
   `svgs=${doc.querySelectorAll('#topbar svg').length}`);
-check('boot: 9 tool buttons with svg icons', doc.querySelectorAll('#toolrail .tool-btn svg').length === 9,
+check('boot: 10 tool buttons with svg icons', doc.querySelectorAll('#toolrail .tool-btn svg').length === 10,
   `svgs=${doc.querySelectorAll('.tool-btn svg').length}`);
 check('renderer is drawing frames', drawCalls > 50, `drawCalls=${drawCalls}`);
 
@@ -123,6 +123,16 @@ window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Delete', bubble
 await wait(400);
 check('delete key: count back to 9', stCount().includes('9'), stCount());
 
+/* --- v1.9: blast tool --- */
+click(doc.querySelector('[data-tool="blast"]'));
+check('v1.9: blast hint explains the tool', doc.getElementById('stageHint').textContent.includes('冲击波'));
+pointer(canvas, 'pointerdown', 620, 300);
+pointer(canvas, 'pointerup', 620, 300);
+await wait(80);
+check('v1.9: blast reports pushed bodies in toast', doc.getElementById('toast').textContent.includes('冲击波推开了'),
+  doc.getElementById('toast').textContent);
+click(doc.querySelector('[data-tool="select"]'));
+
 // scenes modal renders list
 click(doc.getElementById('btnScenes'));
 await wait(60);
@@ -130,7 +140,7 @@ check('scenes modal lists saved scene', doc.getElementById('sceneList').textCont
 
 /* --- v1.1/v1.6: presets (cards with overview thumbnails since 1.6) --- */
 const presetBtns = doc.querySelectorAll('#presetList .preset-card');
-check('v1.6: ten preset cards rendered', presetBtns.length === 10, `got ${presetBtns.length}`);
+check('v1.9: twelve preset cards rendered', presetBtns.length === 12, `got ${presetBtns.length}`);
 check('v1.6: preset cards carry overview thumbnails', !!presetBtns[0].querySelector('canvas.thumb'));
 click(presetBtns[0].querySelector('.mini-btn')); // Newton's cradle (auto-runs)
 await wait(500);

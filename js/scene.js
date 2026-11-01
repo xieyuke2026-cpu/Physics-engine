@@ -370,5 +370,45 @@ export function presetScenes() {
     out.push({ key: 'funnel', name: '漏斗沙漏', scene: sceneData({ name: '漏斗沙漏 Funnel', bodies }) });
   }
 
+  // Loop coaster — a ball dives in and (with enough speed) loops the loop.
+  {
+    const bodies = frameBodies();
+    // entry ramp (high on the left, descending to the right)
+    bodies.push(bodyData({ type: 'rectangle', x: 262, y: 196, width: 400, height: 14, angle: 0.34, isStatic: true, friction: 0.05, label: 'Entry Ramp' }));
+    // loop: 12 static chords forming a ring the ball rides inside
+    const cx = 745, cy = 356, R = 128;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      bodies.push(bodyData({
+        type: 'rectangle', x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R,
+        width: 74, height: 12, angle: a + Math.PI / 2, isStatic: true, friction: 0.05, label: 'Loop Track',
+      }));
+    }
+    // exit ramp (descending to the right wall)
+    bodies.push(bodyData({ type: 'rectangle', x: 1035, y: 430, width: 330, height: 14, angle: 0.16, isStatic: true, friction: 0.05, label: 'Exit Ramp' }));
+    bodies.push(bodyData({ type: 'circle', x: 105, y: 92, radius: 17, friction: 0.02, frictionAir: 0.001, restitution: 0.1, density: 0.002, label: 'Coaster Ball' }));
+    out.push({ key: 'coaster', name: '过山车回环', scene: sceneData({ name: '过山车回环 Loop Coaster', bodies }) });
+  }
+
+  // Bowling — one heavy ball vs a pyramid cluster of six triangle pins.
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ type: 'circle', x: 210, y: GROUND_TOP - 26, radius: 26, density: 0.006, friction: 0.08, restitution: 0.1, vx: 10.5, label: 'Bowling Ball' }));
+    const pinRows = [
+      { y: GROUND_TOP - 21, xs: [950, 995, 1040] },
+      { y: GROUND_TOP - 62, xs: [972, 1017] },
+      { y: GROUND_TOP - 103, xs: [995] },
+    ];
+    for (const row of pinRows) {
+      for (const x of row.xs) {
+        bodies.push(bodyData({
+          type: 'polygon', x, y: row.y, sides: 3, radius: 24,
+          density: 0.0008, friction: 0.3, restitution: 0.2, label: 'Pin',
+        }));
+      }
+    }
+    out.push({ key: 'bowling', name: '保龄球', scene: sceneData({ name: '保龄球 Bowling', bodies }) });
+  }
+
   return out;
 }

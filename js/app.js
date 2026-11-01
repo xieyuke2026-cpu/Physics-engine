@@ -294,6 +294,7 @@ function hintFor(t) {
     triangle: '点按或拖拽确定大小，创建三角形',
     line: '拖拽画出静态线段（斜坡），松手创建',
     spring: springStart ? '再点第二个物体（或空白处作为固定锚点）完成弹簧' : '先点一个物体作为弹簧起点（点空白 = 固定锚点）',
+    blast: '在画布上点按，产生一圈冲击波，把附近的物体推开',
     delete: '点按物体删除 · 点按弹簧线可删除弹簧',
   };
   $('stageHint').textContent = hints[t] || '';
@@ -305,6 +306,27 @@ function setTool(t) {
   hintFor(t);
   canvas.style.cursor = t === 'move' ? 'grab' : t === 'delete' ? 'not-allowed' : 'crosshair';
   if (t === 'select') canvas.style.cursor = 'default';
+}
+
+/* ---------------- blast tool （冲击波） ---------------- */
+const BLAST_RADIUS = 280;
+let blastFx = null; // {x, y, radius, startedAt} — renderer draws the expanding ring
+function applyBlast(w) {
+  let hit = 0;
+  for (const b of world.allBodies()) {
+    if (b.isStatic || world.isBound(b)) continue;
+    const dx = b.position.x - w.x, dy = b.position.y - w.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > BLAST_RADIUS) continue;
+    const falloff = 1 - dist / BLAST_RADIUS;
+    const mag = 2 + 13 * falloff;
+    const ux = dist > 1 ? dx / dist : 0, uy = dist > 1 ? dy / dist : -1;
+    world.setVelocity(b, b.velocity.x + ux * mag, b.velocity.y + uy * mag);
+    hit++;
+  }
+  blastFx = { x: w.x, y: w.y, radius: BLAST_RADIUS, startedAt: performance.now() };
+  if (hit) toast(`冲击波推开了 ${hit} 个物体`);
+  scheduleAutosave();
 }
 
 /** Two-tap spring placement: body->body, body->world anchor, or world anchor->body. */
@@ -370,6 +392,7 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   if (tool === 'spring') { handleSpringTap(w); return; }
+  if (tool === 'blast') { applyBlast(w); return; }
   if (tool === 'delete') {
     // springs first: tapping near a spring line removes the spring, not a body
     const seg = pickSpring(w.x, w.y);
@@ -1176,7 +1199,11 @@ function loop(now) {
     preview,
     dragPoint,
     springPreview: anchor && springCur ? { a: anchor, b: springCur } : null,
+    blast: blastFx && (now - blastFx.startedAt) < 400
+      ? { x: blastFx.x, y: blastFx.y, radius: blastFx.radius, age: (now - blastFx.startedAt) / 1000 }
+      : null,
   });
+  if (blastFx && now - blastFx.startedAt >= 400) blastFx = null;
 }
 
 /* ---------------- landing (first visit) ---------------- */

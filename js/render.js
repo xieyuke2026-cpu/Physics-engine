@@ -32,6 +32,7 @@ export class Renderer {
     this.view = { w: 0, h: 0 };
     this.trails = new Map();   // dataId -> [{x,y}...] recent centre positions
     this._segs = [];           // reusable constraint-segment buffer (no per-frame alloc)
+    this._alive = new Set();   // reusable set for trail bookkeeping
   }
 
   clearTrails() { this.trails.clear(); }
@@ -45,7 +46,7 @@ export class Renderer {
 
   draw(world, opts) {
     const { ctx, view, camera } = this;
-    const { selectedId = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null } = opts;
+    const { selectedId = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null } = opts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = '#fafafa';
     ctx.fillRect(0, 0, view.w, view.h);
@@ -56,17 +57,28 @@ export class Renderer {
     ctx.translate(-camera.x, -camera.y);
     ctx.lineJoin = 'round';
 
-    if (showTrails) this._trails(world);
+    // fetch the body list ONCE per frame (allBodies() copies; trails/vectors reuse it)
+    const bodies = world.allBodies();
+    if (showTrails) this._trails(world, bodies);
     else if (this.trails.size) this.trails.clear();
     for (const seg of world.constraintSegments(this._segs)) this._spring(seg);
     // viewport culling: skip bodies fully outside the visible world rect
     const tl = camera.screenToWorld(0, 0, view);
     const br = camera.screenToWorld(view.w, view.h, view);
     const pad = 40;
-    for (const body of world.allBodies()) {
+    for (const body of bodies) {
       const b = body.bounds;
       if (b.max.x < tl.x - pad || b.min.x > br.x + pad || b.max.y < tl.y - pad || b.min.y > br.y + pad) continue;
       this._body(body, world, selectedId);
+    }
+    if (blast) {
+      // expanding shockwave ring (blast.age in seconds, drawn for ~0.35s)
+      const t = Math.min(1, blast.age / 0.35);
+      ctx.beginPath();
+      ctx.arc(blast.x, blast.y, 20 + t * blast.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(47,109,179,${(1 - t) * 0.55})`;
+      ctx.lineWidth = 2.5 / camera.zoom;
+      ctx.stroke();
     }
     if (springPreview) {
       ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 1.3 / camera.zoom;
@@ -76,7 +88,7 @@ export class Renderer {
       ctx.beginPath(); ctx.arc(springPreview.a.x, springPreview.a.y, 4 / camera.zoom, 0, Math.PI * 2);
       ctx.fillStyle = COLORS.accent; ctx.fill();
     }
-    if (showVectors) for (const body of world.allBodies()) this._vector(body);
+    if (showVectors) for (const body of bodies) this._vector(body);
     if (dragPoint && world.dragging) {
       ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 1.2 / camera.zoom;
       ctx.setLineDash([5 / camera.zoom, 4 / camera.zoom]);
@@ -92,25 +104,28 @@ export class Renderer {
     const tl = camera.screenToWorld(0, 0, view);
     const br = camera.screenToWorld(view.w, view.h, view);
     const minor = 25, major = 100;
+    // arithmetic projection inline — no per-line object allocation
+    const sx = (wx) => (wx - camera.x) * camera.zoom + view.w / 2;
+    const sy = (wy) => (wy - camera.y) * camera.zoom + view.h / 2;
     const drawSet = (step, style, width) => {
       ctx.strokeStyle = style; ctx.lineWidth = width;
       ctx.beginPath();
       for (let x = Math.floor(tl.x / step) * step; x <= br.x; x += step) {
-        const s = camera.worldToScreen(x, 0, view); ctx.moveTo(s.x, 0); ctx.lineTo(s.x, view.h);
+        const px = sx(x); ctx.moveTo(px, 0); ctx.lineTo(px, view.h);
       }
       for (let y = Math.floor(tl.y / step) * step; y <= br.y; y += step) {
-        const s = camera.worldToScreen(0, y, view); ctx.moveTo(0, s.y); ctx.lineTo(view.w, s.y);
+        const py = sy(y); ctx.moveTo(0, py); ctx.lineTo(view.w, py);
       }
       ctx.stroke();
     };
     if (camera.zoom > 0.45) drawSet(minor, '#efeff1', 1);
     drawSet(major, '#e0e0e4', 1);
     // origin axes
-    const o = camera.worldToScreen(0, 0, view);
+    const ox = sx(0), oy = sy(0);
     ctx.strokeStyle = '#c9dcee'; ctx.lineWidth = 1;
     ctx.beginPath();
-    if (o.y >= 0 && o.y <= view.h) { ctx.moveTo(0, o.y); ctx.lineTo(view.w, o.y); }
-    if (o.x >= 0 && o.x <= view.w) { ctx.moveTo(o.x, 0); ctx.lineTo(o.x, view.h); }
+    if (oy >= 0 && oy <= view.h) { ctx.moveTo(0, oy); ctx.lineTo(view.w, oy); }
+    if (ox >= 0 && ox <= view.w) { ctx.moveTo(ox, 0); ctx.lineTo(ox, view.h); }
     ctx.stroke();
   }
 
@@ -182,11 +197,12 @@ export class Renderer {
     ctx.beginPath(); ctx.arc(b.x, b.y, 2.4 / Math.sqrt(camera.zoom), 0, Math.PI * 2); ctx.fill();
   }
 
-  _trails(world) {
+  _trails(world, bodies) {
     const { ctx } = this;
-    const alive = new Set();
-    for (const body of world.allBodies()) {
-      if (body.isStatic) continue;
+    const alive = this._alive;
+    alive.clear();
+    for (const body of bodies) {
+      if (body.isStatic || body.isSleeping) { if (!body.isStatic) alive.add(world.dataIdOf(body)); continue; }
       const id = world.dataIdOf(body);
       alive.add(id);
       let tr = this.trails.get(id);

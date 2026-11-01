@@ -187,7 +187,7 @@ check('stop motion zeroes velocity', lk.velocity.x === 0 && lk.velocity.y === 0 
 
 /* --- v1.1/v1.6: presets --- */
 const presets = presetScenes();
-check('ten presets exist', presets.length === 10, `got ${presets.length}`);
+check('twelve presets exist', presets.length === 12, `got ${presets.length}`);
 for (const p of presets) {
   check(`preset ${p.key} validates`, validateScene(JSON.parse(JSON.stringify(p.scene))).ok);
 }
