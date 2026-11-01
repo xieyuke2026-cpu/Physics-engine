@@ -586,8 +586,10 @@ async function checkForUpdate() {
     const v = await r.json();
     if (v && typeof v.app === 'string' && v.app !== APP_VERSION && v.app !== updateDismissedFor) {
       updateAvailable = v.app;
+      const bar = $('updateBar');
+      if (!bar) return;
       $('updateText').textContent = `发现新版本 MotionLab ${v.app}（当前 ${APP_VERSION}）`;
-      $('updateBar').hidden = false;
+      bar.hidden = false;
     }
   } catch { /* offline or local preview: stay silent */ }
 }
@@ -1066,9 +1068,14 @@ function openSettings() {
 }
 $('btnSettings').addEventListener('click', openSettings);
 $('btnNavSettings').addEventListener('click', openSettings);
-  $('btnSidePF').addEventListener('click', () => enterPFLab());
-  $('btnUpdateReload').addEventListener('click', () => location.reload());
-  $('btnUpdateDismiss').addEventListener('click', () => {
+  // Guards: if a browser cache mix ever pairs this script with older markup,
+  // missing optional buttons must not abort the rest of the chrome setup.
+  const sidePF = $('btnSidePF');
+  if (sidePF) sidePF.addEventListener('click', () => enterPFLab());
+  const btnReload = $('btnUpdateReload');
+  if (btnReload) btnReload.addEventListener('click', () => location.reload());
+  const btnDismiss = $('btnUpdateDismiss');
+  if (btnDismiss) btnDismiss.addEventListener('click', () => {
     updateDismissedFor = updateAvailable;
     $('updateBar').hidden = true;
   });
