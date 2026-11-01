@@ -562,11 +562,12 @@ function openSceneNav() {
 function closeSceneNav() { $('sceneNav').hidden = true; }
 
 /* ---------------- PFLab (platform fighter module) ----------------
-   Single entry point: the standalone PFLab button in the top toolbar.
-   Exiting returns to the lab underneath (nothing else to restore). */
+   Single entry point: the PFLab button in the home hub's sidebar
+   (the main interface). Entering closes the hub; exiting returns to it. */
 let pfLab = null;
 function enterPFLab() {
-  if (!pfLab) pfLab = new PFLab(() => {});
+  closeSceneNav();
+  if (!pfLab) pfLab = new PFLab(() => openSceneNav());
   pfLab.enter();
 }
 
@@ -1065,7 +1066,7 @@ function openSettings() {
 }
 $('btnSettings').addEventListener('click', openSettings);
 $('btnNavSettings').addEventListener('click', openSettings);
-  $('btnPFLab').addEventListener('click', () => enterPFLab());
+  $('btnSidePF').addEventListener('click', () => enterPFLab());
   $('btnUpdateReload').addEventListener('click', () => location.reload());
   $('btnUpdateDismiss').addEventListener('click', () => {
     updateDismissedFor = updateAvailable;

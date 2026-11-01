@@ -46,13 +46,12 @@ try {
   await sleep(120);
 
   check('boot: hub visible, PFLab hidden', !$('sceneNav').hidden && $('pfLab').hidden);
-  check('entry migrated: standalone topbar button, hub card gone', !!$('btnPFLab') && !$('btnEnterPF'));
+  check('entry in the hub sidebar, topbar button gone', !!$('btnSidePF') && !$('btnPFLab') && !$('btnEnterPF'));
 
-  // Enter from the standalone topbar button (close the hub first).
-  $('btnCloseNav').click();
-  $('btnPFLab').click();
+  // Enter from the sidebar button on the main interface (the hub).
+  $('btnSidePF').click();
   await sleep(80);
-  check('enter from topbar: overlay visible, hub closed', !$('pfLab').hidden && $('sceneNav').hidden);
+  check('enter from sidebar: overlay visible, hub closed', !$('pfLab').hidden && $('sceneNav').hidden);
   check('debug panel populated', $('pfDbgPState').textContent !== '—' && $('pfDbgFps').textContent.includes('step'),
     `pstate=${$('pfDbgPState').textContent} fps=${$('pfDbgFps').textContent}`);
 
@@ -67,20 +66,20 @@ try {
   await sleep(30);
   check('restart: still in PFLab, result hidden', !$('pfLab').hidden && $('pfResult').hidden);
 
-  // Exit returns to the lab (the hub is not reopened).
+  // Exit returns to the main interface (the hub).
   $('btnPFBack').click();
   await sleep(30);
-  check('exit: back at the lab, hub stays closed', $('pfLab').hidden && $('sceneNav').hidden);
+  check('exit: back at the hub', $('pfLab').hidden && !$('sceneNav').hidden);
 
   // Repeated enter/exit cycles must not accumulate errors or stuck state.
   let cyclesOk = true;
   for (let i = 0; i < 3; i++) {
-    $('btnPFLab').click();
+    $('btnSidePF').click();
     await sleep(40);
     if ($('pfLab').hidden) cyclesOk = false;
     $('btnPFBack').click();
     await sleep(20);
-    if (!$('pfLab').hidden) cyclesOk = false;
+    if (!$('pfLab').hidden || $('sceneNav').hidden) cyclesOk = false;
   }
   check('repeated enter/exit x3: clean', cyclesOk);
 
