@@ -244,3 +244,14 @@ svg{display:block}
 /* ---------- Toast ---------- */
 #toast{position:fixed;left:50%;bottom:46px;transform:translateX(-50%);background:#22242
 ...[truncated 1293 chars]
+/* ---------- Developer docs (home hub) ---------- */
+.docs{background:#fff;border:1px solid var(--border);border-radius:8px;padding:18px 20px;font-size:13.5px;line-height:1.75;color:#26282c;max-width:860px}
+.docs p{margin:0 0 10px}
+.docs h4{font-size:14px;margin:18px 0 6px;color:#17181a}
+.docs h4:first-of-type{margin-top:8px}
+.docs ul{margin:0 0 6px;padding-left:20px}
+.docs li{margin:4px 0}
+.docs a{color:var(--accent);text-decoration:none}
+.docs a:hover{text-decoration:underline}
+.docs code{font-family:var(--mono);font-size:12px;background:#f1f2f4;border:1px solid #e3e4e8;border-radius:4px;padding:0 4px}
+.docs pre{font-family:var(--mono);font-size:12px;line-height:1.6;background:#f7f7f8;border:1px solid var(--border);border-radius:6px;padding:12px 14px;overflow-x:auto;margin:8px 0 12px;white-space:pre}

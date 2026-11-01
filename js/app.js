@@ -560,16 +560,17 @@ function openSceneNav() {
 }
 function closeSceneNav() { $('sceneNav').hidden = true; }
 
-const NAV_TITLES = { overview: '我的项目', library: '场景库', presets: '实验预设' };
+const NAV_TITLES = { overview: '我的项目', library: '场景库', presets: '实验预设', docs: '开发者文档' };
 function setNavView(view) {
   navView = view;
   document.querySelectorAll('.side-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $('navSectionCurrent').hidden = view !== 'overview';
-  $('navSectionSaved').hidden = view === 'presets';
-  $('navSectionSaved3D').hidden = view === 'presets';
-  $('navSectionPresets').hidden = view === 'library';
-  $('navSectionPresets3D').hidden = view === 'library';
-  $('navToolbar').style.display = view === 'presets' ? 'none' : '';
+  $('navSectionSaved').hidden = view === 'presets' || view === 'docs';
+  $('navSectionSaved3D').hidden = view === 'presets' || view === 'docs';
+  $('navSectionPresets').hidden = view === 'library' || view === 'docs';
+  $('navSectionPresets3D').hidden = view === 'library' || view === 'docs';
+  $('navSectionDocs').hidden = view !== 'docs';
+  $('navToolbar').style.display = view === 'presets' || view === 'docs' ? 'none' : '';
   $('navTitle').textContent = NAV_TITLES[view] || '我的项目';
 }
 
@@ -1008,7 +1009,7 @@ $('btnDuplicateScene').addEventListener('click', () => {
 });
 
 /* ---------------- settings modal ---------------- */
-$('btnSettings').addEventListener('click', () => {
+function openSettings() {
   renderSettings($('settingsBody'), settings, {
     onUISetting(key, value) {
       settings[key] = value;
@@ -1030,7 +1031,9 @@ $('btnSettings').addEventListener('click', () => {
     },
   });
   openModal('modalSettings');
-});
+}
+$('btnSettings').addEventListener('click', openSettings);
+$('btnNavSettings').addEventListener('click', openSettings);
 
 /* ---------------- toolbar wiring ---------------- */
 function initChrome() {
@@ -1046,6 +1049,7 @@ function initChrome() {
   $('btnPause').innerHTML = icon('pause'); $('btnReset').innerHTML = icon('reset');
   $('btnStep').innerHTML = icon('step'); $('btnShot').innerHTML = icon('camera');
   $('btnSettings').innerHTML = icon('settings'); $('btnPanel').innerHTML = icon('panel');
+  $('btnNavSettings').innerHTML = `${icon('settings', 16)} 设置`;
   $('btnSave').innerHTML = `${icon('save', 17)} 保存`;
   $('btnExport').innerHTML = icon('export'); $('btnImport').innerHTML = icon('import');
   $('btnScenes').innerHTML = `${icon('folder', 17)} 我的项目`;

@@ -45,7 +45,7 @@ await wait(300);
 
 /* --- v1.5: hub is the home page, with a sidebar --- */
 check('home: hub is shown on boot (return visit)', !doc.getElementById('sceneNav').hidden);
-check('home: sidebar has three views', doc.querySelectorAll('.side-item').length === 3);
+check('home: sidebar has four views', doc.querySelectorAll('.side-item').length === 4);
 const viewBtn = (v) => doc.querySelector(`.side-item[data-view="${v}"]`);
 click(viewBtn('presets'));
 await wait(60);
@@ -62,6 +62,34 @@ await wait(60);
 check('sidebar: overview shows everything again',
   !doc.getElementById('navSectionSaved').hidden && !doc.getElementById('navSectionPresets').hidden
   && !doc.getElementById('navSectionCurrent').hidden);
+
+/* --- v1.12: developer docs view + settings reachable from the hub --- */
+click(viewBtn('docs'));
+await wait(60);
+check('docs: view shows the docs section and hides the scene sections',
+  !doc.getElementById('navSectionDocs').hidden && doc.getElementById('navSectionSaved').hidden
+  && doc.getElementById('navSectionPresets').hidden && doc.getElementById('navSectionCurrent').hidden);
+check('docs: view hides the search toolbar and retitles the page',
+  doc.getElementById('navToolbar').style.display === 'none'
+  && doc.getElementById('navTitle').textContent === '开发者文档');
+check('docs: content covers download + engine usage',
+  doc.getElementById('navSectionDocs').textContent.includes('如何下载')
+  && doc.getElementById('navSectionDocs').textContent.includes('PhysicsEngine')
+  && doc.getElementById('navSectionDocs').textContent.includes('addBody'));
+check('v1.12: settings button uses a gear icon, not the old sun',
+  doc.getElementById('btnSettings').innerHTML.includes('M19.4'));
+const navSettingsBtn = doc.getElementById('btnNavSettings');
+check('v1.12: hub has a labelled settings entry', !!navSettingsBtn && navSettingsBtn.textContent.includes('设置'));
+click(navSettingsBtn);
+await wait(60);
+check('v1.12: hub settings entry opens the settings modal',
+  !doc.getElementById('modalSettings').hidden
+  && doc.getElementById('settingsBody').textContent.includes('重置数据'));
+click(doc.querySelector('#modalSettings [data-close]'));
+await wait(60);
+check('v1.12: settings modal closes again', doc.getElementById('modalSettings').hidden);
+click(viewBtn('overview'));
+await wait(60);
 click(doc.getElementById('btnCloseNav'));
 await wait(60);
 check('home: 进入实验室 closes the hub', doc.getElementById('sceneNav').hidden);
