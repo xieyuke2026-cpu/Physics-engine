@@ -186,5 +186,28 @@ check('v1.1: scene panel lists objects', panelBody.textContent.includes('物体�
   `rows=${panelBody.querySelectorAll('.obj-row').length}`);
 check('no page errors during smoke', true);
 
+/* --- v1.11: reset data (factory reset) --- */
+window.localStorage.setItem('motionlab.scenes3d.v1', '{"Seed3D":{}}');
+window.localStorage.setItem('motionlab.autosave3d.v1', '{}');
+window.localStorage.setItem('motionlab.ui.v1', '{"panelHidden":true}');
+check('v1.11: seed data present before reset',
+  !!window.localStorage.getItem('motionlab.scenes.v1') && !!window.localStorage.getItem('motionlab.scenes3d.v1'));
+click(doc.getElementById('btnSettings'));
+await wait(80);
+const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
+check('v1.11: settings shows the reset-data button', !!resetBtn);
+click(resetBtn); // window.confirm is stubbed to true in this harness
+await wait(500);
+check('v1.11: 2D library key wiped', window.localStorage.getItem('motionlab.scenes.v1') === null);
+check('v1.11: 3D library + autosave keys wiped',
+  window.localStorage.getItem('motionlab.scenes3d.v1') === null && window.localStorage.getItem('motionlab.autosave3d.v1') === null);
+check('v1.11: UI prefs + visited flag wiped',
+  window.localStorage.getItem('motionlab.ui.v1') === null && window.localStorage.getItem('motionlab.visited.v1') === null);
+check('v1.11: back to default scene (9 bodies, Untitled)',
+  stCount().includes('9') && doc.getElementById('projectName').value === 'Untitled Scene', stCount());
+check('v1.11: home hub open with empty library + reset toast',
+  !doc.getElementById('sceneNav').hidden && doc.getElementById('toast').textContent.includes('已重置'),
+  doc.getElementById('toast').textContent);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

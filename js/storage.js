@@ -120,3 +120,11 @@ export function saveVisited() {
   try { localStorage.setItem(KEY_VISITED, '1'); } catch { /* private mode: landing reappears, harmless */ }
 }
 export function clearVisited() { try { localStorage.removeItem(KEY_VISITED); } catch {} }
+
+/** Factory reset: remove EVERY MotionLab key (2D + 3D libraries, both
+ *  autosaves, UI prefs, visited flag) so the next boot is a true first run. */
+export function resetAllData() {
+  for (const key of [KEY_SCENES, KEY_AUTO, KEY_SCENES_3D, KEY_AUTO_3D, KEY_UI, KEY_VISITED]) {
+    try { localStorage.removeItem(key); } catch {}
+  }
+}

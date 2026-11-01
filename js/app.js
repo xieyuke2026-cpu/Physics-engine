@@ -9,7 +9,7 @@ import { PhysicsEngine } from './engine/physics-engine.js';
 import { Renderer } from './render.js';
 import { Panel, renderSettings } from './ui.js';
 import * as store from './storage.js';
-import { presetScenes3D } from './scene3d.js';
+import { presetScenes3D, defaultScene3D } from './scene3d.js';
 import { initLab3D, setLab3DActive, lab3DLoadScene, lab3DCurrentName, lab3DRename } from './lab3d.js';
 
 /* Feature flags.
@@ -1016,17 +1016,17 @@ $('btnSettings').addEventListener('click', () => {
     },
     onShowLanding() { closeModal('modalSettings'); showLanding(); },
     onClearAll() {
-      if (!confirm('清除 MotionLab 的全部本地数据（场景库、自动保存、设置）？')) return;
-      try {
-        localStorage.removeItem('motionlab.scenes.v1');
-        localStorage.removeItem('motionlab.autosave.v1');
-        localStorage.removeItem('motionlab.ui.v1');
-        store.clearVisited();
-      } catch {}
+      if (!confirm('重置 MotionLab 的全部数据？\n将删除场景库（含 3D）、自动保存、设置与偏好，恢复到第一次打开的状态。此操作不可撤销。')) return;
+      // Reset the (hidden) 3D lab's in-memory scene FIRST, so nothing it
+      // persists afterwards can resurrect pre-reset 3D data.
+      lab3DLoadScene(defaultScene3D());
+      store.resetAllData();
       closeModal('modalSettings');
       setRunning(false);
-      loadScene(defaultScene()); resetHistory();
-      toast('本地数据已清除');
+      loadScene(defaultScene()); // also restores default settings from the scene
+      resetHistory();
+      openSceneNav(); // home hub now shows the empty, first-run library
+      toast('已重置：全部数据恢复初始');
     },
   });
   openModal('modalSettings');
