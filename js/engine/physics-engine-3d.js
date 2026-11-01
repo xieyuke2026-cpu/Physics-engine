@@ -32,7 +32,13 @@ function vec3(v, fb = { x: 0, y: 0, z: 0 }) {
   return { x: num(v && v.x, fb.x), y: num(v && v.y, fb.y), z: num(v && v.z, fb.z) };
 }
 
+/** PhysicsEngine3D core version — the single source of truth for the 3D core. */
+export const VERSION = '1.0.0';
+
 export class PhysicsEngine3D {
+  /** Core version; same value as the module-level VERSION export. */
+  static get VERSION() { return VERSION; }
+
   constructor(opts = {}) {
     const C = cannon();
     this.C = C;

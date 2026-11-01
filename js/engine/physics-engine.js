@@ -28,6 +28,10 @@
    Matter.js must be available as a global `Matter` (script tag) or injected:
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
+
+   Version: 1.1.0 (exported as VERSION / PhysicsEngine.VERSION)
+     1.0.0 — extracted from MotionLab as a project-agnostic core
+     1.1.0 — substeps anti-tunnelling (setSubsteps)
    ========================================================================== */
 
 let _M = null;
@@ -47,7 +51,13 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
+/** PhysicsEngine core version — the single source of truth for the core. */
+export const VERSION = '1.1.0';
+
 export class PhysicsEngine {
+  /** Core version; same value as the module-level VERSION export. */
+  static get VERSION() { return VERSION; }
+
   /** Inject the Matter.js module explicitly (optional; global fallback works). */
   static setMatter(m) { _M = m; }
 

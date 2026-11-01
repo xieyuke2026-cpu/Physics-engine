@@ -3,6 +3,10 @@
    (position / velocity while simulating) are patched in place. */
 
 import { icon } from './icons.js';
+import { VERSION as ENGINE_VERSION } from './engine/physics-engine.js';
+
+/** MotionLab app version — the single source of truth for the app version. */
+export const APP_VERSION = '1.13';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -264,7 +268,8 @@ export function renderSettings(root, ui, cb) {
   clear.addEventListener('click', () => cb.onClearAll());
   wrap.appendChild(clear);
   wrap.appendChild(title('关于'));
-  wrap.appendChild(el('<p class="empty-note">MotionLab 1.12 · 通用 physics-engine 核心 · Matter.js 0.19 · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。</p>'));
+  const matterVersion = (typeof window !== 'undefined' && window.Matter && window.Matter.version) || '0.19.0';
+  wrap.appendChild(el(`<p class="empty-note">MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。</p>`));
   root.appendChild(wrap);
   root.querySelectorAll('input[type=checkbox][data-key]').forEach((inp) => {
     inp.addEventListener('change', () => cb.onUISetting(inp.dataset.key, inp.checked));

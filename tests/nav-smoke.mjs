@@ -88,6 +88,17 @@ check('v1.12: hub settings entry opens the settings modal',
 click(doc.querySelector('#modalSettings [data-close]'));
 await wait(60);
 check('v1.12: settings modal closes again', doc.getElementById('modalSettings').hidden);
+
+/* --- v1.13: the settings modal must stack ABOVE the home hub --- */
+const cssText = fs.readFileSync(new URL('../css/style.css', import.meta.url), 'utf8');
+const zOf = (sel) => {
+  const m = cssText.match(new RegExp(sel.replace(/[.#]/g, '\\$&') + '\\{[^}]*z-index:(\\d+)'));
+  return m ? Number(m[1]) : NaN;
+};
+check('v1.13: modal backdrop z-index exceeds the home hub (settings opens on the hub, not under it)',
+  zOf('.modal-backdrop') > zOf('#sceneNav'), `modal=${zOf('.modal-backdrop')} hub=${zOf('#sceneNav')}`);
+check('v1.13: toast z-index exceeds the modal', zOf('#toast') > zOf('.modal-backdrop'),
+  `toast=${zOf('#toast')} modal=${zOf('.modal-backdrop')}`);
 click(viewBtn('overview'));
 await wait(60);
 click(doc.getElementById('btnCloseNav'));

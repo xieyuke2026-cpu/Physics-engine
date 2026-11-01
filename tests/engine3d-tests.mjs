@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 const CANNON = await import('../vendor/cannon-es.js');
-const { PhysicsEngine3D, setCannonModule } = await import('../js/engine/physics-engine-3d.js');
+const { PhysicsEngine3D, setCannonModule, VERSION } = await import('../js/engine/physics-engine-3d.js');
 setCannonModule(CANNON);
 
 let pass = 0, fail = 0;
@@ -20,6 +20,7 @@ e1.addBody(ground);
 const ball = e1.addBody({ id: 'ball', kind: 'sphere', x: 0, y: 6, z: 0, radius: 0.5, mass: 1 });
 for (let i = 0; i < 240; i++) e1.advance(1000 / 60, 1);
 const bd = e1.describeBody(ball);
+check('version: PhysicsEngine3D.VERSION matches the exported VERSION constant', PhysicsEngine3D.VERSION === VERSION && VERSION === '1.0.0');
 check('sphere falls and rests on ground', Math.abs(bd.y - 0.5) < 0.06, `y=${bd.y}`);
 check('resting sphere nearly stops', bd.speed < 0.2, `speed=${bd.speed.toFixed(3)}`);
 check('describeBody reports quaternion', bd.quaternion && Number.isFinite(bd.quaternion.w));

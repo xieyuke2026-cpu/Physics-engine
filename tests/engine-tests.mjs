@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 globalThis.Matter = require('../vendor/matter.min.js');
 
-const { PhysicsEngine } = await import('../js/engine/physics-engine.js');
+const { PhysicsEngine, VERSION } = await import('../js/engine/physics-engine.js');
 
 let pass = 0, fail = 0;
 function check(name, cond, extra = '') {
@@ -18,6 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.1.0');
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
 pe.addBody({ kind: 'rect', x: 100, y: 400, width: 500, height: 20, isStatic: true });
