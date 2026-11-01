@@ -12,6 +12,12 @@ import * as store from './storage.js';
 import { presetScenes3D } from './scene3d.js';
 import { initLab3D, setLab3DActive, lab3DLoadScene, lab3DCurrentName, lab3DRename } from './lab3d.js';
 
+/* Feature flags.
+ * FEATURE_3D: Ryan asked on 2026-11-01 to HIDE all 3D content without deleting
+ * it. All 3D code, scenes and stored data stay in place; flip this to true to
+ * bring the 3D lab back exactly as it was. */
+const FEATURE_3D = false;
+
 const $ = (id) => document.getElementById(id);
 const canvas = $('world');
 
@@ -547,6 +553,7 @@ function setNavView(view) {
 /* ---------------- 2D / 3D mode switching ---------------- */
 let appMode = '2d';
 function setAppMode(m) {
+  if (m === '3d' && !FEATURE_3D) m = '2d'; // 3D hidden (not removed) — stay in 2D
   appMode = m;
   $('mode2d').classList.toggle('active', m === '2d');
   $('mode3d').classList.toggle('active', m === '3d');
@@ -721,11 +728,15 @@ function renderSceneNav() {
   $('navLogo').innerHTML = icon('logo', 26);
   document.querySelectorAll('.side-ic').forEach((s) => { s.innerHTML = icon(s.dataset.ic, 18); });
   const savedCount = Object.keys(store.loadScenes()).length;
-  const saved3Count = Object.keys(store.loadScenes3D()).length;
-  const presetCount = presetScenes().length + presetScenes3D().length;
+  const saved3Count = FEATURE_3D ? Object.keys(store.loadScenes3D()).length : 0;
+  const presetCount = presetScenes().length + (FEATURE_3D ? presetScenes3D().length : 0);
   $('countLibrary').textContent = String(savedCount + saved3Count);
   $('countPresets').textContent = String(presetCount);
-  $('sideStorage').textContent = `保存在本机浏览器 · 2D 场景 ${savedCount} · 3D 场景 ${saved3Count} · 预设 ${presetCount}`;
+  $('sideStorage').textContent = FEATURE_3D
+    ? `保存在本机浏览器 · 2D 场景 ${savedCount} · 3D 场景 ${saved3Count} · 预设 ${presetCount}`
+    : `保存在本机浏览器 · ${savedCount} 个场景 · ${presetCount} 个预设`;
+  $('navSectionPresets3D').style.display = FEATURE_3D ? '' : 'none';
+  $('navSectionSaved3D').style.display = FEATURE_3D ? '' : 'none';
   // current + autosave cards
   const cur = $('navCurrent');
   cur.innerHTML = '';
@@ -744,21 +755,23 @@ function renderSceneNav() {
       actions: [['恢复这个进度', 'primary', () => openStoredScene(auto)]],
     }));
   }
-  // 3D lab entry card
-  const auto3 = store.loadAutosave3D();
-  const entry = document.createElement('article');
-  entry.className = 'scene-card';
-  entry.innerHTML = `<div class="scene-card-body">
-      <div class="scene-card-name">3D 实验室<span class="badge badge-3d">3D</span></div>
-      <div class="scene-sub">${auto3 ? `上次进度「${auto3.name}」 · ${auto3.bodies.length} 个物体` : '三维刚体物理：方块、球体、斜坡与堆叠'}</div>
-      <div class="scene-card-actions"><button class="mini-btn primary">进入 3D 实验室</button></div>
-    </div>`;
-  entry.querySelector('button').addEventListener('click', () => { closeSceneNav(); setAppMode('3d'); });
-  cur.appendChild(entry);
+  if (FEATURE_3D) {
+    // 3D lab entry card
+    const auto3 = store.loadAutosave3D();
+    const entry = document.createElement('article');
+    entry.className = 'scene-card';
+    entry.innerHTML = `<div class="scene-card-body">
+        <div class="scene-card-name">3D 实验室<span class="badge badge-3d">3D</span></div>
+        <div class="scene-sub">${auto3 ? `上次进度「${auto3.name}」 · ${auto3.bodies.length} 个物体` : '三维刚体物理：方块、球体、斜坡与堆叠'}</div>
+        <div class="scene-card-actions"><button class="mini-btn primary">进入 3D 实验室</button></div>
+      </div>`;
+    entry.querySelector('button').addEventListener('click', () => { closeSceneNav(); setAppMode('3d'); });
+    cur.appendChild(entry);
+  }
   renderPresetList();
-  renderPresetList3D();
+  if (FEATURE_3D) renderPresetList3D();
   renderSceneCards($('sceneSearch').value.trim());
-  renderSceneCards3D($('sceneSearch').value.trim());
+  if (FEATURE_3D) renderSceneCards3D($('sceneSearch').value.trim());
 }
 
 function loadPreset(p) {
@@ -961,7 +974,7 @@ $('btnCloseNav').addEventListener('click', closeSceneNav);
 document.querySelectorAll('.side-item').forEach((b) => b.addEventListener('click', () => setNavView(b.dataset.view)));
 $('sceneSearch').addEventListener('input', () => {
   renderSceneCards($('sceneSearch').value.trim());
-  renderSceneCards3D($('sceneSearch').value.trim());
+  if (FEATURE_3D) renderSceneCards3D($('sceneSearch').value.trim());
 });
 $('btnNewScene').addEventListener('click', () => { closeSceneNav(); newScene(); });
 $('btnDuplicateScene').addEventListener('click', () => {
@@ -998,6 +1011,10 @@ $('btnSettings').addEventListener('click', () => {
 
 /* ---------------- toolbar wiring ---------------- */
 function initChrome() {
+  if (!FEATURE_3D) {
+    const ms = document.querySelector('.mode-switch');
+    if (ms) ms.style.display = 'none';
+  }
   $('logo').innerHTML = icon('logo', 26);
   $('logo').style.cursor = 'pointer';
   $('logo').title = '回到首页（我的项目）';
