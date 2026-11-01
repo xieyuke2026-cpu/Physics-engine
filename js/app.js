@@ -520,58 +520,195 @@ function closeModal(id) { $(id).hidden = true; }
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeModal(b.dataset.close)));
 document.querySelectorAll('.modal-backdrop').forEach((m) => m.addEventListener('pointerdown', (e) => { if (e.target === m) m.hidden = true; }));
 
-function renderSceneList() {
+/* ---------------- project navigation (scene hub) ---------------- */
+function openSceneNav() {
+  renderSceneNav();
+  $('sceneNav').hidden = false;
+}
+function closeSceneNav() { $('sceneNav').hidden = true; }
+
+/** Static thumbnail drawn from scene data (no physics): shapes + springs, fitted to the card. */
+function drawThumb(canvas, scene) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#fafafa'; ctx.fillRect(0, 0, W, H);
+  const bodies = scene.bodies || [];
+  if (!bodies.length) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const ext = (b) => (b.type === 'circle' || b.type === 'polygon') ? b.radius : Math.hypot(b.width, b.height) / 2;
+  for (const b of bodies) {
+    const e = ext(b);
+    minX = Math.min(minX, b.x - e); maxX = Math.max(maxX, b.x + e);
+    minY = Math.min(minY, b.y - e); maxY = Math.max(maxY, b.y + e);
+  }
+  const pad = 10;
+  const scale = Math.min((W - pad * 2) / Math.max(1, maxX - minX), (H - pad * 2) / Math.max(1, maxY - minY));
+  const ox = pad + ((W - pad * 2) - (maxX - minX) * scale) / 2 - minX * scale;
+  const oy = pad + ((H - pad * 2) - (maxY - minY) * scale) / 2 - minY * scale;
+  const P = (x, y) => [ox + x * scale, oy + y * scale];
+  const byId = new Map(bodies.map((b) => [b.id, b]));
+  ctx.strokeStyle = '#8a8d93'; ctx.lineWidth = 1;
+  for (const c of scene.constraints || []) {
+    const bB = byId.get(c.bodyB); if (!bB) continue;
+    const a = c.bodyA && byId.get(c.bodyA) ? [byId.get(c.bodyA).x, byId.get(c.bodyA).y] : [c.pointA.x, c.pointA.y];
+    const [x1, y1] = P(a[0], a[1]); const [x2, y2] = P(bB.x, bB.y);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+  for (const b of bodies) {
+    const [cx, cy] = P(b.x, b.y);
+    ctx.beginPath();
+    if (b.type === 'circle') {
+      ctx.arc(cx, cy, Math.max(1.5, b.radius * scale), 0, Math.PI * 2);
+    } else {
+      let pts;
+      if (b.type === 'polygon') {
+        pts = [];
+        for (let i = 0; i < b.sides; i++) {
+          const a = b.angle - Math.PI / 2 + i * Math.PI * 2 / b.sides;
+          pts.push([cx + Math.cos(a) * b.radius * scale, cy + Math.sin(a) * b.radius * scale]);
+        }
+      } else {
+        const hw = b.width / 2 * scale, hh = b.height / 2 * scale;
+        const c = Math.cos(b.angle), s = Math.sin(b.angle);
+        pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([dx, dy]) => [cx + dx * c - dy * s, cy + dx * s + dy * c]);
+      }
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.closePath();
+    }
+    ctx.fillStyle = b.isBound ? '#dcdce0' : (b.isStatic ? '#e6e6ea' : '#ffffff');
+    ctx.fill();
+    ctx.strokeStyle = b.isStatic ? '#9a9da3' : '#3c4046';
+    ctx.stroke();
+  }
+}
+
+function sceneCard(scene, opts = {}) {
+  const card = document.createElement('article');
+  card.className = 'scene-card' + (opts.current ? ' current' : '');
+  const cv = document.createElement('canvas');
+  cv.className = 'thumb'; cv.width = 264; cv.height = 118;
+  card.appendChild(cv);
+  const body = document.createElement('div');
+  body.className = 'scene-card-body';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'scene-card-name';
+  nameEl.textContent = scene.name;
+  if (opts.badge) {
+    const bd = document.createElement('span');
+    bd.className = 'badge'; bd.textContent = opts.badge;
+    nameEl.appendChild(bd);
+  }
+  const sub = document.createElement('div');
+  sub.className = 'scene-sub';
+  const nCon = (scene.constraints || []).length;
+  sub.textContent = `${scene.bodies.length} 个物体${nCon ? ` · ${nCon} 个弹簧` : ''} · ${new Date(scene.updatedAt || Date.now()).toLocaleString()}`;
+  body.appendChild(nameEl); body.appendChild(sub);
+  const actions = document.createElement('div');
+  actions.className = 'scene-card-actions';
+  for (const [label, cls, fn] of opts.actions || []) {
+    const b = document.createElement('button');
+    b.className = 'mini-btn' + (cls ? ` ${cls}` : '');
+    b.textContent = label;
+    b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
+    actions.appendChild(b);
+  }
+  body.appendChild(actions);
+  card.appendChild(body);
+  requestAnimationFrame(() => drawThumb(cv, scene));
+  return card;
+}
+
+function openStoredScene(s) {
+  setRunning(false);
+  loadScene(s); resetHistory(); closeSceneNav();
+  toast(`已打开场景「${s.name}」`);
+}
+
+function exportSceneData(s) {
+  const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${s.name.replace(/[\\/:*?"<>|]/g, '_')}.motionlab.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function renderSceneCards(filter = '') {
   const list = $('sceneList');
   list.innerHTML = '';
   const scenes = store.loadScenes();
-  const names = Object.keys(scenes).sort((a, b) => (scenes[b].updatedAt || 0) - (scenes[a].updatedAt || 0));
+  const names = Object.keys(scenes)
+    .filter((n) => !filter || n.toLowerCase().includes(filter.toLowerCase()))
+    .sort((a, b) => (scenes[b].updatedAt || 0) - (scenes[a].updatedAt || 0));
   if (!names.length) {
-    list.appendChild(Object.assign(document.createElement('p'), { className: 'empty-note', textContent: '暂无已保存场景。点击顶部「保存」将当前场景存入场景库。' }));
+    list.appendChild(Object.assign(document.createElement('p'), {
+      className: 'empty-note',
+      textContent: filter ? '没有匹配的场景。' : '暂无已保存场景。在实验室里点顶部「保存」，或用上方「复制当前场景」，就会出现在这里。',
+    }));
     return;
   }
   for (const name of names) {
     const s = scenes[name];
-    const item = document.createElement('div');
-    item.className = 'scene-item' + (name === sceneName ? ' current' : '');
-    item.innerHTML = `<div class="scene-meta"><div class="scene-name"></div>
-      <div class="scene-sub">${s.bodies.length} 个物体 · ${new Date(s.updatedAt || Date.now()).toLocaleString()}</div></div>`;
-    item.querySelector('.scene-name').textContent = name;
-    const mkBtn = (ic, titleText, fn) => {
-      const b = document.createElement('button');
-      b.className = 'tb-btn icon'; b.innerHTML = icon(ic, 18); b.title = titleText;
-      b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
-      return b;
-    };
-    item.appendChild(mkBtn('edit', '重命名', () => {
-      const nn = prompt('新的场景名称：', name);
-      if (!nn || !nn.trim() || nn.trim() === name) return;
-      if (store.renameSceneInLibrary(name, nn.trim())) {
-        if (sceneName === name) { sceneName = nn.trim(); $('projectName').value = sceneName; }
-        renderSceneList(); toast('已重命名');
-      } else toast('重命名失败：名称已存在或保存失败', 3000);
+    list.appendChild(sceneCard(s, {
+      current: name === sceneName,
+      badge: name === sceneName ? '当前' : '',
+      actions: [
+        ['打开', 'primary', () => openStoredScene(s)],
+        ['重命名', '', () => {
+          const nn = prompt('新的场景名称：', name);
+          if (!nn || !nn.trim() || nn.trim() === name) return;
+          if (store.renameSceneInLibrary(name, nn.trim())) {
+            if (sceneName === name) { sceneName = nn.trim(); $('projectName').value = sceneName; }
+            renderSceneNav(); toast('已重命名');
+          } else toast('重命名失败：名称已存在或保存失败', 3000);
+        }],
+        ['复制', '', () => {
+          let nn = `${name} 副本`; let i = 2;
+          const all = store.loadScenes();
+          while (all[nn]) nn = `${name} 副本 ${i++}`;
+          if (store.saveSceneToLibrary({ ...s, name: nn })) { renderSceneNav(); toast(`已复制为「${nn}」`); }
+        }],
+        ['导出', '', () => exportSceneData(s)],
+        ['删除', 'danger', () => {
+          if (!confirm(`删除场景「${name}」？此操作不可恢复。`)) return;
+          store.deleteSceneFromLibrary(name); renderSceneNav(); toast('场景已删除');
+        }],
+      ],
     }));
-    item.appendChild(mkBtn('copy', '复制场景', () => {
-      let nn = `${name} 副本`; let i = 2;
-      const all = store.loadScenes();
-      while (all[nn]) nn = `${name} 副本 ${i++}`;
-      if (store.saveSceneToLibrary({ ...s, name: nn })) { renderSceneList(); toast(`已复制为「${nn}」`); }
-    }));
-    item.appendChild(mkBtn('trash', '删除场景', () => {
-      if (!confirm(`删除场景「${name}」？此操作不可恢复。`)) return;
-      store.deleteSceneFromLibrary(name); renderSceneList(); toast('场景已删除');
-    }));
-    item.addEventListener('click', () => {
-      setRunning(false);
-      loadScene(s); resetHistory(); closeModal('modalScenes');
-      toast(`已加载场景「${name}」`);
-    });
-    list.appendChild(item);
   }
 }
+
+function renderSceneNav() {
+  $('navLogo').innerHTML = icon('logo', 26);
+  $('btnCloseNav').innerHTML = icon('close', 18);
+  // current + autosave cards
+  const cur = $('navCurrent');
+  cur.innerHTML = '';
+  const now = currentScene();
+  cur.appendChild(sceneCard(now, {
+    current: true, badge: '正在编辑',
+    actions: [
+      ['保存到场景库', 'primary', () => { saveCurrent(); renderSceneNav(); }],
+      ['继续编辑', '', () => closeSceneNav()],
+    ],
+  }));
+  const auto = store.loadAutosave();
+  if (auto && JSON.stringify(auto.bodies) !== JSON.stringify(now.bodies)) {
+    cur.appendChild(sceneCard({ ...auto, name: '上次自动保存', updatedAt: auto.updatedAt }, {
+      badge: '自动保存',
+      actions: [['恢复这个进度', 'primary', () => openStoredScene(auto)]],
+    }));
+  }
+  renderPresetList();
+  renderSceneCards($('sceneSearch').value.trim());
+}
+
 function loadPreset(p) {
   loadScene(p.scene);
   resetHistory();
-  closeModal('modalScenes');
+  closeSceneNav();
   setRunning(true);
   toast(`已载入预设「${p.name}」，模拟运行中`);
 }
@@ -587,13 +724,15 @@ function renderPresetList() {
     wrap.appendChild(b);
   }
 }
-$('btnScenes').addEventListener('click', () => { renderPresetList(); renderSceneList(); openModal('modalScenes'); });
-$('btnNewScene').addEventListener('click', () => { closeModal('modalScenes'); newScene(); });
+$('btnScenes').addEventListener('click', openSceneNav);
+$('btnCloseNav').addEventListener('click', closeSceneNav);
+$('sceneSearch').addEventListener('input', () => renderSceneCards($('sceneSearch').value.trim()));
+$('btnNewScene').addEventListener('click', () => { closeSceneNav(); newScene(); });
 $('btnDuplicateScene').addEventListener('click', () => {
   let nn = `${sceneName} 副本`; let i = 2;
   const all = store.loadScenes();
   while (all[nn]) nn = `${sceneName} 副本 ${i++}`;
-  if (store.saveSceneToLibrary({ ...currentScene(), name: nn })) { renderSceneList(); toast(`当前场景已复制为「${nn}」`); }
+  if (store.saveSceneToLibrary({ ...currentScene(), name: nn })) { renderSceneNav(); toast(`当前场景已复制为「${nn}」`); }
 });
 
 /* ---------------- settings modal ---------------- */
@@ -630,7 +769,7 @@ function initChrome() {
   $('btnSettings').innerHTML = icon('settings'); $('btnPanel').innerHTML = icon('panel');
   $('btnSave').innerHTML = `${icon('save', 17)} 保存`;
   $('btnExport').innerHTML = icon('export'); $('btnImport').innerHTML = icon('import');
-  $('btnScenes').innerHTML = `${icon('folder', 17)} 场景`;
+  $('btnScenes').innerHTML = `${icon('folder', 17)} 我的项目`;
   $('btnZoomIn').innerHTML = icon('plus', 17); $('btnZoomOut').innerHTML = icon('minus', 17);
   $('btnNewScene').innerHTML = `${icon('plus', 16)} 新建场景`;
   $('btnDuplicateScene').innerHTML = `${icon('copy', 16)} 复制当前场景`;

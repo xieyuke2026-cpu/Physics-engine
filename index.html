@@ -18,7 +18,7 @@
     </div>
     <div class="tb-group project">
       <input id="projectName" class="project-name" type="text" value="Untitled Scene" maxlength="60" aria-label="项目名称" spellcheck="false">
-      <button id="btnScenes" class="tb-btn wide" title="场景管理"></button>
+      <button id="btnScenes" class="tb-btn wide" title="我的项目：储存与打开场景"></button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -116,18 +116,28 @@
   </div>
 </div>
 
-<!-- ===== Scenes modal ===== -->
-<div id="modalScenes" class="modal-backdrop" hidden>
-  <div class="modal" role="dialog" aria-label="场景管理">
-    <div class="modal-head"><span>场景管理</span><button class="tb-btn icon modal-close" data-close="modalScenes"></button></div>
-    <div class="modal-actions">
+<!-- ===== Project navigation: store & open scenes ===== -->
+<div id="sceneNav" hidden>
+  <div class="scenenav-inner">
+    <div class="scenenav-head">
+      <span id="navLogo"></span>
+      <div class="scenenav-titles">
+        <h2>我的项目</h2>
+        <p>场景都保存在这台设备的浏览器里。点开任意卡片即可继续实验，也可以导出 JSON 备份或分享。</p>
+      </div>
+      <button id="btnCloseNav" class="tb-btn icon" title="返回实验室"></button>
+    </div>
+    <div class="scenenav-toolbar">
+      <input id="sceneSearch" type="search" placeholder="搜索已保存场景…" aria-label="搜索已保存场景">
       <button id="btnNewScene" class="btn"></button>
       <button id="btnDuplicateScene" class="btn"></button>
     </div>
+    <div class="panel-title"><span class="dot"></span>当前与恢复</div>
+    <div id="navCurrent" class="scene-grid"></div>
     <div class="panel-title"><span class="dot"></span>实验预设 Presets</div>
     <div id="presetList" class="preset-grid"></div>
     <div class="panel-title"><span class="dot"></span>已保存场景</div>
-    <div id="sceneList" class="scene-list"></div>
+    <div id="sceneList" class="scene-grid"></div>
   </div>
 </div>
 
