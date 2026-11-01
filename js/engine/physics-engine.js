@@ -59,6 +59,11 @@ export class PhysicsEngine {
    *        win for stacks/piles; bodies wake on collision, edits and dragging)
    * @param {number} [opts.fixedDt] fixed timestep in ms (default 1000/60)
    * @param {number} [opts.maxSteps] max fixed steps per advance() (default 5)
+   * @param {number} [opts.substeps] physics sub-updates per fixed step
+   *        (default 1). Higher values shrink per-update displacement, which
+   *        prevents fast bodies tunnelling through thin colliders; 2 is a
+   *        good default for scenes with thin statics. User dragging is
+   *        exempt by design (the drag constraint is position-driven).
    */
   constructor(opts = {}) {
     const M = opts.matter || matter();
@@ -68,6 +73,7 @@ export class PhysicsEngine {
     this.world = this.engine.world;
     this.fixedDt = num(opts.fixedDt, 1000 / 60);
     this.maxSteps = Math.max(1, Math.round(num(opts.maxSteps, 5)));
+    this.substeps = Math.max(1, Math.min(8, Math.round(num(opts.substeps, 1))));
     this._acc = 0;
     this._byId = new Map();        // id -> Matter body
     this._bodiesCache = null;      // cached array view of _byId (invalidated on structure change)
@@ -318,7 +324,16 @@ export class PhysicsEngine {
     for (let i = 0; i < n; i++) this._subStep(sub);
   }
 
-  _stepOnce() { this._subStep(this.fixedDt); }
+  _stepOnce() {
+    // Split the fixed step into `substeps` engine updates (anti-tunnelling:
+    // a body can move at most fixedDt/substeps worth of travel per update).
+    const n = this.substeps;
+    const dt = this.fixedDt / n;
+    for (let i = 0; i < n; i++) this._subStep(dt);
+  }
+
+  /** Change the anti-tunnelling substep count (1..8). */
+  setSubsteps(n) { this.substeps = Math.max(1, Math.min(8, Math.round(num(n, 1)))); }
 
   _subStep(dt) {
     // Rotation lock is a hard guarantee: zero residual angular velocity each

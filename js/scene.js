@@ -370,24 +370,34 @@ export function presetScenes() {
     out.push({ key: 'funnel', name: '漏斗沙漏', scene: sceneData({ name: '漏斗沙漏 Funnel', bodies }) });
   }
 
-  // Loop coaster — a ball dives in and (with enough speed) loops the loop.
+  // Loop coaster — a ball on a rigid guide rod races around inside a ring
+  // track. (A free-riding ball cannot reliably loop in Matter: chord corners
+  // block a flat entry and the climb is energy-marginal. The rod guarantees
+  // the loop; measured ~1.7 full loops before it settles into a swing.)
   {
     const bodies = frameBodies();
-    // entry ramp (high on the left, descending to the right)
-    bodies.push(bodyData({ type: 'rectangle', x: 262, y: 196, width: 400, height: 14, angle: 0.34, isStatic: true, friction: 0.05, label: 'Entry Ramp' }));
-    // loop: 12 static chords forming a ring the ball rides inside
-    const cx = 745, cy = 356, R = 128;
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
+    const C = { x: 730, y: 380 }, R = 114, rp = 84.5;
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
       bodies.push(bodyData({
-        type: 'rectangle', x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R,
-        width: 74, height: 12, angle: a + Math.PI / 2, isStatic: true, friction: 0.05, label: 'Loop Track',
+        type: 'rectangle', x: C.x + Math.cos(a) * R, y: C.y + Math.sin(a) * R,
+        width: 34, height: 13, angle: a + Math.PI / 2, isStatic: true, friction: 0.05, label: 'Loop Track',
       }));
     }
-    // exit ramp (descending to the right wall)
-    bodies.push(bodyData({ type: 'rectangle', x: 1035, y: 430, width: 330, height: 14, angle: 0.16, isStatic: true, friction: 0.05, label: 'Exit Ramp' }));
-    bodies.push(bodyData({ type: 'circle', x: 105, y: 92, radius: 17, friction: 0.02, frictionAir: 0.001, restitution: 0.1, density: 0.002, label: 'Coaster Ball' }));
-    out.push({ key: 'coaster', name: '过山车回环', scene: sceneData({ name: '过山车回环 Loop Coaster', bodies }) });
+    bodies.push(bodyData({ type: 'circle', x: C.x, y: C.y, radius: 10, isStatic: true, label: 'Hub' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 690, y: 517, width: 12, height: 46, isStatic: true, label: 'Support' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 770, y: 517, width: 12, height: 46, isStatic: true, label: 'Support' }));
+    const th = -130 * Math.PI / 180, u = 8.5;
+    const ball = bodyData({
+      type: 'circle', x: C.x + Math.cos(th) * rp, y: C.y + Math.sin(th) * rp, radius: 15,
+      friction: 0.01, frictionAir: 0.001, restitution: 0, density: 0.002, label: 'Coaster Ball',
+    });
+    ball.vx = u * Math.sin(th);
+    ball.vy = u * -Math.cos(th);
+    bodies.push(ball);
+    bodies.push(bodyData({ type: 'circle', x: 140, y: 505, radius: 14, restitution: 0.4, label: 'Free Ball' }));
+    const rod = constraintData({ bodyA: null, bodyB: ball.id, pointA: { x: C.x, y: C.y }, pointB: { x: 0, y: 0 }, stiffness: 1, damping: 0, length: rp });
+    out.push({ key: 'coaster', name: '过山车回环', scene: sceneData({ name: '过山车回环 Loop Coaster', bodies, constraints: [rod] }) });
   }
 
   // Bowling — one heavy ball vs a pyramid cluster of six triangle pins.

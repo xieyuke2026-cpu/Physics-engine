@@ -199,5 +199,36 @@ check('cradle loads 5 constraints into world', wcr.constraintCount === 5);
 for (let i = 0; i < 120; i++) wcr.step(1000 / 60, 1);
 check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b) => b.label === 'Pendulum Ball').every((b) => b.position.y < 500));
 
+/* --- v1.10: coaster preset really loops; world-level anti-tunnelling --- */
+{
+  const coaster = presets.find((p) => p.key === 'coaster');
+  const wc = new PhysicsWorld();
+  wc.loadScene(coaster.scene);
+  const C = { x: 730, y: 380 };
+  const start = coaster.scene.bodies.find((b) => b.label === 'Coaster Ball');
+  const ball = wc.allBodies().find((b) => !b.isStatic && Math.abs(b.position.x - start.x) < 2 && Math.abs(b.position.y - start.y) < 2);
+  let prevA = Math.atan2(ball.position.y - C.y, ball.position.x - C.x), sweep = 0, loops = 0;
+  for (let i = 0; i < 900; i++) {
+    wc.advance(1000 / 60, 1);
+    const a = Math.atan2(ball.position.y - C.y, ball.position.x - C.x);
+    let d = a - prevA; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+    sweep += d; prevA = a;
+    loops = Math.max(loops, -sweep / (2 * Math.PI));
+  }
+  check('v1.10: coaster ball completes at least one full loop', loops >= 1, `loops=${loops.toFixed(2)}`);
+}
+{
+  const wt = new PhysicsWorld();
+  wt.loadScene(defaultScene());
+  wt.clearBodies();
+  wt.addBody(bodyData({ type: 'rectangle', x: 300, y: 300, width: 12, height: 200, isStatic: true, label: 'Thin Wall' }));
+  const shotData = bodyData({ type: 'circle', x: 100, y: 300, radius: 8, frictionAir: 0, label: 'Shot' });
+  wt.addBody(shotData);
+  const shot = wt.allBodies().find((b) => !b.isStatic);
+  wt.setVelocity(shot, 20, 0);
+  for (let i = 0; i < 40; i++) wt.advance(1000 / 60, 1);
+  check('v1.10: fast shot cannot tunnel through a thin wall (substeps=2)', shot.position.x < 294, `x=${Math.round(shot.position.x)}`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -121,5 +121,17 @@ const elapsed = Date.now() - t0;
 check('perf: 201 bodies x 120 steps completes quickly', elapsed < 4000, `${elapsed}ms`);
 console.log(`  perf: 201 bodies x 120 steps = ${elapsed}ms (${(elapsed / 120).toFixed(2)}ms/step)`);
 
+/* --- anti-tunnelling: substeps stop a fast body passing a thin wall --- */
+function tunnelTrial(substeps) {
+  const peT = new PhysicsEngine({ gravity: { x: 0, y: 0 }, substeps });
+  peT.addBody({ kind: 'rect', x: 300, y: 300, width: 12, height: 200, isStatic: true });
+  const shot = peT.addBody({ kind: 'circle', x: 100, y: 300, radius: 8, frictionAir: 0 });
+  peT.setVelocity(shot, 36, 0);
+  for (let i = 0; i < 40; i++) peT.advance(1000 / 60, 1);
+  return shot.position.x;
+}
+check('tunnelling: substeps=1 lets a 36px/step shot through a 12px wall (baseline)', tunnelTrial(1) > 306, `x=${tunnelTrial(1)}`);
+check('tunnelling: substeps=4 stops the same shot at the wall', tunnelTrial(4) < 294, `x=${tunnelTrial(4)}`);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

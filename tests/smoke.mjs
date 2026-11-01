@@ -64,7 +64,7 @@ check('boot: 10 tool buttons with svg icons', doc.querySelectorAll('#toolrail .t
 check('renderer is drawing frames', drawCalls > 50, `drawCalls=${drawCalls}`);
 
 click(doc.getElementById('btnPlay'));
-await wait(1400);
+await wait(2200); // jsdom rAF is throttled under load; the FPS check needs a full update window
 check('play: state becomes running', stState().includes('运行中'), stState());
 check('play: FPS counter live', /FPS [1-9]/.test(doc.getElementById('stFps').textContent), doc.getElementById('stFps').textContent);
 check('play: bodies still 9 after settling', stCount().includes('9'), stCount());

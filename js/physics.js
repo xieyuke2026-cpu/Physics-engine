@@ -24,7 +24,9 @@ export class PhysicsWorld {
   constructor() {
     // Sleeping on: resting stacks (pyramids, settled piles) stop costing CPU.
     // Bodies wake automatically on collision, edits and dragging.
-    this.core = new PhysicsEngine({ enableSleeping: true });
+    // substeps 2 = anti-tunnelling: fast bodies cannot jump thin colliders
+    // (user dragging stays exempt — it is position-driven by design).
+    this.core = new PhysicsEngine({ enableSleeping: true, substeps: 2 });
     this.collisionFlash = 0;
     this.core.onCollision(() => { this.collisionFlash = performance.now(); });
   }
