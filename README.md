@@ -55,8 +55,11 @@ index.html            页面骨架（顶栏 / 左工具栏 / 画布 / 右面板 
 css/style.css         全部样式（黑白灰 + 低饱和蓝，iPad 13" 横屏优先）
 js/icons.js           统一 SVG 图标集（1.7 线宽、24 网格）
 js/scene.js           纯数据层：场景/物体数据模型、默认值、导入校验（无 DOM 依赖，可单测）
-js/physics.js         Matter.js 封装：引擎、物体创建/序列化、属性同步、约束拖拽
-js/render.js          Canvas 渲染器 + 相机（网格、选中高亮、速度向量、创建预览）
+js/engine/physics-engine.js  通用可复用物理核心（v1.2 抽出）：固定时间步累加器、休眠、
+                      描述符建体/序列化、弹簧约束管理、物理拖拽——与 MotionLab 格式无关，
+                      独立包在 ~/workspace/physics-engine/，新项目可直接调用
+js/physics.js         薄适配层：MotionLab 场景格式 ⇄ 通用引擎描述符的翻译
+js/render.js          Canvas 渲染器 + 相机（网格、选中高亮、速度向量、创建预览、视口裁剪）
 js/ui.js              右侧属性面板与设置弹窗的 DOM 构建
 js/storage.js         localStorage：场景库、自动保存、UI 设置（损坏数据自动回退）
 js/app.js             应用装配：工具与指针交互、历史记录、场景管理、主循环
@@ -66,6 +69,11 @@ tests/run-tests.mjs   Node 逻辑测试：`node tests/run-tests.mjs`
 
 UI、物理引擎、场景管理三层分离：`ui.js` 不直接接触 Matter，`physics.js` 不操作 DOM，
 `scene.js` 是可独立测试的纯数据模块。
+
+**v1.2 引擎优化**：物理层抽成通用引擎（见上），主循环改由引擎的固定时间步累加器驱动
+（任意刷新率下物理一致，带防螺旋死亡上限）；启用刚体休眠（静止堆积自动睡、碰撞/编辑/拖拽自动醒）；
+渲染增加视口裁剪（画布外物体不绘制）与约束线段缓冲复用（逐帧零分配）。基准：201 个物体 × 120 步
+约 110ms（≈0.9ms/步，Node，休眠开）。
 
 ## 数据格式
 

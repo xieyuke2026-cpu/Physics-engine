@@ -31,6 +31,7 @@ export class Renderer {
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.view = { w: 0, h: 0 };
     this.trails = new Map();   // dataId -> [{x,y}...] recent centre positions
+    this._segs = [];           // reusable constraint-segment buffer (no per-frame alloc)
   }
 
   clearTrails() { this.trails.clear(); }
@@ -57,8 +58,16 @@ export class Renderer {
 
     if (showTrails) this._trails(world);
     else if (this.trails.size) this.trails.clear();
-    for (const seg of world.constraintSegments()) this._spring(seg);
-    for (const body of world.allBodies()) this._body(body, world, selectedId);
+    for (const seg of world.constraintSegments(this._segs)) this._spring(seg);
+    // viewport culling: skip bodies fully outside the visible world rect
+    const tl = camera.screenToWorld(0, 0, view);
+    const br = camera.screenToWorld(view.w, view.h, view);
+    const pad = 40;
+    for (const body of world.allBodies()) {
+      const b = body.bounds;
+      if (b.max.x < tl.x - pad || b.min.x > br.x + pad || b.max.y < tl.y - pad || b.min.y > br.y + pad) continue;
+      this._body(body, world, selectedId);
+    }
     if (springPreview) {
       ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 1.3 / camera.zoom;
       ctx.setLineDash([5 / camera.zoom, 4 / camera.zoom]);
@@ -115,7 +124,7 @@ export class Renderer {
     for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y);
     ctx.closePath();
     const isSel = dataId === selectedId;
-    if (body.isStatic) ctx.fillStyle = body.plugin.motionlab.isBound ? COLORS.bound : COLORS.static;
+    if (body.isStatic) ctx.fillStyle = world.isBound(body) ? COLORS.bound : COLORS.static;
     else if (type === 'circle') ctx.fillStyle = COLORS.circle;
     else if (type === 'polygon') ctx.fillStyle = COLORS.polygon;
     else ctx.fillStyle = COLORS.dynamic;
@@ -128,7 +137,7 @@ export class Renderer {
     ctx.arc(body.position.x, body.position.y, 2.2 / Math.sqrt(camera.zoom), 0, Math.PI * 2);
     ctx.fillStyle = isSel ? COLORS.accent : '#8a8d93'; ctx.fill();
     if (type === 'circle' || type === 'polygon') {
-      const r = body.circleRadius || (body._mlData && body._mlData.radius) || 20;
+      const r = body.circleRadius || 20;
       ctx.beginPath();
       ctx.moveTo(body.position.x, body.position.y);
       ctx.lineTo(body.position.x + Math.cos(body.angle) * r, body.position.y + Math.sin(body.angle) * r);

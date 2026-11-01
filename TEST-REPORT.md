@@ -1,4 +1,19 @@
-# MotionLab — 测试报告（2026-11-01，v1.1 更新）
+# MotionLab — 测试报告（2026-11-01，v1.2 更新）
+
+## 0. v1.2 通用物理引擎单测（与 MotionLab 完全解耦）
+
+命令：`node tests/engine-tests.mjs` — **19 passed, 0 failed**
+
+只依赖 Matter.js + `js/engine/physics-engine.js`，不导入任何 MotionLab 代码：
+- 固定时间步：advance(16.7ms) 恰好执行 1 步；advance(10000ms) 被 maxSteps=5 截断（防螺旋死亡）
+- 重力下落并静止于地板；userData 原样保留；snapshot→JSON→load 往返一致
+- 刚性连杆保持距离；删物体自动清理约束（通用层）；碰撞回调触发
+- 休眠：静止方块 600 步后进入睡眠；setVelocity 唤醒并实际运动
+- 通用 resize 保持 id 与 userData；通用拖拽拉动物体
+- 性能基准：201 个物体 × 120 步 ≈ 110ms（≈0.9ms/步，休眠开）
+- 独立包 `~/workspace/physics-engine/` 内的同一套测试同样 19/19 通过
+
+v1.2 后原有测试无回归：逻辑/物理 56/56、jsdom 冒烟 30/30（见下，数字为 v1.1 时期累计口径）。
 
 ## 1. 逻辑与物理测试（Node，真实 Matter.js 引擎）
 

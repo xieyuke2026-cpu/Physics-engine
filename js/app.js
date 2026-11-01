@@ -745,7 +745,7 @@ setInterval(() => {
   if (b) panel.refreshBody(liveOf(b));
 }, 250);
 
-let lastT = performance.now(), fpsFrames = 0, fpsT = performance.now(), acc = 0;
+let lastT = performance.now(), fpsFrames = 0, fpsT = performance.now();
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = now - lastT; lastT = now;
@@ -754,11 +754,9 @@ function loop(now) {
     $('stFps').textContent = `FPS ${Math.round(fpsFrames * 1000 / (now - fpsT))}`;
     fpsFrames = 0; fpsT = now;
   }
-  if (running) {
-    acc += Math.min(dt, 100);
-    const stepMs = 1000 / 60;
-    while (acc >= stepMs) { world.step(stepMs, settings.speed); acc -= stepMs; }
-  } else acc = 0;
+  // Fixed-timestep accumulator lives in the engine core: stable physics at
+  // any display refresh rate, with spiral-of-death protection built in.
+  if (running) world.advance(dt, settings.speed);
   const anchor = springAnchorWorld();
   renderer.draw(world, {
     selectedId,
