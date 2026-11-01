@@ -1,1 +1,95 @@
-# Physics-engine
+# MotionLab — 2D Physics Sandbox
+
+一个运行在浏览器中的 2D 物理模拟与实验平台。基于 **Matter.js** 的真实刚体物理：
+重力、碰撞、摩擦、弹性、旋转与不同质量的物体，都可以在画布中创建、拖拽、调参并保存为实验场景。
+
+设计关键词：Minimalist · Scientific · Interactive · Responsive · Lightweight。
+黑白灰为主、低饱和蓝为强调色的科学软件风格界面，全部图标为统一线条风格的 SVG（无 Emoji 功能图标）。
+
+## 在线使用 / 本地运行
+
+- GitHub Pages：仓库启用 Pages 后访问 `https://xieyuke2026-cpu.github.io/Physics-engine/`
+- 本地：任意静态服务器即可，例如在本目录执行 `python3 -m http.server 8000` 后打开 `http://localhost:8000`
+- 无后端、无构建步骤、无 API Key；直接部署静态文件即可（GitHub Pages 兼容）。
+
+## 功能
+
+**物理（Matter.js 真实模拟）**
+- 重力（X/Y 可调、可关闭）、碰撞检测、摩擦力、弹性碰撞、刚体旋转、静态/动态物体
+- 物体类型：圆形 Circle、矩形 Rectangle、正多边形 Polygon、静态线段 Static Line（斜坡）
+- 地面与左右墙壁作为场景框架物体，可选中、调参、删除
+
+**交互**
+- 工具：选择、移动、圆形、矩形、多边形、线段、删除
+- 点按放置 / 拖拽定尺寸创建物体；约束拖拽（运行中拖拽是真实物理约束，可投掷物体）
+- 画布缩放（滚轮 / 双指捏合 / 工具按钮）与平移（移动工具拖拽空白、双指拖动）
+- 选中高亮（蓝色描边 + 虚线包围盒）、双击空白快速添加圆形
+- 播放 / 暂停 / 重置、Undo / Redo（Ctrl+Z / Ctrl+Shift+Z）、空格播放暂停、Delete 删除
+
+**属性面板（右侧，可折叠）**
+- 选中物体：类型、位置 X/Y、宽/高或半径、边数、质量、密度、摩擦力、弹性、角度、速度 X/Y、静态开关
+- 所有修改实时同步到物理引擎（尺寸修改通过原地重建保持 id 与材质参数）
+- 未选中时显示场景属性：重力 X/Y、模拟速度、重力开关、网格 / 速度向量显示开关
+
+**项目管理**
+- 新建 / 保存 / 加载 / 重命名 / 复制 / 删除场景（场景库存于 localStorage）
+- 导出 / 导入 JSON（格式 `motionlab-scene` v1，导入时完整校验，错误会逐条提示）
+- 自动保存：刷新页面后恢复上次场景
+
+**状态栏**：FPS、物体数量、模拟状态、重力、模拟速度、缩放比例。
+
+## 项目结构
+
+```
+index.html            页面骨架（顶栏 / 左工具栏 / 画布 / 右面板 / 状态栏 / 弹窗）
+css/style.css         全部样式（黑白灰 + 低饱和蓝，iPad 13" 横屏优先）
+js/icons.js           统一 SVG 图标集（1.7 线宽、24 网格）
+js/scene.js           纯数据层：场景/物体数据模型、默认值、导入校验（无 DOM 依赖，可单测）
+js/physics.js         Matter.js 封装：引擎、物体创建/序列化、属性同步、约束拖拽
+js/render.js          Canvas 渲染器 + 相机（网格、选中高亮、速度向量、创建预览）
+js/ui.js              右侧属性面板与设置弹窗的 DOM 构建
+js/storage.js         localStorage：场景库、自动保存、UI 设置（损坏数据自动回退）
+js/app.js             应用装配：工具与指针交互、历史记录、场景管理、主循环
+vendor/matter.min.js  Matter.js 0.19.0（本地托管，不依赖 CDN 在线可用性）
+tests/run-tests.mjs   Node 逻辑测试：`node tests/run-tests.mjs`
+```
+
+UI、物理引擎、场景管理三层分离：`ui.js` 不直接接触 Matter，`physics.js` 不操作 DOM，
+`scene.js` 是可独立测试的纯数据模块。
+
+## 数据格式
+
+导出 JSON 示例（节选）：
+
+```json
+{
+  "format": "motionlab-scene",
+  "version": 1,
+  "name": "Untitled Scene",
+  "settings": { "gravityX": 0, "gravityY": 1, "gravityEnabled": true, "speed": 1, "showGrid": true, "showVectors": false },
+  "bodies": [
+    { "id": "body-…", "type": "circle", "x": 380, "y": 120, "radius": 30,
+      "density": 0.001, "friction": 0.3, "restitution": 0.55, "isStatic": false }
+  ]
+}
+```
+
+保存的是物理对象与参数本身，不是截图；导入后会完整重建物理世界。
+
+## GitHub Pages 部署
+
+仓库 Settings → Pages → Source 选择 `Deploy from a branch`，分支 `main`、目录 `/ (root)`，保存即可。
+本站为纯静态文件，根目录 `index.html` 即入口，无需 Actions 构建。
+
+## 已知问题
+
+- 画布世界未做无限边界管理：把物体拖到很远处后需用「适应画布」按钮找回视角。
+- 密度下限做了保护（≥0.00001），极端参数组合（如弹性 1 + 高速）仍可能出现 Matter.js 固有的轻微抖动。
+- 深色模式未实现（设计已预留，后续可扩展）。
+- Apple Pencil 专属功能未实现（按需求暂缓）。
+
+## 测试
+
+`node tests/run-tests.mjs` — 覆盖场景校验、重力下落与地面碰撞静止、重力关闭、
+拾取/删除、密度/质量/摩擦/弹性/位置/角度/速度/静态切换同步、尺寸重建、
+约束拖拽、序列化 JSON 往返、速度倍率。结果见 TEST-REPORT.md。
