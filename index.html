@@ -90,6 +90,32 @@
   </footer>
 </div>
 
+<!-- ===== Landing (first visit only) ===== -->
+<div id="landing" hidden>
+  <div class="landing-inner">
+    <div class="landing-copy">
+      <div class="landing-brand"><span id="landingLogo"></span><span>MotionLab</span></div>
+      <h1>在浏览器里，<br>做真实的物理实验</h1>
+      <p class="landing-sub">重力、碰撞、摩擦、弹性、弹簧——全部由真实刚体物理引擎实时计算。创建物体、调整参数、搭一个牛顿摆，再把实验场景保存下来。</p>
+      <ul class="landing-feats">
+        <li><b>真实物理</b><span>密度、摩擦、弹性实时生效，拖拽物体还能扔出去</span></li>
+        <li><b>弹簧与连杆</b><span>两点连线就能做单摆、吊桥和牛顿摆</span></li>
+        <li><b>场景存档</b><span>自动保存、场景库、JSON 导入导出，刷新不丢失</span></li>
+      </ul>
+      <div class="landing-presets">
+        <span class="landing-presets-label">直接试一个实验：</span>
+        <div id="landingPresets" class="chip-row"></div>
+      </div>
+      <button id="btnStartLab" class="btn accent landing-cta">开始使用</button>
+      <p class="landing-note">这一页只在第一次打开时出现；之后会直接进入实验室。想再看时，在「设置」里点「显示欢迎页」。</p>
+    </div>
+    <div class="landing-demo">
+      <canvas id="landingCanvas"></canvas>
+      <p class="landing-demo-cap">实时演示 · 与实验室共用同一台物理引擎</p>
+    </div>
+  </div>
+</div>
+
 <!-- ===== Scenes modal ===== -->
 <div id="modalScenes" class="modal-backdrop" hidden>
   <div class="modal" role="dialog" aria-label="场景管理">

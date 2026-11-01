@@ -5,6 +5,7 @@
 import { icon, TOOL_ICONS } from './icons.js';
 import { sceneData, bodyData, constraintData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS } from './scene.js';
 import { PhysicsWorld } from './physics.js';
+import { PhysicsEngine } from './engine/physics-engine.js';
 import { Renderer } from './render.js';
 import { Panel, renderSettings } from './ui.js';
 import * as store from './storage.js';
@@ -567,6 +568,13 @@ function renderSceneList() {
     list.appendChild(item);
   }
 }
+function loadPreset(p) {
+  loadScene(p.scene);
+  resetHistory();
+  closeModal('modalScenes');
+  setRunning(true);
+  toast(`已载入预设「${p.name}」，模拟运行中`);
+}
 function renderPresetList() {
   const wrap = $('presetList');
   wrap.innerHTML = '';
@@ -575,13 +583,7 @@ function renderPresetList() {
     b.className = 'preset-btn';
     b.innerHTML = `${icon('layers', 17)}<span></span><span class="p-sub">${p.scene.bodies.length} 物体</span>`;
     b.querySelector('span').textContent = p.name;
-    b.addEventListener('click', () => {
-      loadScene(p.scene);
-      resetHistory();
-      closeModal('modalScenes');
-      setRunning(true);
-      toast(`已载入预设「${p.name}」，模拟运行中`);
-    });
+    b.addEventListener('click', () => loadPreset(p));
     wrap.appendChild(b);
   }
 }
@@ -601,12 +603,14 @@ $('btnSettings').addEventListener('click', () => {
       settings[key] = value;
       scheduleAutosave();
     },
+    onShowLanding() { closeModal('modalSettings'); showLanding(); },
     onClearAll() {
       if (!confirm('清除 MotionLab 的全部本地数据（场景库、自动保存、设置）？')) return;
       try {
         localStorage.removeItem('motionlab.scenes.v1');
         localStorage.removeItem('motionlab.autosave.v1');
         localStorage.removeItem('motionlab.ui.v1');
+        store.clearVisited();
       } catch {}
       closeModal('modalSettings');
       setRunning(false);
@@ -769,9 +773,91 @@ function loop(now) {
   });
 }
 
+/* ---------------- landing (first visit) ---------------- */
+let landingDemo = null; // {running} while the landing demo loop is alive
+
+function showLanding() {
+  const el = $('landing');
+  el.hidden = false;
+  startLandingDemo();
+}
+function hideLanding() {
+  $('landing').hidden = true;
+  if (landingDemo) landingDemo.running = false;
+  store.saveVisited();
+}
+
+function startLandingDemo() {
+  if (landingDemo) { landingDemo.running = true; return; }
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const canvas = $('landingCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.clientWidth || 520, H = canvas.clientHeight || 420;
+  canvas.width = W; canvas.height = H;
+  const pe = new PhysicsEngine({ enableSleeping: false });
+  pe.addBody({ kind: 'rect', x: W / 2, y: H - 8, width: W + 60, height: 16, isStatic: true, friction: 0.5 });
+  pe.addBody({ kind: 'rect', x: W * 0.3, y: H * 0.58, width: W * 0.44, height: 12, angle: 0.16, isStatic: true, friction: 0.15 });
+  // a hanging spring pair to show constraints at a glance
+  const hang = pe.addBody({ kind: 'circle', x: W * 0.74, y: H * 0.42, radius: 17, restitution: 0.5, frictionAir: 0.004 });
+  pe.addConstraint({ bodyA: null, bodyB: pe.idOf(hang), pointA: { x: W * 0.74, y: 26 }, stiffness: 0.02, damping: 0.02, length: 120 });
+  let n = 0;
+  const fills = ['#ffffff', '#eef4fa', '#f2f2f3'];
+  function spawn() {
+    pe.addBody({
+      kind: n % 3 === 1 ? 'polygon' : (n % 2 ? 'rect' : 'circle'), sides: 6,
+      x: 40 + Math.random() * (W * 0.5), y: -24, radius: 14 + Math.random() * 10,
+      width: 26 + Math.random() * 18, height: 26 + Math.random() * 18,
+      angle: Math.random(), restitution: 0.45, userData: { fill: fills[n % 3] },
+    });
+    n++;
+    const dyn = pe.allBodies().filter((b) => !b.isStatic);
+    if (dyn.length > 26) pe.removeBody(pe.idOf(dyn[0]));
+  }
+  for (let i = 0; i < 8; i++) setTimeout(() => { if (landingDemo && landingDemo.running) spawn(); }, i * 170);
+  const spawner = setInterval(() => { if (landingDemo && landingDemo.running) spawn(); }, 2400);
+  landingDemo = { running: true, spawner };
+  let last = performance.now();
+  (function frame(now) {
+    if (!landingDemo) return;
+    requestAnimationFrame(frame);
+    if (!landingDemo.running) { last = now; return; }
+    const dt = now - last; last = now;
+    pe.advance(dt, 1);
+    ctx.clearRect(0, 0, W, H);
+    for (const seg of pe.constraintSegments()) {
+      ctx.strokeStyle = '#6d7278'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y); ctx.stroke();
+    }
+    pe.forEachBody((b) => {
+      const v = b.vertices;
+      ctx.beginPath(); ctx.moveTo(v[0].x, v[0].y);
+      for (let i = 1; i < v.length; i++) ctx.lineTo(v[i].x, v[i].y);
+      ctx.closePath();
+      ctx.fillStyle = b.isStatic ? '#e9e9ec' : (pe.userDataOf(b).fill || '#fff');
+      ctx.fill();
+      ctx.strokeStyle = b.isStatic ? '#9a9da3' : '#3c4046'; ctx.lineWidth = 1.2; ctx.stroke();
+    });
+  })(performance.now());
+}
+
+function initLanding() {
+  $('landingLogo').innerHTML = icon('logo', 30);
+  const wrap = $('landingPresets');
+  for (const p of presetScenes()) {
+    const c = document.createElement('button');
+    c.className = 'chip';
+    c.textContent = p.name;
+    c.addEventListener('click', () => { hideLanding(); loadPreset(p); });
+    wrap.appendChild(c);
+  }
+  $('btnStartLab').addEventListener('click', hideLanding);
+  if (!store.loadVisited()) showLanding();
+}
+
 /* ---------------- boot ---------------- */
 function boot() {
   initChrome();
+  initLanding();
   renderer.resize();
   camera.fit(renderer.view);
   updateZoomLabel();

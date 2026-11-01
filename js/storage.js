@@ -6,6 +6,7 @@ import { validateScene } from './scene.js';
 const KEY_SCENES = 'motionlab.scenes.v1';
 const KEY_AUTO = 'motionlab.autosave.v1';
 const KEY_UI = 'motionlab.ui.v1';
+const KEY_VISITED = 'motionlab.visited.v1';
 
 function readJSON(key) {
   try {
@@ -66,3 +67,12 @@ export function loadUISettings() {
   return (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj : {};
 }
 export function saveUISettings(ui) { return writeJSON(KEY_UI, ui); }
+
+/** First-run flag for the landing page: shown once, then the app opens directly. */
+export function loadVisited() {
+  try { return localStorage.getItem(KEY_VISITED) === '1'; } catch { return false; }
+}
+export function saveVisited() {
+  try { localStorage.setItem(KEY_VISITED, '1'); } catch { /* private mode: landing reappears, harmless */ }
+}
+export function clearVisited() { try { localStorage.removeItem(KEY_VISITED); } catch {} }

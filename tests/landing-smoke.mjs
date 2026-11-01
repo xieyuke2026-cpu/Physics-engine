@@ -1,0 +1,67 @@
+/* MotionLab landing smoke — run: node tests/landing-smoke.mjs
+   First boot (no visited flag) must show the landing page; starting writes
+   the flag; a return boot must open the app directly. */
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
+
+const require = createRequire('/home/hatch/workspace/webos/package.json');
+const localRequire = createRequire(import.meta.url);
+const { JSDOM } = require('jsdom');
+
+let pass = 0, fail = 0;
+const check = (name, cond, extra = '') => {
+  if (cond) { pass++; console.log(`  ok  ${name}`); } else { fail++; console.log(`FAIL  ${name} ${extra}`); }
+};
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function boot(presetVisited, bust) {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8')
+    .replace(/<script[\s\S]*?<\/script>/g, '');
+  const dom = new JSDOM(html, { url: 'http://localhost/', pretendToBeVisual: true });
+  const { window } = dom;
+  const fakeCtx = new Proxy({}, {
+    get(t, p) { if (p in t) return t[p]; return () => {}; },
+    set(t, p, v) { t[p] = v; return true; },
+  });
+  window.HTMLCanvasElement.prototype.getContext = () => fakeCtx;
+  window.HTMLCanvasElement.prototype.setPointerCapture = () => {};
+  window.Element.prototype.getBoundingClientRect = function () {
+    return { width: 1200, height: 700, left: 0, top: 0, right: 1200, bottom: 700, x: 0, y: 0 };
+  };
+  window.Matter = localRequire('../vendor/matter.min.js');
+  window.confirm = () => true;
+  window.prompt = () => null;
+  if (presetVisited) window.localStorage.setItem('motionlab.visited.v1', '1');
+  for (const k of ['document', 'localStorage']) globalThis[k] = window[k];
+  globalThis.window = window;
+  globalThis.requestAnimationFrame = window.requestAnimationFrame.bind(window);
+  globalThis.confirm = window.confirm; globalThis.prompt = window.prompt;
+  await import(`../js/app.js?case=${bust}`);
+  await wait(250);
+  return window;
+}
+
+const click = (w, el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+
+/* --- first visit --- */
+const w1 = await boot(false, 'first');
+const d1 = w1.document;
+check('first visit: landing is shown', !d1.getElementById('landing').hidden);
+check('landing: demo canvas + start button present', !!d1.getElementById('landingCanvas') && !!d1.getElementById('btnStartLab'));
+check('landing: five preset shortcuts', d1.querySelectorAll('#landingPresets .chip').length === 5,
+  `got ${d1.querySelectorAll('#landingPresets .chip').length}`);
+click(w1, d1.querySelectorAll('#landingPresets .chip')[0]); // Newton's cradle
+await wait(500);
+check('preset shortcut: landing hides', d1.getElementById('landing').hidden);
+check('preset shortcut: visited flag written', w1.localStorage.getItem('motionlab.visited.v1') === '1');
+check('preset shortcut: cradle loaded (9 bodies)', d1.getElementById('stCount').textContent.includes('9'),
+  d1.getElementById('stCount').textContent);
+check('preset shortcut: simulation running', d1.getElementById('stState').textContent.includes('运行中'));
+
+/* --- return visit --- */
+const w2 = await boot(true, 'return');
+check('return visit: landing stays hidden', w2.document.getElementById('landing').hidden);
+check('return visit: app booted with 9 bodies', w2.document.getElementById('stCount').textContent.includes('9'));
+
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);

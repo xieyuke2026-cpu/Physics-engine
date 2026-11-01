@@ -257,11 +257,14 @@ export function renderSettings(root, ui, cb) {
   wrap.appendChild(title('数据'));
   const note = el('<p class="empty-note">场景与设置保存在浏览器 localStorage 中，仅在本机有效。导出 JSON 可备份或分享实验场景。</p>');
   wrap.appendChild(note);
+  const landing = el(`<button class="btn block">${icon('logo', 16)} 显示欢迎页</button>`);
+  landing.addEventListener('click', () => cb.onShowLanding());
+  wrap.appendChild(landing);
   const clear = el(`<button class="btn danger block">${icon('trash', 16)} 清除全部本地数据</button>`);
   clear.addEventListener('click', () => cb.onClearAll());
   wrap.appendChild(clear);
   wrap.appendChild(title('关于'));
-  wrap.appendChild(el('<p class="empty-note">MotionLab 1.2 · 通用 physics-engine 核心 · Matter.js 0.19 · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。</p>'));
+  wrap.appendChild(el('<p class="empty-note">MotionLab 1.3 · 通用 physics-engine 核心 · Matter.js 0.19 · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。</p>'));
   root.appendChild(wrap);
   root.querySelectorAll('input[type=checkbox][data-key]').forEach((inp) => {
     inp.addEventListener('change', () => cb.onUISetting(inp.dataset.key, inp.checked));
