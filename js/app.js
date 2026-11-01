@@ -7,7 +7,8 @@ import { sceneData, bodyData, constraintData, validateScene, defaultScene, prese
 import { PhysicsWorld } from './physics.js';
 import { PhysicsEngine } from './engine/physics-engine.js';
 import { Renderer } from './render.js';
-import { Panel, renderSettings } from './ui.js';
+import { Panel, renderSettings, APP_VERSION } from './ui.js';
+import { PFLab } from './pf/pf-lab.js';
 import * as store from './storage.js';
 import { presetScenes3D, defaultScene3D } from './scene3d.js';
 import { initLab3D, setLab3DActive, lab3DLoadScene, lab3DCurrentName, lab3DRename } from './lab3d.js';
@@ -560,6 +561,40 @@ function openSceneNav() {
 }
 function closeSceneNav() { $('sceneNav').hidden = true; }
 
+/* ---------------- PFLab (platform fighter module) ---------------- */
+let pfLab = null;
+let pfReturnTo = 'hub';
+function enterPFLab(from) {
+  pfReturnTo = from;
+  if (from === 'hub') closeSceneNav();
+  if (!pfLab) pfLab = new PFLab(exitPFLab);
+  pfLab.enter();
+}
+function exitPFLab() {
+  if (pfReturnTo === 'hub') openSceneNav();
+}
+
+/* ---------------- New-version notice ----------------
+   GitHub Pages (and Safari) may keep serving cached files after a deploy.
+   The app polls version.json with no-store on boot and whenever the tab
+   becomes visible again; if the served version differs from the running
+   one, a notice offers a one-tap refresh to the new build. */
+let updateDismissedFor = null;
+let updateAvailable = null;
+async function checkForUpdate() {
+  try {
+    if (typeof fetch !== 'function') return;
+    const r = await fetch(`version.json?ts=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) return;
+    const v = await r.json();
+    if (v && typeof v.app === 'string' && v.app !== APP_VERSION && v.app !== updateDismissedFor) {
+      updateAvailable = v.app;
+      $('updateText').textContent = `发现新版本 MotionLab ${v.app}（当前 ${APP_VERSION}）`;
+      $('updateBar').hidden = false;
+    }
+  } catch { /* offline or local preview: stay silent */ }
+}
+
 const NAV_TITLES = { overview: '我的项目', library: '场景库', presets: '实验预设', docs: '开发者文档' };
 function setNavView(view) {
   navView = view;
@@ -1034,6 +1069,14 @@ function openSettings() {
 }
 $('btnSettings').addEventListener('click', openSettings);
 $('btnNavSettings').addEventListener('click', openSettings);
+  $('btnPFLab').addEventListener('click', () => enterPFLab('lab'));
+  $('btnEnterPF').addEventListener('click', () => enterPFLab('hub'));
+  $('btnUpdateReload').addEventListener('click', () => location.reload());
+  $('btnUpdateDismiss').addEventListener('click', () => {
+    updateDismissedFor = updateAvailable;
+    $('updateBar').hidden = true;
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
 
 /* ---------------- toolbar wiring ---------------- */
 function initChrome() {
@@ -1313,5 +1356,6 @@ function boot() {
   // The hub is the home page: returning users land here first, then step into the lab.
   if (store.loadVisited()) openSceneNav();
   else if (auto) toast('已恢复上次自动保存的场景');
+  checkForUpdate();
 }
 boot();

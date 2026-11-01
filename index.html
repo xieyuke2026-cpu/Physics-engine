@@ -24,6 +24,7 @@
     <div class="tb-group project">
       <input id="projectName" class="project-name" type="text" value="Untitled Scene" maxlength="60" aria-label="项目名称" spellcheck="false">
       <button id="btnScenes" class="tb-btn wide" title="我的项目：储存与打开场景"></button>
+      <button id="btnPFLab" class="tb-btn wide" title="PFLab：平台格斗实验室">PFLab</button>
     </div>
     <div class="tb-sep lab2d-only"></div>
     <div class="tb-group lab2d-only">
@@ -194,6 +195,14 @@
       <section id="navSectionCurrent">
         <div class="panel-title"><span class="dot"></span>当前与恢复</div>
         <div id="navCurrent" class="scene-grid"></div>
+        <div class="panel-title">实验模块</div>
+        <div class="pf-entry">
+          <div class="pf-entry-text">
+            <strong>PFLab · 平台格斗实验室</strong>
+            <span>基于 PhysicsEngine 的 2D 平台格斗原型：移动、二段跳、冲刺、攻击判定、伤害累积击退与状态机 AI 假人。</span>
+          </div>
+          <button id="btnEnterPF" class="primary-btn">进入 PFLab</button>
+        </div>
       </section>
       <section id="navSectionPresets">
         <div class="panel-title"><span class="dot"></span>2D 实验预设</div>
@@ -270,6 +279,58 @@
     <div class="modal-head"><span>设置</span><button class="tb-btn icon modal-close" data-close="modalSettings"></button></div>
     <div id="settingsBody"></div>
   </div>
+</div>
+
+<!-- ===== PFLab overlay ===== -->
+<div id="pfLab" hidden>
+  <header class="pf-topbar">
+    <div class="pf-title">PFLab <span>平台格斗实验室</span></div>
+    <div id="pfStatus" class="pf-status">对战中</div>
+    <div class="pf-actions">
+      <button id="btnPFPause" class="tb-btn wide">暂停</button>
+      <button id="btnPFRestart" class="tb-btn wide">重新开始</button>
+      <button id="btnPFBack" class="tb-btn wide">返回 MotionLab</button>
+    </div>
+  </header>
+  <div class="pf-main">
+    <div class="pf-stagewrap">
+      <canvas id="pfCanvas" width="960" height="540"></canvas>
+      <div id="pfResult" hidden>
+        <div id="pfResultText">玩家获胜</div>
+        <button id="btnPFRematch" class="primary-btn">再来一局</button>
+      </div>
+      <div class="pf-touch" aria-hidden="false">
+        <div class="pf-touch-group">
+          <button id="pfTLeft" class="pf-tbtn" aria-label="左移">←</button>
+          <button id="pfTRight" class="pf-tbtn" aria-label="右移">→</button>
+        </div>
+        <div class="pf-touch-group">
+          <button id="pfTJump" class="pf-tbtn" aria-label="跳跃">跳</button>
+          <button id="pfTAttack" class="pf-tbtn" aria-label="攻击">攻</button>
+          <button id="pfTDash" class="pf-tbtn" aria-label="冲刺">闪</button>
+        </div>
+      </div>
+    </div>
+    <aside class="pf-debug">
+      <div class="panel-title">调试面板</div>
+      <div class="pf-dbg-row"><span>玩家状态</span><strong id="pfDbgPState">—</strong></div>
+      <div class="pf-dbg-row"><span>玩家伤害</span><strong id="pfDbgPDmg">0%</strong></div>
+      <div class="pf-dbg-row"><span>玩家速度</span><strong id="pfDbgPVel">0, 0</strong></div>
+      <div class="pf-dbg-row"><span>AI 状态</span><strong id="pfDbgAState">—</strong></div>
+      <div class="pf-dbg-row"><span>AI 决策</span><strong id="pfDbgAIState">idle</strong></div>
+      <div class="pf-dbg-row"><span>AI 伤害</span><strong id="pfDbgADmg">0%</strong></div>
+      <div class="pf-dbg-row"><span>AI 速度</span><strong id="pfDbgAVel">0, 0</strong></div>
+      <div class="pf-dbg-row"><span>FPS / 步数</span><strong id="pfDbgFps">—</strong></div>
+      <div class="pf-dbg-row col"><span>最近命中</span><strong id="pfDbgHit">—</strong></div>
+    </aside>
+  </div>
+  <footer class="pf-footer">键盘：A / D 移动 · W 跳跃（可二段跳）· J 攻击 · K 冲刺 ｜ 触屏：左侧方向，右侧跳 / 攻 / 闪 ｜ 将对手打出场地边缘即获胜，伤害越高被击飞越远</footer>
+</div>
+
+<div id="updateBar" hidden>
+  <span id="updateText">发现新版本</span>
+  <button id="btnUpdateReload" class="tb-btn wide">立即刷新</button>
+  <button id="btnUpdateDismiss" class="tb-btn icon" aria-label="关闭提示">✕</button>
 </div>
 
 <div id="toast" hidden></div>
