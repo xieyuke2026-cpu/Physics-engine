@@ -41,13 +41,15 @@ const TYPE_LABELS = { circle: 'Circle · 圆形', rectangle: 'Rectangle · 矩�
 
 export class Panel {
   /** cb: { onBodyProp(key,value), onBodySize(key,value), onSceneProp(key,value),
-   *        onDeleteSelected(), onDuplicateSelected(), onSaveScene(), onNewScene() } */
+   *        onDeleteSelected(), onDuplicateSelected(), onSaveScene(), onNewScene(),
+   *        onBodyAction(action), onSelectBody(id), onDeleteBody(id), onGravityPreset(key) } */
   constructor(root, cb) {
     this.root = root;
     this.cb = cb;
     this.mode = null;       // 'body' | 'scene'
     this.selectedId = null;
     this.inputs = new Map();
+    this.ro = {};
   }
 
   _collectInputs() {
@@ -75,15 +77,28 @@ export class Panel {
     });
   }
 
-  showScene(settings, bodyCount) {
-    if (this.mode === 'scene' && this.root.childElementCount) { this.refreshScene(settings, bodyCount); return; }
+  showScene(settings, bodies) {
+    const list = Array.isArray(bodies) ? bodies : [];
+    const sig = list.map((b) => b.id).join(',');
+    if (this.mode === 'scene' && this.root.childElementCount && this._sceneSig === sig) { this.refreshScene(settings, list.length); return; }
+    this._sceneSig = sig;
     this.mode = 'scene'; this.selectedId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title('场景属性 Scene'));
-    const ro = el(`<div class="readonly-grid"><span>物体数量</span><b data-ro="count">${bodyCount}</b>
-      <span>引擎</span><b>Matter.js</b><span>格式</span><b>motionlab-scene v1</b></div>`);
+    const ro = el(`<div class="readonly-grid"><span>物体数量</span><b data-ro="count">${list.length}</b>
+      <span>引擎</span><b>Matter.js</b><span>格式</span><b>motionlab-scene v2</b></div>`);
     r.appendChild(ro);
     r.appendChild(title('重力与模拟'));
+    const chips = el('<div class="chip-row"></div>');
+    const chipDefs = [
+      ['moon', '月球 0.17g'], ['earth', '地球 1g'], ['jupiter', '木星 2.5g'], ['zero', '零重力'], ['side', '侧向重力'],
+    ];
+    for (const [key, label] of chipDefs) {
+      const c = el(`<button class="chip">${label}</button>`);
+      c.addEventListener('click', () => this.cb.onGravityPreset(key));
+      chips.appendChild(c);
+    }
+    r.appendChild(chips);
     const gx = numField('Gravity X', 'gravityX', settings.gravityX, { step: 0.1, min: -3, max: 3 });
     const gy = numField('Gravity Y', 'gravityY', settings.gravityY, { step: 0.1, min: -3, max: 3 });
     r.appendChild(row(gx, gy));
@@ -92,11 +107,27 @@ export class Panel {
     r.appendChild(title('显示'));
     r.appendChild(switchRow('显示网格 Grid', 'showGrid', settings.showGrid));
     r.appendChild(switchRow('速度向量 Vectors', 'showVectors', settings.showVectors));
+    r.appendChild(switchRow('运动轨迹 Trails', 'showTrails', settings.showTrails));
     const save = el(`<button class="btn accent block">${icon('save', 16)} 保存场景</button>`);
     save.addEventListener('click', () => this.cb.onSaveScene());
     const nw = el(`<button class="btn block">${icon('plus', 16)} 新建场景</button>`);
     nw.addEventListener('click', () => this.cb.onNewScene());
     r.appendChild(save); r.appendChild(nw);
+    if (list.length) {
+      r.appendChild(title('物体列表 Objects'));
+      const wrap = el('<div class="obj-list"></div>');
+      for (const b of list) {
+        const rowEl = el(`<button class="obj-row"><span class="o-name"></span><span class="o-type"></span></button>`);
+        rowEl.querySelector('.o-name').textContent = b.label || b.type;
+        rowEl.querySelector('.o-type').textContent = b.type + (b.isStatic ? ' · 静态' : '');
+        rowEl.addEventListener('click', () => this.cb.onSelectBody(b.id));
+        const del = el(`<span class="tb-btn icon o-del">${icon('trash', 16)}</span>`);
+        del.addEventListener('click', (e) => { e.stopPropagation(); this.cb.onDeleteBody(b.id); });
+        rowEl.appendChild(del);
+        wrap.appendChild(rowEl);
+      }
+      r.appendChild(wrap);
+    }
     r.appendChild(el('<p class="empty-note">在画布上点选一个物体，这里会显示它的物理参数。空白处双击可添加物体。</p>'));
     this._wireNumbers(r, (k, v) => this.cb.onSceneProp(k, v));
     this._collectInputs();
@@ -149,12 +180,40 @@ export class Panel {
       numField('Mass 质量', 'mass', live.mass, { step: 0.1, min: 0.01 }),
       numField('Velocity Y', 'vy', live.vy, { step: 0.5 }),
     ));
+    r.appendChild(title('实时数据 Live'));
+    const liveRo = el(`<div class="readonly-grid">
+      <span>速率 |v| (px/s)</span><b data-ro="speed">0</b>
+      <span>动能 KE</span><b data-ro="ke">0</b>
+      <span>角速度 (°/s)</span><b data-ro="angvel">0</b>
+      <span>动量 |p|</span><b data-ro="momentum">0</b></div>`);
+    r.appendChild(liveRo);
+    this.ro = {
+      speed: liveRo.querySelector('[data-ro="speed"]'),
+      ke: liveRo.querySelector('[data-ro="ke"]'),
+      angvel: liveRo.querySelector('[data-ro="angvel"]'),
+      momentum: liveRo.querySelector('[data-ro="momentum"]'),
+    };
     r.appendChild(title('材质 Material'));
     r.appendChild(numField('Density 密度', 'density', data.density, { step: 0.0005, min: 0.0001, max: 0.05 }));
     r.appendChild(sliderField('Friction 摩擦力', 'friction', data.friction, 0, 1, 0.01));
     r.appendChild(sliderField('Restitution 弹性', 'restitution', data.restitution, 0, 1, 0.01));
-    if (data.type !== 'line') r.appendChild(switchRow('Static 静态物体', 'isStatic', data.isStatic));
-    else r.appendChild(el('<p class="empty-note">线段始终为静态物体。</p>'));
+    r.appendChild(sliderField('Air Friction 空气阻力', 'frictionAir', data.frictionAir, 0, 0.1, 0.001));
+    if (data.type !== 'line') {
+      r.appendChild(switchRow('Static 静态物体', 'isStatic', data.isStatic));
+      r.appendChild(switchRow('锁定旋转 Lock Rotation', 'lockRotation', data.lockRotation === true));
+    } else r.appendChild(el('<p class="empty-note">线段始终为静态物体。</p>'));
+    if (!data.isStatic) {
+      const ops = el('<div class="btn-row"></div>');
+      const mkOp = (ic, label, action) => {
+        const b = el(`<button class="btn">${icon(ic, 15)} ${label}</button>`);
+        b.addEventListener('click', () => this.cb.onBodyAction(action));
+        return b;
+      };
+      ops.appendChild(mkOp('stop', '停止', 'stop'));
+      ops.appendChild(mkOp('flip', '翻转X', 'flipX'));
+      ops.appendChild(mkOp('flip', '翻转Y', 'flipY'));
+      r.appendChild(ops);
+    }
     const dup = el(`<button class="btn block">${icon('copy', 16)} 复制物体</button>`);
     dup.addEventListener('click', () => this.cb.onDuplicateSelected());
     const del = el(`<button class="btn danger block">${icon('trash', 16)} 删除物体</button>`);
@@ -181,6 +240,10 @@ export class Panel {
     this._setIfIdle('x', live.x); this._setIfIdle('y', live.y);
     this._setIfIdle('vx', live.vx); this._setIfIdle('vy', live.vy);
     this._setIfIdle('angleDeg', live.angleDeg); this._setIfIdle('mass', live.mass);
+    if (this.ro.speed) this.ro.speed.textContent = fmt(live.speedPxS, 0);
+    if (this.ro.ke) this.ro.ke.textContent = fmt(live.ke, 1);
+    if (this.ro.angvel) this.ro.angvel.textContent = fmt(live.angVelDegS, 0);
+    if (this.ro.momentum) this.ro.momentum.textContent = fmt(live.momentum, 1);
   }
 }
 
@@ -190,6 +253,7 @@ export function renderSettings(root, ui, cb) {
   wrap.appendChild(title('显示'));
   wrap.appendChild(switchRow('显示网格 Grid', 'showGrid', ui.showGrid !== false));
   wrap.appendChild(switchRow('速度向量 Vectors', 'showVectors', ui.showVectors === true));
+  wrap.appendChild(switchRow('运动轨迹 Trails', 'showTrails', ui.showTrails === true));
   wrap.appendChild(title('数据'));
   const note = el('<p class="empty-note">场景与设置保存在浏览器 localStorage 中，仅在本机有效。导出 JSON 可备份或分享实验场景。</p>');
   wrap.appendChild(note);
@@ -197,7 +261,7 @@ export function renderSettings(root, ui, cb) {
   clear.addEventListener('click', () => cb.onClearAll());
   wrap.appendChild(clear);
   wrap.appendChild(title('关于'));
-  wrap.appendChild(el('<p class="empty-note">MotionLab 1.0 · Matter.js 0.19 · 纯静态部署（GitHub Pages）· 无后端、无 API Key。</p>'));
+  wrap.appendChild(el('<p class="empty-note">MotionLab 1.1 · Matter.js 0.19 · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。</p>'));
   root.appendChild(wrap);
   root.querySelectorAll('input[type=checkbox][data-key]').forEach((inp) => {
     inp.addEventListener('change', () => cb.onUISetting(inp.dataset.key, inp.checked));

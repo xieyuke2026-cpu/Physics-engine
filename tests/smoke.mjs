@@ -59,7 +59,8 @@ check('boot: state is paused', stState().includes('已暂停'), stState());
 check('boot: scene panel visible', doc.getElementById('panelBody').textContent.includes('场景属性'));
 check('boot: toolbar icons rendered (svg)', doc.querySelectorAll('#topbar svg').length >= 8,
   `svgs=${doc.querySelectorAll('#topbar svg').length}`);
-check('boot: 7 tool buttons with svg icons', doc.querySelectorAll('.tool-btn svg').length === 7);
+check('boot: 9 tool buttons with svg icons', doc.querySelectorAll('.tool-btn svg').length === 9,
+  `svgs=${doc.querySelectorAll('.tool-btn svg').length}`);
 check('renderer is drawing frames', drawCalls > 50, `drawCalls=${drawCalls}`);
 
 click(doc.getElementById('btnPlay'));
@@ -126,6 +127,52 @@ check('delete key: count back to 9', stCount().includes('9'), stCount());
 click(doc.getElementById('btnScenes'));
 await wait(60);
 check('scenes modal lists saved scene', doc.getElementById('sceneList').textContent.includes('Untitled Scene'));
+
+/* --- v1.1: presets --- */
+const presetBtns = doc.querySelectorAll('#presetList .preset-btn');
+check('v1.1: five preset buttons rendered', presetBtns.length === 5, `got ${presetBtns.length}`);
+click(presetBtns[0]); // Newton's cradle (auto-runs)
+await wait(500);
+check('v1.1: cradle preset loads 9 bodies', stCount().includes('9'), stCount());
+check('v1.1: cradle preset auto-runs', stState().includes('运行中'), stState());
+click(doc.getElementById('btnPause'));
+await wait(60);
+
+// back to the default scene via the scene panel's new-scene button
+const newBtn = [...doc.getElementById('panelBody').querySelectorAll('button')].find((b) => b.textContent.includes('新建场景'));
+click(newBtn);
+await wait(200);
+check('v1.1: new scene restores default 9 bodies', stCount().includes('9'), stCount());
+
+/* --- v1.1: spring tool creates a real constraint (fit zoom 0.895, cam 640,300) --- */
+click(doc.querySelector('[data-tool="spring"]'));
+pointer(canvas, 'pointerdown', 367, 189); pointer(canvas, 'pointerup', 367, 189); // Ball at (380,120)
+await wait(60);
+pointer(canvas, 'pointerdown', 600, 162); pointer(canvas, 'pointerup', 600, 162); // Box at (640,90)
+await wait(900); // autosave debounce 700ms
+const auto = JSON.parse(window.localStorage.getItem('motionlab.autosave.v1') || '{}');
+check('v1.1: spring saved into autosave constraints', Array.isArray(auto.constraints) && auto.constraints.length === 1,
+  `constraints=${auto.constraints && auto.constraints.length}`);
+
+/* --- v1.1: body panel extras --- */
+click(doc.querySelector('[data-tool="select"]'));
+pointer(canvas, 'pointerdown', 367, 189); pointer(canvas, 'pointerup', 367, 189);
+await wait(60);
+check('v1.1: panel shows air friction slider', !!panelBody.querySelector('[data-key="frictionAir"]'));
+check('v1.1: panel shows lock-rotation switch', !!panelBody.querySelector('[data-key="lockRotation"]'));
+check('v1.1: panel shows live readouts', panelBody.textContent.includes('动能') && panelBody.textContent.includes('角速度'));
+
+/* --- v1.1: single-step while paused --- */
+click(doc.getElementById('btnStep'));
+await wait(60);
+check('v1.1: step keeps paused state', stState().includes('已暂停'), stState());
+
+/* --- v1.1: object list in scene panel --- */
+window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+await wait(60);
+check('v1.1: scene panel lists objects', panelBody.textContent.includes('物体列表')
+  && panelBody.querySelectorAll('.obj-row').length === 9,
+  `rows=${panelBody.querySelectorAll('.obj-row').length}`);
 check('no page errors during smoke', true);
 
 console.log(`\n${pass} passed, ${fail} failed`);

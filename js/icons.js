@@ -29,6 +29,14 @@ const PATHS = {
   fit: '<path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/>',
   check: '<path d="m4.5 12.5 5 5 10-11"/>',
   grid: '<path d="M4 4h16v16H4zM4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16"/>',
+  spring: '<path d="M2.5 12h2.2l1.6-4.5 2.1 9 2.1-9 2.1 9 2.1-9 2.1 9 1.6-4.5h3.1"/>',
+  triangle: '<path d="M12 4.2 20.3 19.5H3.7Z"/>',
+  step: '<path d="M6.5 5.8v12.4L15 12Z"/><path d="M17.5 5.5v13"/>',
+  camera: '<rect x="3.5" y="7.5" width="17" height="12" rx="1.2"/><circle cx="12" cy="13.5" r="3.4"/><path d="M9 7.5 10.4 5h3.2L15 7.5"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="1"/>',
+  flip: '<path d="M4 8.5h13M13.5 4.8 17.2 8.5l-3.7 3.7M20 15.5H7M10.5 11.8 6.8 15.5l3.7 3.7"/>',
+  lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="1.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+  layers: '<path d="m12 3.8 8.5 4.7L12 13.2 3.5 8.5Z"/><path d="m4.8 12.8 7.2 4 7.2-4M4.8 16.8l7.2 4 7.2-4"/>',
 };
 
 export function icon(name, size = 20) {
@@ -39,9 +47,9 @@ export function icon(name, size = 20) {
 
 export const TOOL_ICONS = {
   select: 'select', move: 'move', circle: 'circle', rectangle: 'rectangle',
-  polygon: 'polygon', line: 'line', delete: 'trash',
+  polygon: 'polygon', triangle: 'triangle', line: 'line', spring: 'spring', delete: 'trash',
 };
 export const TOOL_LABELS = {
   select: '选择', move: '移动', circle: '圆形', rectangle: '矩形',
-  polygon: '多边形', line: '线段', delete: '删除',
+  polygon: '多边形', triangle: '三角形', line: '线段', spring: '弹簧', delete: '删除',
 };

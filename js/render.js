@@ -30,7 +30,10 @@ export class Renderer {
     this.camera = new Camera();
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.view = { w: 0, h: 0 };
+    this.trails = new Map();   // dataId -> [{x,y}...] recent centre positions
   }
+
+  clearTrails() { this.trails.clear(); }
 
   resize() {
     const r = this.canvas.getBoundingClientRect();
@@ -41,7 +44,7 @@ export class Renderer {
 
   draw(world, opts) {
     const { ctx, view, camera } = this;
-    const { selectedId = null, showGrid = true, showVectors = false, preview = null, dragPoint = null } = opts;
+    const { selectedId = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null } = opts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = '#fafafa';
     ctx.fillRect(0, 0, view.w, view.h);
@@ -52,7 +55,18 @@ export class Renderer {
     ctx.translate(-camera.x, -camera.y);
     ctx.lineJoin = 'round';
 
+    if (showTrails) this._trails(world);
+    else if (this.trails.size) this.trails.clear();
+    for (const seg of world.constraintSegments()) this._spring(seg);
     for (const body of world.allBodies()) this._body(body, world, selectedId);
+    if (springPreview) {
+      ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 1.3 / camera.zoom;
+      ctx.setLineDash([5 / camera.zoom, 4 / camera.zoom]);
+      ctx.beginPath(); ctx.moveTo(springPreview.a.x, springPreview.a.y); ctx.lineTo(springPreview.b.x, springPreview.b.y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(springPreview.a.x, springPreview.a.y, 4 / camera.zoom, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.accent; ctx.fill();
+    }
     if (showVectors) for (const body of world.allBodies()) this._vector(body);
     if (dragPoint && world.dragging) {
       ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 1.2 / camera.zoom;
@@ -128,6 +142,59 @@ export class Renderer {
       ctx.strokeRect(b.min.x - 4, b.min.y - 4, (b.max.x - b.min.x) + 8, (b.max.y - b.min.y) + 8);
       ctx.setLineDash([]);
     }
+  }
+
+  /** Spring drawn as a coil zig-zag; near-rigid constraints (stiffness >= 0.9) as a straight rod. */
+  _spring(seg) {
+    const { ctx, camera } = this;
+    const { a, b, stiffness } = seg;
+    ctx.strokeStyle = '#6d7278';
+    ctx.lineWidth = 1.4 / Math.sqrt(camera.zoom);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    if (stiffness >= 0.9) {
+      ctx.lineTo(b.x, b.y);
+    } else {
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len, px = -uy, py = ux;
+      const coils = Math.max(4, Math.min(16, Math.round(len / 14)));
+      const amp = 6;
+      for (let i = 1; i < coils; i++) {
+        const t = i / coils;
+        const off = (i % 2 === 0 ? -amp : amp) * Math.sin(Math.PI * Math.min(1, Math.max(0, (t - 0.06) / 0.88)));
+        ctx.lineTo(a.x + dx * t + px * off, a.y + dy * t + py * off);
+      }
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#6d7278';
+    ctx.beginPath(); ctx.arc(a.x, a.y, 2.4 / Math.sqrt(camera.zoom), 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(b.x, b.y, 2.4 / Math.sqrt(camera.zoom), 0, Math.PI * 2); ctx.fill();
+  }
+
+  _trails(world) {
+    const { ctx } = this;
+    const alive = new Set();
+    for (const body of world.allBodies()) {
+      if (body.isStatic) continue;
+      const id = world.dataIdOf(body);
+      alive.add(id);
+      let tr = this.trails.get(id);
+      if (!tr) { tr = []; this.trails.set(id, tr); }
+      const last = tr[tr.length - 1];
+      if (!last || Math.hypot(body.position.x - last.x, body.position.y - last.y) > 3) {
+        tr.push({ x: body.position.x, y: body.position.y });
+        if (tr.length > 110) tr.shift();
+      }
+      if (tr.length > 1) {
+        ctx.strokeStyle = 'rgba(47,109,179,.4)'; ctx.lineWidth = 1.2; ctx.beginPath();
+        ctx.moveTo(tr[0].x, tr[0].y);
+        for (let i = 1; i < tr.length; i++) ctx.lineTo(tr[i].x, tr[i].y);
+        ctx.stroke();
+      }
+    }
+    for (const id of [...this.trails.keys()]) if (!alive.has(id)) this.trails.delete(id);
   }
 
   _vector(body) {

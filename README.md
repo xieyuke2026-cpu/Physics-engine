@@ -16,24 +16,34 @@
 
 **物理（Matter.js 真实模拟）**
 - 重力（X/Y 可调、可关闭）、碰撞检测、摩擦力、弹性碰撞、刚体旋转、静态/动态物体
-- 物体类型：圆形 Circle、矩形 Rectangle、正多边形 Polygon、静态线段 Static Line（斜坡）
+- 物体类型：圆形 Circle、矩形 Rectangle、正多边形 Polygon、三角形 Triangle、静态线段 Static Line（斜坡）
+- **弹簧 / 连杆约束（v1.1）**：两点式放置——物体↔物体、物体↔固定锚点；低刚度渲染为弹簧线圈，
+  高刚度（≥0.9）渲染为直杆（可做单摆/牛顿摆）；删除物体自动清理其约束，删除工具点按弹簧线可单独删除弹簧
 - 地面与左右墙壁作为场景框架物体，可选中、调参、删除
 
 **交互**
-- 工具：选择、移动、圆形、矩形、多边形、线段、删除
+- 工具：选择、移动、圆形、矩形、多边形、三角形、线段、弹簧、删除
 - 点按放置 / 拖拽定尺寸创建物体；约束拖拽（运行中拖拽是真实物理约束，可投掷物体）
 - 画布缩放（滚轮 / 双指捏合 / 工具按钮）与平移（移动工具拖拽空白、双指拖动）
 - 选中高亮（蓝色描边 + 虚线包围盒）、双击空白快速添加圆形
-- 播放 / 暂停 / 重置、Undo / Redo（Ctrl+Z / Ctrl+Shift+Z）、空格播放暂停、Delete 删除
+- 播放 / 暂停 / **单步运行一帧** / 重置、Undo / Redo、空格播放暂停、Delete 删除
+- 快捷键：Ctrl+D 复制物体、方向键微调位置（Shift=10px）、R 旋转 15°（Shift+R 反向）
+- **画布截图导出 PNG**（顶部相机按钮）
+
+**实验预设（v1.1，场景管理弹窗内一键载入并自动运行）**
+- 牛顿摆（5 球刚性摆杆）、多米诺骨牌、方块金字塔、斜坡滚球、高弹球阵列
 
 **属性面板（右侧，可折叠）**
-- 选中物体：类型、位置 X/Y、宽/高或半径、边数、质量、密度、摩擦力、弹性、角度、速度 X/Y、静态开关
+- 选中物体：类型、位置 X/Y、宽/高或半径、边数、质量、密度、摩擦力、**空气阻力**、弹性、角度、速度 X/Y、静态开关、**锁定旋转**
+- **实时数据读数**：速率 |v|（px/s）、动能 KE、角速度（°/s）、动量 |p|，模拟运行时实时刷新
+- **物体操作**：停止运动、水平/垂直翻转速度
 - 所有修改实时同步到物理引擎（尺寸修改通过原地重建保持 id 与材质参数）
-- 未选中时显示场景属性：重力 X/Y、模拟速度、重力开关、网格 / 速度向量显示开关
+- 未选中时显示场景属性：**重力预设**（月球/地球/木星/零重力/侧向）、重力 X/Y、模拟速度、重力开关、
+  网格 / 速度向量 / **运动轨迹**显示开关、**物体列表**（点选定位、单删）
 
 **项目管理**
 - 新建 / 保存 / 加载 / 重命名 / 复制 / 删除场景（场景库存于 localStorage）
-- 导出 / 导入 JSON（格式 `motionlab-scene` v1，导入时完整校验，错误会逐条提示）
+- 导出 / 导入 JSON（格式 `motionlab-scene` v2，含 `constraints`；v1 文件可继续导入，导入时完整校验，错误会逐条提示）
 - 自动保存：刷新页面后恢复上次场景
 
 **状态栏**：FPS、物体数量、模拟状态、重力、模拟速度、缩放比例。
@@ -64,12 +74,17 @@ UI、物理引擎、场景管理三层分离：`ui.js` 不直接接触 Matter，
 ```json
 {
   "format": "motionlab-scene",
-  "version": 1,
+  "version": 2,
   "name": "Untitled Scene",
-  "settings": { "gravityX": 0, "gravityY": 1, "gravityEnabled": true, "speed": 1, "showGrid": true, "showVectors": false },
+  "settings": { "gravityX": 0, "gravityY": 1, "gravityEnabled": true, "speed": 1, "showGrid": true, "showVectors": false, "showTrails": false },
   "bodies": [
     { "id": "body-…", "type": "circle", "x": 380, "y": 120, "radius": 30,
-      "density": 0.001, "friction": 0.3, "restitution": 0.55, "isStatic": false }
+      "density": 0.001, "friction": 0.3, "restitution": 0.55, "isStatic": false, "lockRotation": false }
+  ],
+  "constraints": [
+    { "id": "spring-…", "bodyA": null, "bodyB": "body-…",
+      "pointA": { "x": 380, "y": 40 }, "pointB": { "x": 0, "y": 0 },
+      "stiffness": 0.08, "damping": 0.05, "length": 80 }
   ]
 }
 ```
@@ -92,4 +107,7 @@ UI、物理引擎、场景管理三层分离：`ui.js` 不直接接触 Matter，
 
 `node tests/run-tests.mjs` — 覆盖场景校验、重力下落与地面碰撞静止、重力关闭、
 拾取/删除、密度/质量/摩擦/弹性/位置/角度/速度/静态切换同步、尺寸重建、
-约束拖拽、序列化 JSON 往返、速度倍率。结果见 TEST-REPORT.md。
+约束拖拽、序列化 JSON 往返、速度倍率；v1.1 新增：v1/v2 格式兼容与约束校验、
+刚性摆杆长度保持、软弹簧拉近、约束生命周期与往返、锁定旋转、空气阻力、停止运动、五个预设的校验与载入。
+`node tests/smoke.mjs` — jsdom 真实 UI 冒烟（启动/运行/创建/编辑/保存/撤销/预设/弹簧工具/单步/物体列表）。
+结果见 TEST-REPORT.md。

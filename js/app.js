@@ -3,7 +3,7 @@
    drawing in render.js, panel DOM in ui.js, persistence in storage.js. */
 
 import { icon, TOOL_ICONS } from './icons.js';
-import { sceneData, bodyData, validateScene, defaultScene, DEFAULT_SETTINGS } from './scene.js';
+import { sceneData, bodyData, constraintData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS } from './scene.js';
 import { PhysicsWorld } from './physics.js';
 import { Renderer } from './render.js';
 import { Panel, renderSettings } from './ui.js';
@@ -24,6 +24,8 @@ let selectedId = null;
 let initialSnapshot = null;   // for Reset: state at load / last save
 let preview = null;
 let dragPoint = null;
+let springStart = null;   // {bodyId|null, offset:{x,y}, point:{x,y}} first spring endpoint
+let springCur = null;     // current pointer world pos while placing a spring
 
 /* ---------------- toast ---------------- */
 let toastTimer = null;
@@ -40,6 +42,7 @@ function currentScene() {
     name: sceneName,
     settings: { ...settings },
     bodies: world.allBodies().map((b) => world.serializeBody(b)),
+    constraints: world.serializeConstraints(),
   });
 }
 
@@ -50,6 +53,8 @@ function loadScene(scene, { markInitial = true } = {}) {
   $('projectName').value = sceneName;
   world.loadScene(s);
   selectedId = null;
+  springStart = null; springCur = null;
+  renderer.clearTrails();
   if (markInitial) initialSnapshot = JSON.stringify(currentScene());
   refreshPanel();
   updateTransport();
@@ -58,12 +63,33 @@ function loadScene(scene, { markInitial = true } = {}) {
 
 function selectedBody() { return selectedId ? world.bodyById(selectedId) : null; }
 function liveOf(body) {
+  const speedPxS = Math.hypot(body.velocity.x, body.velocity.y) * 60;
   return {
     x: body.position.x, y: body.position.y,
     vx: body.velocity.x, vy: body.velocity.y,
     angleDeg: body.angle * 180 / Math.PI,
     mass: body.mass,
+    speedPxS,
+    ke: body.isStatic ? 0 : 0.5 * body.mass * speedPxS * speedPxS,
+    angVelDegS: body.angularVelocity * 60 * 180 / Math.PI,
+    momentum: body.isStatic ? 0 : body.mass * speedPxS,
   };
+}
+
+/** World point of a spring's first endpoint (anchor may ride on a moving body). */
+function springAnchorWorld() {
+  if (!springStart) return null;
+  if (!springStart.bodyId) return { ...springStart.point };
+  const b = world.bodyById(springStart.bodyId);
+  if (!b) return null;
+  const c = Math.cos(b.angle), s = Math.sin(b.angle);
+  const o = springStart.offset;
+  return { x: b.position.x + o.x * c - o.y * s, y: b.position.y + o.x * s + o.y * c };
+}
+function localOffset(body, w) {
+  const dx = w.x - body.position.x, dy = w.y - body.position.y;
+  const c = Math.cos(-body.angle), s = Math.sin(-body.angle);
+  return { x: dx * c - dy * s, y: dx * s + dy * c };
 }
 
 /* ---------------- history (undo/redo over scene snapshots) ---------------- */
@@ -121,10 +147,42 @@ const panel = new Panel($('panelBody'), {
       case 'mass': world.setMass(b, value); break;
       case 'density': world.setDensity(b, value); break;
       case 'friction': world.setFriction(b, value); break;
+      case 'frictionAir': world.setFrictionAir(b, value); break;
       case 'restitution': world.setRestitution(b, value); break;
       case 'isStatic': world.setStatic(b, value); break;
+      case 'lockRotation': world.setLockRotation(b, value); break;
     }
     panel.refreshBody(liveOf(b));
+    pushHistorySoon(); scheduleAutosave();
+  },
+  onBodyAction(action) {
+    const b = selectedBody(); if (!b) return;
+    if (action === 'stop') world.stopMotion(b);
+    else if (action === 'flipX') world.setVelocity(b, -b.velocity.x, b.velocity.y);
+    else if (action === 'flipY') world.setVelocity(b, b.velocity.x, -b.velocity.y);
+    panel.refreshBody(liveOf(b));
+    pushHistorySoon(); scheduleAutosave();
+  },
+  onSelectBody(id) {
+    if (!world.bodyById(id)) return;
+    selectedId = id;
+    refreshPanel();
+  },
+  onDeleteBody(id) {
+    world.removeBody(id);
+    if (selectedId === id) selectedId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast('物体已删除');
+  },
+  onGravityPreset(key) {
+    if (key === 'moon') { settings.gravityX = 0; settings.gravityY = 0.17; settings.gravityEnabled = true; }
+    else if (key === 'earth') { settings.gravityX = 0; settings.gravityY = 1; settings.gravityEnabled = true; }
+    else if (key === 'jupiter') { settings.gravityX = 0; settings.gravityY = 2.5; settings.gravityEnabled = true; }
+    else if (key === 'zero') { settings.gravityEnabled = false; }
+    else if (key === 'side') { settings.gravityX = 1; settings.gravityY = 0; settings.gravityEnabled = true; }
+    world.applySettings(settings);
+    panel.selectedId = null; panel.mode = null; // force scene panel rebuild so values show
+    refreshPanel(); updateStatus();
     pushHistorySoon(); scheduleAutosave();
   },
   onBodySize(key, value) {
@@ -151,7 +209,7 @@ const panel = new Panel($('panelBody'), {
 function refreshPanel() {
   const b = selectedBody();
   if (b) panel.showBody(world.serializeBody(b), liveOf(b));
-  else panel.showScene(settings, world.count);
+  else panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)));
 }
 
 function deleteSelected() {
@@ -224,17 +282,67 @@ function hintFor(t) {
     circle: '在画布上点按或拖拽画出圆形，松手创建',
     rectangle: '在画布上拖拽画出矩形，松手创建',
     polygon: '点按或拖拽确定半径，创建正六边形',
+    triangle: '点按或拖拽确定大小，创建三角形',
     line: '拖拽画出静态线段（斜坡），松手创建',
-    delete: '点按任意物体将其删除',
+    spring: springStart ? '再点第二个物体（或空白处作为固定锚点）完成弹簧' : '先点一个物体作为弹簧起点（点空白 = 固定锚点）',
+    delete: '点按物体删除 · 点按弹簧线可删除弹簧',
   };
   $('stageHint').textContent = hints[t] || '';
 }
 function setTool(t) {
   tool = t;
+  if (t !== 'spring') { springStart = null; springCur = null; }
   document.querySelectorAll('.tool-btn').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
   hintFor(t);
   canvas.style.cursor = t === 'move' ? 'grab' : t === 'delete' ? 'not-allowed' : 'crosshair';
   if (t === 'select') canvas.style.cursor = 'default';
+}
+
+/** Two-tap spring placement: body->body, body->world anchor, or world anchor->body. */
+function handleSpringTap(w) {
+  const b = world.pick(w.x, w.y);
+  if (!springStart) {
+    springStart = b
+      ? { bodyId: world.dataIdOf(b), offset: localOffset(b, w), point: { ...w } }
+      : { bodyId: null, offset: { x: 0, y: 0 }, point: { ...w } };
+    springCur = { ...w };
+    hintFor('spring');
+    toast(b ? '已选起点，再点第二个物体或空白锚点' : '已放置固定锚点，再点一个物体');
+    return;
+  }
+  const start = springStart;
+  springStart = null; springCur = null;
+  hintFor('spring');
+  if (b && start.bodyId && world.dataIdOf(b) === start.bodyId) { toast('弹簧两端不能是同一个物体'); return; }
+  if (!b && !start.bodyId) { toast('弹簧至少一端要连接物体'); return; }
+  // Only bodyA may be null (a fixed world anchor), so a world endpoint always goes to A.
+  let data;
+  if (start.bodyId && b) {
+    data = constraintData({ bodyA: start.bodyId, bodyB: world.dataIdOf(b), pointA: start.offset, pointB: localOffset(b, w), stiffness: 0.08, damping: 0.05 });
+  } else if (start.bodyId && !b) {
+    data = constraintData({ bodyA: null, bodyB: start.bodyId, pointA: { ...w }, pointB: start.offset, stiffness: 0.08, damping: 0.05 });
+  } else {
+    data = constraintData({ bodyA: null, bodyB: world.dataIdOf(b), pointA: start.point, pointB: localOffset(b, w), stiffness: 0.08, damping: 0.05 });
+  }
+  if (world.addConstraint(data)) {
+    pushHistorySoon(); scheduleAutosave();
+    toast('弹簧已创建');
+  } else toast('弹簧创建失败');
+}
+
+/** Nearest spring segment within tap tolerance of a world point, or null. */
+function pickSpring(wx, wy) {
+  const tol = 12 / camera.zoom;
+  let best = null, bestD = tol;
+  for (const seg of world.constraintSegments()) {
+    const { a, b } = seg;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((wx - a.x) * dx + (wy - a.y) * dy) / len2));
+    const d = Math.hypot(wx - (a.x + dx * t), wy - (a.y + dy * t));
+    if (d < bestD) { bestD = d; best = seg; }
+  }
+  return best;
 }
 
 canvas.addEventListener('pointerdown', (e) => {
@@ -247,12 +355,21 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   const w = toWorld(e);
-  if (tool === 'circle' || tool === 'rectangle' || tool === 'polygon' || tool === 'line') {
+  if (tool === 'circle' || tool === 'rectangle' || tool === 'polygon' || tool === 'triangle' || tool === 'line') {
     gesture = { kind: 'create', start: w, cur: w };
     updatePreview();
     return;
   }
+  if (tool === 'spring') { handleSpringTap(w); return; }
   if (tool === 'delete') {
+    // springs first: tapping near a spring line removes the spring, not a body
+    const seg = pickSpring(w.x, w.y);
+    if (seg) {
+      world.removeConstraint(seg.id);
+      refreshPanel(); pushHistorySoon(); scheduleAutosave();
+      toast('弹簧已删除');
+      return;
+    }
     const b = world.pick(w.x, w.y);
     if (b) {
       const id = world.dataIdOf(b);
@@ -286,6 +403,7 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (tool === 'spring' && springStart) springCur = toWorld(e);
   if (!gesture) return;
   if (gesture.kind === 'pinch' && pointers.size === 2) {
     const d = pinchDist(), c = pinchCenter();
@@ -336,7 +454,7 @@ function updatePreview() {
   if (!gesture || gesture.kind !== 'create') { preview = null; return; }
   const { start: s, cur: c } = gesture;
   const dx = c.x - s.x, dy = c.y - s.y;
-  if (tool === 'circle' || tool === 'polygon') preview = { kind: tool, x: s.x, y: s.y, r: Math.max(6, Math.hypot(dx, dy)) };
+  if (tool === 'circle' || tool === 'polygon' || tool === 'triangle') preview = { kind: 'circle', x: s.x, y: s.y, r: Math.max(6, Math.hypot(dx, dy)) };
   else if (tool === 'line') preview = { kind: 'line', x1: s.x, y1: s.y, x2: c.x, y2: c.y };
   else preview = { kind: 'rectangle', x: (s.x + c.x) / 2, y: (s.y + c.y) / 2, w: Math.max(6, Math.abs(dx)), h: Math.max(6, Math.abs(dy)) };
 }
@@ -348,6 +466,7 @@ function finalizeCreate() {
   let d = null;
   if (tool === 'circle') d = bodyData({ type: 'circle', x: s.x, y: s.y, radius: dist > 6 ? dist : 30, restitution: 0.4, label: 'Ball' });
   else if (tool === 'polygon') d = bodyData({ type: 'polygon', x: s.x, y: s.y, radius: dist > 6 ? dist : 34, sides: 6, label: 'Polygon' });
+  else if (tool === 'triangle') d = bodyData({ type: 'polygon', x: s.x, y: s.y, radius: dist > 6 ? dist : 36, sides: 3, label: 'Triangle' });
   else if (tool === 'rectangle') {
     d = dist > 6
       ? bodyData({ type: 'rectangle', x: (s.x + c.x) / 2, y: (s.y + c.y) / 2, width: Math.abs(dx), height: Math.abs(dy), label: 'Box' })
@@ -448,7 +567,25 @@ function renderSceneList() {
     list.appendChild(item);
   }
 }
-$('btnScenes').addEventListener('click', () => { renderSceneList(); openModal('modalScenes'); });
+function renderPresetList() {
+  const wrap = $('presetList');
+  wrap.innerHTML = '';
+  for (const p of presetScenes()) {
+    const b = document.createElement('button');
+    b.className = 'preset-btn';
+    b.innerHTML = `${icon('layers', 17)}<span></span><span class="p-sub">${p.scene.bodies.length} 物体</span>`;
+    b.querySelector('span').textContent = p.name;
+    b.addEventListener('click', () => {
+      loadScene(p.scene);
+      resetHistory();
+      closeModal('modalScenes');
+      setRunning(true);
+      toast(`已载入预设「${p.name}」，模拟运行中`);
+    });
+    wrap.appendChild(b);
+  }
+}
+$('btnScenes').addEventListener('click', () => { renderPresetList(); renderSceneList(); openModal('modalScenes'); });
 $('btnNewScene').addEventListener('click', () => { closeModal('modalScenes'); newScene(); });
 $('btnDuplicateScene').addEventListener('click', () => {
   let nn = `${sceneName} 副本`; let i = 2;
@@ -485,6 +622,7 @@ function initChrome() {
   $('logo').innerHTML = icon('logo', 26);
   $('btnUndo').innerHTML = icon('undo'); $('btnRedo').innerHTML = icon('redo');
   $('btnPause').innerHTML = icon('pause'); $('btnReset').innerHTML = icon('reset');
+  $('btnStep').innerHTML = icon('step'); $('btnShot').innerHTML = icon('camera');
   $('btnSettings').innerHTML = icon('settings'); $('btnPanel').innerHTML = icon('panel');
   $('btnSave').innerHTML = `${icon('save', 17)} 保存`;
   $('btnExport').innerHTML = icon('export'); $('btnImport').innerHTML = icon('import');
@@ -499,6 +637,27 @@ function initChrome() {
   });
   $('btnPlay').addEventListener('click', () => setRunning(!running));
   $('btnPause').addEventListener('click', () => setRunning(false));
+  $('btnStep').addEventListener('click', () => {
+    setRunning(false);
+    world.step(1000 / 60, settings.speed);
+    const b = selectedBody();
+    if (b) panel.refreshBody(liveOf(b));
+  });
+  $('btnShot').addEventListener('click', () => {
+    renderer.draw(world, {
+      selectedId, showGrid: settings.showGrid, showVectors: settings.showVectors,
+      showTrails: settings.showTrails, preview: null, dragPoint: null, springPreview: null,
+    });
+    canvas.toBlob((blob) => {
+      if (!blob) { toast('截图失败'); return; }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(sceneName || 'motionlab').replace(/[\\/:*?"<>|]/g, '_')}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast('画布截图 PNG 已导出');
+    }, 'image/png');
+  });
   $('btnReset').addEventListener('click', resetScene);
   $('btnUndo').addEventListener('click', () => applyHistory(-1));
   $('btnRedo').addEventListener('click', () => applyHistory(1));
@@ -548,9 +707,26 @@ function initChrome() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); applyHistory(e.shiftKey ? 1 : -1); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); applyHistory(1); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveCurrent(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); }
     else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); setRunning(!running); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { deleteSelected(); }
-    else if (e.key === 'Escape') { selectedId = null; refreshPanel(); }
+    else if (e.key === 'Escape') { selectedId = null; springStart = null; springCur = null; refreshPanel(); }
+    else if (selectedId && e.key.startsWith('Arrow')) {
+      e.preventDefault();
+      const b = selectedBody(); if (!b) return;
+      const step = e.shiftKey ? 10 : 1;
+      const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+      const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+      world.setPosition(b, b.position.x + dx, b.position.y + dy);
+      panel.refreshBody(liveOf(b));
+      pushHistorySoon(); scheduleAutosave();
+    }
+    else if (selectedId && (e.key === 'r' || e.key === 'R')) {
+      const b = selectedBody(); if (!b) return;
+      world.setAngleDeg(b, b.angle * 180 / Math.PI + (e.shiftKey ? -15 : 15));
+      panel.refreshBody(liveOf(b));
+      pushHistorySoon(); scheduleAutosave();
+    }
   });
   window.addEventListener('resize', () => renderer.resize());
   window.addEventListener('beforeunload', () => { try { store.saveAutosave(currentScene()); } catch {} });
@@ -583,12 +759,15 @@ function loop(now) {
     const stepMs = 1000 / 60;
     while (acc >= stepMs) { world.step(stepMs, settings.speed); acc -= stepMs; }
   } else acc = 0;
+  const anchor = springAnchorWorld();
   renderer.draw(world, {
     selectedId,
     showGrid: settings.showGrid,
     showVectors: settings.showVectors,
+    showTrails: settings.showTrails,
     preview,
     dragPoint,
+    springPreview: anchor && springCur ? { a: anchor, b: springCur } : null,
   });
 }
 

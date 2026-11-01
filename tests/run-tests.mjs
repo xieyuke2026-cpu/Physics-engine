@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 globalThis.Matter = require('../vendor/matter.min.js');
 
-const { validateScene, defaultScene, sceneData, bodyData } = await import('../js/scene.js');
+const { validateScene, defaultScene, sceneData, bodyData, constraintData, presetScenes } = await import('../js/scene.js');
 const { PhysicsWorld } = await import('../js/physics.js');
 
 let pass = 0, fail = 0;
@@ -112,6 +112,92 @@ w8.loadScene(sceneData({ bodies: [bodyData({ type: 'circle', x: 0, y: 0, radius:
 const fast = w8.allBodies()[0];
 for (let i = 0; i < 30; i++) w8.step(1000 / 60, 2);
 check('speed 2x falls further than 1x baseline (>150px in 0.5s wall)', fast.position.y > 100, `y=${fast.position.y.toFixed(1)}`);
+
+/* --- v1.1: format v2 + backward compatibility --- */
+check('v1 scene (no constraints) still validates', validateScene({ format: 'motionlab-scene', version: 1, bodies: [] }).ok);
+check('version 3 rejected', !validateScene({ format: 'motionlab-scene', version: 3, bodies: [] }).ok);
+check('constraint referencing missing body rejected', !validateScene({
+  format: 'motionlab-scene', version: 2,
+  bodies: [{ id: 'a', type: 'circle', x: 0, y: 0 }],
+  constraints: [{ bodyA: null, bodyB: 'nope', pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 }, stiffness: 0.1 }],
+}).ok);
+check('constraint stiffness > 1 rejected', !validateScene({
+  format: 'motionlab-scene', version: 2,
+  bodies: [{ id: 'a', type: 'circle', x: 0, y: 0 }],
+  constraints: [{ bodyA: null, bodyB: 'a', pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 }, stiffness: 5 }],
+}).ok);
+
+/* --- v1.1: rigid rod constraint holds a pendulum ball --- */
+const wp = new PhysicsWorld();
+wp.loadScene(sceneData({
+  settings: { gravityY: 1 },
+  bodies: [bodyData({ id: 'pend', type: 'circle', x: 320, y: 250, radius: 20, frictionAir: 0.001 })],
+  constraints: [constraintData({ bodyA: null, bodyB: 'pend', pointA: { x: 200, y: 50 }, pointB: { x: 0, y: 0 }, stiffness: 1, damping: 0, length: 200 })],
+}));
+check('constraint added to world', wp.constraintCount === 1);
+const pend = wp.allBodies()[0];
+for (let i = 0; i < 240; i++) wp.step(1000 / 60, 1);
+const rodDist = Math.hypot(pend.position.x - 200, pend.position.y - 50);
+check('rod keeps ball near fixed length from anchor', rodDist > 180 && rodDist < 225, `d=${rodDist.toFixed(1)}`);
+check('pendulum did not fall away', pend.position.y < 320, `y=${pend.position.y.toFixed(1)}`);
+
+/* --- v1.1: soft spring pulls two bodies together --- */
+const ws = new PhysicsWorld();
+ws.loadScene(sceneData({
+  settings: { gravityEnabled: false },
+  bodies: [
+    bodyData({ id: 's1', type: 'circle', x: 100, y: 200, radius: 15 }),
+    bodyData({ id: 's2', type: 'circle', x: 420, y: 200, radius: 15 }),
+  ],
+  constraints: [constraintData({ bodyA: 's1', bodyB: 's2', stiffness: 0.02, damping: 0.02, length: 0 })],
+}));
+const [s1, s2] = ws.allBodies();
+for (let i = 0; i < 180; i++) ws.step(1000 / 60, 1);
+const sprDist = Math.hypot(s2.position.x - s1.position.x, s2.position.y - s1.position.y);
+check('spring pulls bodies closer (320 -> <200)', sprDist < 200, `d=${sprDist.toFixed(1)}`);
+
+/* --- v1.1: constraint lifecycle --- */
+const wc = new PhysicsWorld();
+wc.loadScene(sceneData({
+  bodies: [bodyData({ id: 'c1', type: 'circle', x: 100, y: 100, radius: 15 })],
+  constraints: [constraintData({ bodyA: null, bodyB: 'c1', pointA: { x: 100, y: 20 } })],
+}));
+check('constraint serialized back out', wc.serializeConstraints().length === 1);
+const cScene = sceneData({ bodies: wc.allBodies().map((b) => wc.serializeBody(b)), constraints: wc.serializeConstraints() });
+check('scene with constraint validates after round-trip', validateScene(JSON.parse(JSON.stringify(cScene))).ok);
+wc.removeBody('c1');
+check('deleting a body removes its constraints', wc.constraintCount === 0);
+
+/* --- v1.1: lock rotation / air friction / stop --- */
+const wl = new PhysicsWorld();
+wl.loadScene(sceneData({ bodies: [bodyData({ id: 'lk', type: 'rectangle', x: 100, y: 100, width: 60, height: 30 })] }));
+const lk = wl.allBodies()[0];
+wl.setLockRotation(lk, true);
+check('lock rotation sets infinite inertia', lk.inertia === Infinity);
+check('lock rotation flag serializes', wl.serializeBody(lk).lockRotation === true);
+Matter.Body.setAngularVelocity(lk, 0.3);
+for (let i = 0; i < 30; i++) wl.step(1000 / 60, 1);
+check('locked body does not rotate', Math.abs(lk.angle) < 0.05, `angle=${lk.angle.toFixed(3)}`);
+wl.setLockRotation(lk, false);
+check('unlock restores finite inertia', Number.isFinite(lk.inertia));
+wl.setFrictionAir(lk, 0.05);
+check('frictionAir edit applies', lk.frictionAir === 0.05);
+wl.setVelocity(lk, 4, 3); wl.stopMotion(lk);
+check('stop motion zeroes velocity', lk.velocity.x === 0 && lk.velocity.y === 0 && lk.angularVelocity === 0);
+
+/* --- v1.1: presets --- */
+const presets = presetScenes();
+check('five presets exist', presets.length === 5, `got ${presets.length}`);
+for (const p of presets) {
+  check(`preset ${p.key} validates`, validateScene(JSON.parse(JSON.stringify(p.scene))).ok);
+}
+const cradle = presets.find((p) => p.key === 'cradle');
+check('cradle preset has 5 rod constraints', cradle.scene.constraints.length === 5, `got ${cradle.scene.constraints.length}`);
+const wcr = new PhysicsWorld();
+wcr.loadScene(cradle.scene);
+check('cradle loads 5 constraints into world', wcr.constraintCount === 5);
+for (let i = 0; i < 120; i++) wcr.step(1000 / 60, 1);
+check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b) => b.label === 'Pendulum Ball').every((b) => b.position.y < 500));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

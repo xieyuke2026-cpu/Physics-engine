@@ -29,11 +29,13 @@
     <div class="tb-group transport">
       <button id="btnPlay" class="tb-btn primary" title="运行"></button>
       <button id="btnPause" class="tb-btn icon" title="暂停"></button>
+      <button id="btnStep" class="tb-btn icon" title="单步运行一帧"></button>
       <button id="btnReset" class="tb-btn icon" title="重置场景"></button>
     </div>
     <div class="tb-spacer"></div>
     <div class="tb-group">
       <button id="btnSave" class="tb-btn wide" title="保存场景 (Ctrl+S)"></button>
+      <button id="btnShot" class="tb-btn icon" title="导出画布截图 PNG"></button>
       <button id="btnExport" class="tb-btn icon" title="导出 JSON"></button>
       <button id="btnImport" class="tb-btn icon" title="导入 JSON"></button>
       <input id="fileImport" type="file" accept="application/json,.json" hidden>
@@ -51,7 +53,10 @@
       <button class="tool-btn" data-tool="circle" title="圆形"></button>
       <button class="tool-btn" data-tool="rectangle" title="矩形"></button>
       <button class="tool-btn" data-tool="polygon" title="多边形"></button>
+      <button class="tool-btn" data-tool="triangle" title="三角形"></button>
       <button class="tool-btn" data-tool="line" title="静态线段"></button>
+      <div class="rail-sep"></div>
+      <button class="tool-btn" data-tool="spring" title="弹簧 / 连杆"></button>
       <div class="rail-sep"></div>
       <button class="tool-btn danger" data-tool="delete" title="删除"></button>
     </nav>
@@ -93,6 +98,9 @@
       <button id="btnNewScene" class="btn"></button>
       <button id="btnDuplicateScene" class="btn"></button>
     </div>
+    <div class="panel-title"><span class="dot"></span>实验预设 Presets</div>
+    <div id="presetList" class="preset-grid"></div>
+    <div class="panel-title"><span class="dot"></span>已保存场景</div>
     <div id="sceneList" class="scene-list"></div>
   </div>
 </div>
