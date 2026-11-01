@@ -520,12 +520,25 @@ function closeModal(id) { $(id).hidden = true; }
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeModal(b.dataset.close)));
 document.querySelectorAll('.modal-backdrop').forEach((m) => m.addEventListener('pointerdown', (e) => { if (e.target === m) m.hidden = true; }));
 
-/* ---------------- project navigation (scene hub) ---------------- */
+/* ---------------- home (My Projects hub) ---------------- */
+let navView = 'overview';
 function openSceneNav() {
   renderSceneNav();
+  setNavView(navView);
   $('sceneNav').hidden = false;
 }
 function closeSceneNav() { $('sceneNav').hidden = true; }
+
+const NAV_TITLES = { overview: '我的项目', library: '场景库', presets: '实验预设' };
+function setNavView(view) {
+  navView = view;
+  document.querySelectorAll('.side-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  $('navSectionCurrent').hidden = view !== 'overview';
+  $('navSectionSaved').hidden = view === 'presets';
+  $('navSectionPresets').hidden = view === 'library';
+  $('navToolbar').style.display = view === 'presets' ? 'none' : '';
+  $('navTitle').textContent = NAV_TITLES[view] || '我的项目';
+}
 
 /** Static thumbnail drawn from scene data (no physics): shapes + springs, fitted to the card. */
 function drawThumb(canvas, scene) {
@@ -682,7 +695,10 @@ function renderSceneCards(filter = '') {
 
 function renderSceneNav() {
   $('navLogo').innerHTML = icon('logo', 26);
-  $('btnCloseNav').innerHTML = icon('close', 18);
+  document.querySelectorAll('.side-ic').forEach((s) => { s.innerHTML = icon(s.dataset.ic, 18); });
+  const savedCount = Object.keys(store.loadScenes()).length;
+  $('countLibrary').textContent = String(savedCount);
+  $('sideStorage').textContent = `保存在本机浏览器 · ${savedCount} 个场景 · 5 个预设`;
   // current + autosave cards
   const cur = $('navCurrent');
   cur.innerHTML = '';
@@ -726,6 +742,7 @@ function renderPresetList() {
 }
 $('btnScenes').addEventListener('click', openSceneNav);
 $('btnCloseNav').addEventListener('click', closeSceneNav);
+document.querySelectorAll('.side-item').forEach((b) => b.addEventListener('click', () => setNavView(b.dataset.view)));
 $('sceneSearch').addEventListener('input', () => renderSceneCards($('sceneSearch').value.trim()));
 $('btnNewScene').addEventListener('click', () => { closeSceneNav(); newScene(); });
 $('btnDuplicateScene').addEventListener('click', () => {
@@ -763,6 +780,9 @@ $('btnSettings').addEventListener('click', () => {
 /* ---------------- toolbar wiring ---------------- */
 function initChrome() {
   $('logo').innerHTML = icon('logo', 26);
+  $('logo').style.cursor = 'pointer';
+  $('logo').title = '回到首页（我的项目）';
+  $('logo').addEventListener('click', openSceneNav);
   $('btnUndo').innerHTML = icon('undo'); $('btnRedo').innerHTML = icon('redo');
   $('btnPause').innerHTML = icon('pause'); $('btnReset').innerHTML = icon('reset');
   $('btnStep').innerHTML = icon('step'); $('btnShot').innerHTML = icon('camera');
@@ -989,7 +1009,7 @@ function initLanding() {
     c.addEventListener('click', () => { hideLanding(); loadPreset(p); });
     wrap.appendChild(c);
   }
-  $('btnStartLab').addEventListener('click', hideLanding);
+  $('btnStartLab').addEventListener('click', () => { hideLanding(); openSceneNav(); });
   if (!store.loadVisited()) showLanding();
 }
 
@@ -1008,6 +1028,8 @@ function boot() {
   setRunning(false);
   updateStatus();
   requestAnimationFrame(loop);
-  if (auto) toast('已恢复上次自动保存的场景');
+  // The hub is the home page: returning users land here first, then step into the lab.
+  if (store.loadVisited()) openSceneNav();
+  else if (auto) toast('已恢复上次自动保存的场景');
 }
 boot();

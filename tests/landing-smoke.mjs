@@ -62,6 +62,19 @@ check('preset shortcut: simulation running', d1.getElementById('stState').textCo
 const w2 = await boot(true, 'return');
 check('return visit: landing stays hidden', w2.document.getElementById('landing').hidden);
 check('return visit: app booted with 9 bodies', w2.document.getElementById('stCount').textContent.includes('9'));
+check('return visit: home hub is the first screen', !w2.document.getElementById('sceneNav').hidden);
+
+/* --- first visit: 开始使用 goes landing -> home --- */
+const w3 = await boot(false, 'start');
+const d3 = w3.document;
+check('start flow: landing shown first', !d3.getElementById('landing').hidden && d3.getElementById('sceneNav').hidden);
+click(w3, d3.getElementById('btnStartLab'));
+await wait(120);
+check('start flow: landing hides, home hub opens',
+  d3.getElementById('landing').hidden && !d3.getElementById('sceneNav').hidden);
+click(w3, d3.getElementById('btnCloseNav'));
+await wait(60);
+check('start flow: 进入实验室 reaches the lab', d3.getElementById('sceneNav').hidden);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

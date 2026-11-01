@@ -43,6 +43,29 @@ const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles:
 await import('../js/app.js');
 await wait(300);
 
+/* --- v1.5: hub is the home page, with a sidebar --- */
+check('home: hub is shown on boot (return visit)', !doc.getElementById('sceneNav').hidden);
+check('home: sidebar has three views', doc.querySelectorAll('.side-item').length === 3);
+const viewBtn = (v) => doc.querySelector(`.side-item[data-view="${v}"]`);
+click(viewBtn('presets'));
+await wait(60);
+check('sidebar: presets view hides saved + current sections',
+  doc.getElementById('navSectionSaved').hidden && doc.getElementById('navSectionCurrent').hidden
+  && !doc.getElementById('navSectionPresets').hidden);
+check('sidebar: presets view hides the search toolbar', doc.getElementById('navToolbar').style.display === 'none');
+click(viewBtn('library'));
+await wait(60);
+check('sidebar: library view shows saved, hides presets',
+  !doc.getElementById('navSectionSaved').hidden && doc.getElementById('navSectionPresets').hidden);
+click(viewBtn('overview'));
+await wait(60);
+check('sidebar: overview shows everything again',
+  !doc.getElementById('navSectionSaved').hidden && !doc.getElementById('navSectionPresets').hidden
+  && !doc.getElementById('navSectionCurrent').hidden);
+click(doc.getElementById('btnCloseNav'));
+await wait(60);
+check('home: 进入实验室 closes the hub', doc.getElementById('sceneNav').hidden);
+
 // save the default scene under a project name first
 doc.getElementById('projectName').value = '我的实验一号';
 doc.getElementById('projectName').dispatchEvent(new window.Event('change', { bubbles: true }));

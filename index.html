@@ -116,28 +116,49 @@
   </div>
 </div>
 
-<!-- ===== Project navigation: store & open scenes ===== -->
+<!-- ===== Home: My Projects (store & open scenes) ===== -->
 <div id="sceneNav" hidden>
-  <div class="scenenav-inner">
-    <div class="scenenav-head">
-      <span id="navLogo"></span>
-      <div class="scenenav-titles">
-        <h2>我的项目</h2>
-        <p>场景都保存在这台设备的浏览器里。点开任意卡片即可继续实验，也可以导出 JSON 备份或分享。</p>
+  <div class="scenenav-layout">
+    <aside class="scenenav-side">
+      <div class="side-brand">
+        <span id="navLogo"></span>
+        <div class="side-brand-text"><b>MotionLab</b><span>我的项目 · 首页</span></div>
       </div>
-      <button id="btnCloseNav" class="tb-btn icon" title="返回实验室"></button>
-    </div>
-    <div class="scenenav-toolbar">
-      <input id="sceneSearch" type="search" placeholder="搜索已保存场景…" aria-label="搜索已保存场景">
-      <button id="btnNewScene" class="btn"></button>
-      <button id="btnDuplicateScene" class="btn"></button>
-    </div>
-    <div class="panel-title"><span class="dot"></span>当前与恢复</div>
-    <div id="navCurrent" class="scene-grid"></div>
-    <div class="panel-title"><span class="dot"></span>实验预设 Presets</div>
-    <div id="presetList" class="preset-grid"></div>
-    <div class="panel-title"><span class="dot"></span>已保存场景</div>
-    <div id="sceneList" class="scene-grid"></div>
+      <nav class="side-nav" aria-label="首页导航">
+        <button class="side-item active" data-view="overview"><span class="side-ic" data-ic="grid"></span>概览</button>
+        <button class="side-item" data-view="library"><span class="side-ic" data-ic="folder"></span>场景库<span class="side-count" id="countLibrary"></span></button>
+        <button class="side-item" data-view="presets"><span class="side-ic" data-ic="layers"></span>实验预设<span class="side-count">5</span></button>
+      </nav>
+      <div class="side-foot">
+        <p id="sideStorage">本地存储</p>
+        <button id="btnCloseNav" class="btn accent block">进入实验室</button>
+      </div>
+    </aside>
+    <main class="scenenav-main">
+      <div class="scenenav-head">
+        <div class="scenenav-titles">
+          <h2 id="navTitle">我的项目</h2>
+          <p>场景都保存在这台设备的浏览器里。点开任意卡片即可继续实验，也可以导出 JSON 备份或分享。</p>
+        </div>
+      </div>
+      <div class="scenenav-toolbar" id="navToolbar">
+        <input id="sceneSearch" type="search" placeholder="搜索已保存场景…" aria-label="搜索已保存场景">
+        <button id="btnNewScene" class="btn"></button>
+        <button id="btnDuplicateScene" class="btn"></button>
+      </div>
+      <section id="navSectionCurrent">
+        <div class="panel-title"><span class="dot"></span>当前与恢复</div>
+        <div id="navCurrent" class="scene-grid"></div>
+      </section>
+      <section id="navSectionPresets">
+        <div class="panel-title"><span class="dot"></span>实验预设 Presets</div>
+        <div id="presetList" class="preset-grid"></div>
+      </section>
+      <section id="navSectionSaved">
+        <div class="panel-title"><span class="dot"></span>已保存场景</div>
+        <div id="sceneList" class="scene-grid"></div>
+      </section>
+    </main>
   </div>
 </div>
 
