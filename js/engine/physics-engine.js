@@ -70,6 +70,8 @@ export class PhysicsEngine {
     this.maxSteps = Math.max(1, Math.round(num(opts.maxSteps, 5)));
     this._acc = 0;
     this._byId = new Map();        // id -> Matter body
+    this._bodiesCache = null;      // cached array view of _byId (invalidated on structure change)
+    this._locked = new Set();      // bodies with lockRotation — the per-step lock pass touches only these
     this._cons = new Map();        // id -> {constraint, desc}
     this._seq = 1;
     this._drag = null;
@@ -138,6 +140,7 @@ export class PhysicsEngine {
     if (!desc.isStatic && (desc.vx || desc.vy)) Body.setVelocity(body, { x: desc.vx, y: desc.vy });
     Composite.add(this.world, body);
     this._byId.set(desc.id, body);
+    if (desc.lockRotation) this._locked.add(body);
     this._emitChange();
     return body;
   }
@@ -151,6 +154,7 @@ export class PhysicsEngine {
     }
     this.M.Composite.remove(this.world, body);
     this._byId.delete(id);
+    this._locked.delete(body);
     this._emitChange();
     return true;
   }
@@ -160,6 +164,7 @@ export class PhysicsEngine {
     this._cons.clear();
     for (const b of this._byId.values()) this.M.Composite.remove(this.world, b);
     this._byId.clear();
+    this._locked.clear();
     this.endDrag();
     this._acc = 0;
     this._emitChange();
@@ -169,15 +174,21 @@ export class PhysicsEngine {
   idOf(body) { return body && body.plugin && body.plugin.pe ? body.plugin.pe.id : null; }
   kindOf(body) { return body && body.plugin && body.plugin.pe ? body.plugin.pe.kind : 'rect'; }
   userDataOf(body) { return body && body.plugin && body.plugin.pe ? body.plugin.pe.desc.userData : {}; }
-  /** All bodies as an array (insertion order). Allocates; use in UI code, not per-frame loops. */
-  allBodies() { return [...this._byId.values()]; }
+  /** Cached array view (insertion order). Rebuilt only after a structural change;
+   *  internal use — callers must not mutate it. */
+  _bodies() {
+    if (!this._bodiesCache) this._bodiesCache = [...this._byId.values()];
+    return this._bodiesCache;
+  }
+  /** All bodies as an array (insertion order). Allocates a copy; use in UI code, not per-frame loops. */
+  allBodies() { return [...this._bodies()]; }
   /** Allocation-free iteration for render loops. */
   forEachBody(fn) { for (const b of this._byId.values()) fn(b); }
   get count() { return this._byId.size; }
 
   /** Topmost body containing the world point, or null. */
   pick(wx, wy) {
-    const arr = [...this._byId.values()];
+    const arr = this._bodies();
     for (let i = arr.length - 1; i >= 0; i--) {
       const b = arr[i];
       if (this.M.Bounds.contains(b.bounds, { x: wx, y: wy }) &&
@@ -312,9 +323,10 @@ export class PhysicsEngine {
   _subStep(dt) {
     // Rotation lock is a hard guarantee: zero residual angular velocity each
     // step (infinite inertia alone does not stop an explicitly set spin).
-    for (const b of this._byId.values()) {
-      if (!b.isStatic && b.plugin.pe.desc.lockRotation && b.angularVelocity !== 0) {
-        this.M.Body.setAngularVelocity(b, 0);
+    // Only bodies in the lock set are visited — O(locked), not O(all bodies).
+    if (this._locked.size) {
+      for (const b of this._locked) {
+        if (!b.isStatic && b.angularVelocity !== 0) this.M.Body.setAngularVelocity(b, 0);
       }
     }
     this.M.Engine.update(this.engine, dt);
@@ -345,6 +357,7 @@ export class PhysicsEngine {
   setLockRotation(body, flag) {
     const rec = body.plugin.pe;
     rec.desc.lockRotation = flag;
+    if (flag) this._locked.add(body); else this._locked.delete(body);
     if (body.isStatic) return;
     if (flag) {
       if (Number.isFinite(body.inertia)) body._peInertia0 = body.inertia;
@@ -395,7 +408,10 @@ export class PhysicsEngine {
 
   /* ---------------- events ---------------- */
   onCollision(cb) { if (typeof cb === 'function') this._collisionCbs.push(cb); }
-  _emitChange() { if (typeof this.onChange === 'function') this.onChange(); }
+  _emitChange() {
+    this._bodiesCache = null; // any structural change invalidates the cached view
+    if (typeof this.onChange === 'function') this.onChange();
+  }
 }
 
 export default PhysicsEngine;

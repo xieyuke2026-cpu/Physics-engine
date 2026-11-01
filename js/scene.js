@@ -256,5 +256,119 @@ export function presetScenes() {
     out.push({ key: 'bounce', name: '高弹球阵列', scene: sceneData({ name: '高弹球阵列 Bouncy Balls', bodies }) });
   }
 
+  // Double pendulum — two rigid rods chained; tiny differences explode into chaos.
+  {
+    const bodies = frameBodies();
+    const constraints = [];
+    const ax = 640, ay = 90, L1 = 150, L2 = 140;
+    const a1 = 2.2, a2 = 3.3;
+    const jx = ax + Math.sin(a1) * L1, jy = ay + Math.cos(a1) * L1;
+    const bx = jx + Math.sin(a2) * L2, by = jy + Math.cos(a2) * L2;
+    bodies.push(bodyData({ id: 'dp-joint', type: 'circle', x: jx, y: jy, radius: 15, density: 0.002, frictionAir: 0.0005, restitution: 0, label: 'Joint' }));
+    bodies.push(bodyData({ id: 'dp-bob', type: 'circle', x: bx, y: by, radius: 22, density: 0.003, frictionAir: 0.0005, restitution: 0, label: 'Bob' }));
+    constraints.push(constraintData({ bodyA: null, bodyB: 'dp-joint', pointA: { x: ax, y: ay }, pointB: { x: 0, y: 0 }, stiffness: 1, damping: 0, length: L1 }));
+    constraints.push(constraintData({ bodyA: 'dp-joint', bodyB: 'dp-bob', pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 }, stiffness: 1, damping: 0, length: L2 }));
+    bodies.push(bodyData({ type: 'rectangle', x: ax, y: ay - 8, width: 150, height: 14, isStatic: true, label: 'Beam' }));
+    out.push({
+      key: 'doublependulum', name: '双摆混沌',
+      scene: sceneData({ name: '双摆混沌 Double Pendulum', bodies, constraints, settings: { ...DEFAULT_SETTINGS, showTrails: true } }),
+    });
+  }
+
+  // Plank bridge on two piers, chained with stiff springs, carrying a heavy load.
+  {
+    const bodies = frameBodies();
+    const constraints = [];
+    const deckY = 372, n = 7, pw = 92;
+    bodies.push(bodyData({ id: 'bridge-pier-l', type: 'rectangle', x: 330, y: 460, width: 64, height: 160, isStatic: true, friction: 0.6, label: 'Pier' }));
+    bodies.push(bodyData({ id: 'bridge-pier-r', type: 'rectangle', x: 950, y: 460, width: 64, height: 160, isStatic: true, friction: 0.6, label: 'Pier' }));
+    const firstCx = 330 + 32 + pw / 2; // 408
+    for (let i = 0; i < n; i++) {
+      bodies.push(bodyData({
+        id: `bridge-plank-${i}`, type: 'rectangle', x: firstCx + i * pw, y: deckY,
+        width: pw - 2, height: 14, density: 0.0012, friction: 0.5, restitution: 0.05, label: 'Plank',
+      }));
+    }
+    const link = (a, b, pa, pb, len) => constraints.push(constraintData({
+      bodyA: a, bodyB: b, pointA: pa, pointB: pb, stiffness: 0.85, damping: 0.08, length: len,
+    }));
+    link('bridge-pier-l', 'bridge-plank-0', { x: 32, y: -80 }, { x: -pw / 2, y: 0 }, 14);
+    for (let i = 0; i < n - 1; i++) link(`bridge-plank-${i}`, `bridge-plank-${i + 1}`, { x: pw / 2, y: 0 }, { x: -pw / 2, y: 0 }, 2);
+    link('bridge-pier-r', `bridge-plank-${n - 1}`, { x: -32, y: -80 }, { x: pw / 2, y: 0 }, 14);
+    bodies.push(bodyData({ type: 'rectangle', x: 640, y: deckY - 42, width: 56, height: 56, density: 0.005, friction: 0.6, label: 'Heavy Load' }));
+    bodies.push(bodyData({ type: 'circle', x: 500, y: deckY - 30, radius: 21, density: 0.003, restitution: 0.2, label: 'Load Ball' }));
+    out.push({ key: 'bridge', name: '桥梁承重', scene: sceneData({ name: '桥梁承重 Plank Bridge', bodies, constraints }) });
+  }
+
+  // Galton board — balls rain through staggered pegs into bins (probability in action).
+  {
+    const bodies = frameBodies();
+    // entry guides
+    bodies.push(bodyData({ type: 'rectangle', x: 486, y: 96, width: 250, height: 14, angle: 0.5, isStatic: true, friction: 0.1, label: 'Guide' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 794, y: 96, width: 250, height: 14, angle: -0.5, isStatic: true, friction: 0.1, label: 'Guide' }));
+    // pegs
+    for (let row = 0; row < 6; row++) {
+      const y = 208 + row * 40;
+      const off = row % 2 ? 32 : 0;
+      for (let x = 424 + off; x <= 856; x += 64) {
+        bodies.push(bodyData({ type: 'circle', x, y, radius: 7, isStatic: true, friction: 0.05, restitution: 0.4, label: 'Peg' }));
+      }
+    }
+    // bins
+    for (let i = 0; i <= 8; i++) {
+      bodies.push(bodyData({ type: 'rectangle', x: 392 + i * 64, y: 492, width: 8, height: 96, isStatic: true, friction: 0.2, label: 'Bin Wall' }));
+    }
+    // balls queued above the entry
+    for (let i = 0; i < 12; i++) {
+      bodies.push(bodyData({
+        type: 'circle', x: 628 + (i % 2) * 24, y: 24 + Math.floor(i / 2) * 27, radius: 11,
+        restitution: 0.35, friction: 0.05, frictionAir: 0.002, label: 'Ball',
+      }));
+    }
+    out.push({ key: 'galton', name: '钉板概率', scene: sceneData({ name: '钉板概率 Galton Board', bodies }) });
+  }
+
+  // Trampoline — springy net of chained segments between two posts.
+  {
+    const bodies = frameBodies();
+    const constraints = [];
+    const netY = 372, n = 6, segW = 78;
+    bodies.push(bodyData({ id: 'tramp-post-l', type: 'rectangle', x: 380, y: 456, width: 26, height: 168, isStatic: true, friction: 0.5, label: 'Post' }));
+    bodies.push(bodyData({ id: 'tramp-post-r', type: 'rectangle', x: 900, y: 456, width: 26, height: 168, isStatic: true, friction: 0.5, label: 'Post' }));
+    const span = (900 - 13) - (380 + 13); // 494 between inner faces
+    const step = span / n;
+    for (let i = 0; i < n; i++) {
+      bodies.push(bodyData({
+        id: `tramp-seg-${i}`, type: 'rectangle', x: 393 + step * (i + 0.5), y: netY,
+        width: segW, height: 8, density: 0.0008, friction: 0.4, restitution: 0.1, label: 'Net',
+      }));
+    }
+    const spring = (a, b, pa, pb, len) => constraints.push(constraintData({
+      bodyA: a, bodyB: b, pointA: pa, pointB: pb, stiffness: 0.22, damping: 0.05, length: len,
+    }));
+    spring('tramp-post-l', 'tramp-seg-0', { x: 13, y: -84 }, { x: -segW / 2, y: 0 }, 6);
+    for (let i = 0; i < n - 1; i++) spring(`tramp-seg-${i}`, `tramp-seg-${i + 1}`, { x: segW / 2, y: 0 }, { x: -segW / 2, y: 0 }, step - segW);
+    spring('tramp-post-r', `tramp-seg-${n - 1}`, { x: -13, y: -84 }, { x: segW / 2, y: 0 }, 6);
+    bodies.push(bodyData({ type: 'circle', x: 640, y: 190, radius: 27, density: 0.003, restitution: 0.15, frictionAir: 0.002, label: 'Jumper' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 760, y: 120, width: 44, height: 44, density: 0.002, restitution: 0.1, label: 'Box' }));
+    out.push({ key: 'trampoline', name: '蹦床弹簧网', scene: sceneData({ name: '蹦床弹簧网 Trampoline', bodies, constraints }) });
+  }
+
+  // Funnel — small balls pour through a V funnel into the bin below.
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ type: 'rectangle', x: 517, y: 258, width: 252, height: 16, angle: 0.71, isStatic: true, friction: 0.1, label: 'Funnel Wall' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 763, y: 258, width: 252, height: 16, angle: -0.71, isStatic: true, friction: 0.1, label: 'Funnel Wall' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 470, y: 486, width: 10, height: 108, isStatic: true, label: 'Bin Wall' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 810, y: 486, width: 10, height: 108, isStatic: true, label: 'Bin Wall' }));
+    for (let i = 0; i < 16; i++) {
+      bodies.push(bodyData({
+        type: 'circle', x: 520 + (i % 8) * 34, y: 84 + Math.floor(i / 8) * 30, radius: 10.5,
+        restitution: 0.25, friction: 0.08, frictionAir: 0.002, label: 'Bead',
+      }));
+    }
+    out.push({ key: 'funnel', name: '漏斗沙漏', scene: sceneData({ name: '漏斗沙漏 Funnel', bodies }) });
+  }
+
   return out;
 }

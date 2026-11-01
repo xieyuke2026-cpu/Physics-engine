@@ -185,9 +185,9 @@ check('frictionAir edit applies', lk.frictionAir === 0.05);
 wl.setVelocity(lk, 4, 3); wl.stopMotion(lk);
 check('stop motion zeroes velocity', lk.velocity.x === 0 && lk.velocity.y === 0 && lk.angularVelocity === 0);
 
-/* --- v1.1: presets --- */
+/* --- v1.1/v1.6: presets --- */
 const presets = presetScenes();
-check('five presets exist', presets.length === 5, `got ${presets.length}`);
+check('ten presets exist', presets.length === 10, `got ${presets.length}`);
 for (const p of presets) {
   check(`preset ${p.key} validates`, validateScene(JSON.parse(JSON.stringify(p.scene))).ok);
 }

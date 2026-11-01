@@ -697,8 +697,10 @@ function renderSceneNav() {
   $('navLogo').innerHTML = icon('logo', 26);
   document.querySelectorAll('.side-ic').forEach((s) => { s.innerHTML = icon(s.dataset.ic, 18); });
   const savedCount = Object.keys(store.loadScenes()).length;
+  const presetCount = presetScenes().length;
   $('countLibrary').textContent = String(savedCount);
-  $('sideStorage').textContent = `保存在本机浏览器 · ${savedCount} 个场景 · 5 个预设`;
+  $('countPresets').textContent = String(presetCount);
+  $('sideStorage').textContent = `保存在本机浏览器 · ${savedCount} 个场景 · ${presetCount} 个预设`;
   // current + autosave cards
   const cur = $('navCurrent');
   cur.innerHTML = '';
@@ -732,12 +734,14 @@ function renderPresetList() {
   const wrap = $('presetList');
   wrap.innerHTML = '';
   for (const p of presetScenes()) {
-    const b = document.createElement('button');
-    b.className = 'preset-btn';
-    b.innerHTML = `${icon('layers', 17)}<span></span><span class="p-sub">${p.scene.bodies.length} 物体</span>`;
-    b.querySelector('span').textContent = p.name;
-    b.addEventListener('click', () => loadPreset(p));
-    wrap.appendChild(b);
+    const card = sceneCard({ ...p.scene, name: p.name }, {
+      badge: '预设',
+      actions: [['载入并运行', 'primary', () => loadPreset(p)]],
+    });
+    card.classList.add('preset-card');
+    card.title = '点击卡片也可直接载入并运行';
+    card.addEventListener('click', () => loadPreset(p));
+    wrap.appendChild(card);
   }
 }
 $('btnScenes').addEventListener('click', openSceneNav);

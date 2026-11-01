@@ -82,6 +82,33 @@ for (let i = 0; i < 90; i++) pe6.advance(1000 / 60, 1);
 check('generic drag pulls body', db.position.x > 250, `x=${db.position.x.toFixed(1)}`);
 pe6.endDrag();
 
+/* --- v1.6 optimizations: bodies cache + lock set --- */
+const pe8 = new PhysicsEngine({ enableSleeping: true });
+pe8.addBody({ id: 'floor8', kind: 'rect', x: 300, y: 560, width: 800, height: 40, isStatic: true });
+const c1 = pe8.addBody({ id: 'c1', kind: 'circle', x: 200, y: 100, radius: 18 });
+const c2 = pe8.addBody({ id: 'c2', kind: 'circle', x: 260, y: 100, radius: 18 });
+check('cache: pick finds body before structural change', pe8.pick(200, 100) === c1);
+pe8.removeBody('c1');
+check('cache: pick no longer returns removed body', pe8.pick(200, 100) === null);
+check('cache: allBodies reflects removal', pe8.allBodies().length === 2 && pe8.count === 2);
+const c3 = pe8.addBody({ id: 'c3', kind: 'circle', x: 200, y: 100, radius: 18 });
+check('cache: pick finds newly added body', pe8.pick(200, 100) === c3);
+const copy = pe8.allBodies(); copy.length = 0;
+check('cache: allBodies returns a copy (mutation-safe)', pe8.count === 3);
+// lock set: only locked bodies are held; unlocking releases; removing a locked body is clean
+pe8.setLockRotation(c2, true);
+pe8.setVelocity(c2, 0, 0);
+Matter.Body.setAngularVelocity(c2, 2.5);
+for (let i = 0; i < 30; i++) pe8.advance(1000 / 60, 1);
+check('lock set: locked body keeps zero spin', Math.abs(c2.angularVelocity) < 1e-9 && Math.abs(c2.angle) < 0.05, `angle=${c2.angle}`);
+pe8.setLockRotation(c2, false);
+check('lock set: unlock removes from set', pe8._locked.size === 0);
+pe8.setLockRotation(c3, true);
+pe8.removeBody('c3');
+check('lock set: removing a locked body cleans the set', pe8._locked.size === 0);
+for (let i = 0; i < 10; i++) pe8.advance(1000 / 60, 1);
+check('lock set: engine still steps after cleanup', Number.isFinite(c2.position.y));
+
 /* --- perf sanity: 200 dynamic bodies, 120 steps --- */
 const pe7 = new PhysicsEngine({ enableSleeping: true });
 pe7.addBody({ kind: 'rect', x: 600, y: 580, width: 1400, height: 40, isStatic: true });

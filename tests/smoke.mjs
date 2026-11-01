@@ -128,10 +128,11 @@ click(doc.getElementById('btnScenes'));
 await wait(60);
 check('scenes modal lists saved scene', doc.getElementById('sceneList').textContent.includes('Untitled Scene'));
 
-/* --- v1.1: presets --- */
-const presetBtns = doc.querySelectorAll('#presetList .preset-btn');
-check('v1.1: five preset buttons rendered', presetBtns.length === 5, `got ${presetBtns.length}`);
-click(presetBtns[0]); // Newton's cradle (auto-runs)
+/* --- v1.1/v1.6: presets (cards with overview thumbnails since 1.6) --- */
+const presetBtns = doc.querySelectorAll('#presetList .preset-card');
+check('v1.6: ten preset cards rendered', presetBtns.length === 10, `got ${presetBtns.length}`);
+check('v1.6: preset cards carry overview thumbnails', !!presetBtns[0].querySelector('canvas.thumb'));
+click(presetBtns[0].querySelector('.mini-btn')); // Newton's cradle (auto-runs)
 await wait(500);
 check('v1.1: cradle preset loads 9 bodies', stCount().includes('9'), stCount());
 check('v1.1: cradle preset auto-runs', stState().includes('运行中'), stState());
