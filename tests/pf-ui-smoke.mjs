@@ -46,12 +46,13 @@ try {
   await sleep(120);
 
   check('boot: hub visible, PFLab hidden', !$('sceneNav').hidden && $('pfLab').hidden);
-  check('hub shows the PFLab entry card', !!$('btnEnterPF'));
+  check('entry migrated: standalone topbar button, hub card gone', !!$('btnPFLab') && !$('btnEnterPF'));
 
-  // Enter from the hub.
-  $('btnEnterPF').click();
+  // Enter from the standalone topbar button (close the hub first).
+  $('btnCloseNav').click();
+  $('btnPFLab').click();
   await sleep(80);
-  check('enter from hub: overlay visible, hub closed', !$('pfLab').hidden && $('sceneNav').hidden);
+  check('enter from topbar: overlay visible, hub closed', !$('pfLab').hidden && $('sceneNav').hidden);
   check('debug panel populated', $('pfDbgPState').textContent !== '—' && $('pfDbgFps').textContent.includes('step'),
     `pstate=${$('pfDbgPState').textContent} fps=${$('pfDbgFps').textContent}`);
 
@@ -66,19 +67,10 @@ try {
   await sleep(30);
   check('restart: still in PFLab, result hidden', !$('pfLab').hidden && $('pfResult').hidden);
 
-  // Exit returns to the hub.
+  // Exit returns to the lab (the hub is not reopened).
   $('btnPFBack').click();
   await sleep(30);
-  check('exit: back at the hub', $('pfLab').hidden && !$('sceneNav').hidden);
-
-  // Enter from the lab topbar: exit must return to the lab, not the hub.
-  $('btnCloseNav').click();
-  $('btnPFLab').click();
-  await sleep(60);
-  check('enter from topbar: overlay visible', !$('pfLab').hidden);
-  $('btnPFBack').click();
-  await sleep(30);
-  check('exit to lab: hub stays closed', $('pfLab').hidden && $('sceneNav').hidden);
+  check('exit: back at the lab, hub stays closed', $('pfLab').hidden && $('sceneNav').hidden);
 
   // Repeated enter/exit cycles must not accumulate errors or stuck state.
   let cyclesOk = true;

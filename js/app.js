@@ -561,17 +561,13 @@ function openSceneNav() {
 }
 function closeSceneNav() { $('sceneNav').hidden = true; }
 
-/* ---------------- PFLab (platform fighter module) ---------------- */
+/* ---------------- PFLab (platform fighter module) ----------------
+   Single entry point: the standalone PFLab button in the top toolbar.
+   Exiting returns to the lab underneath (nothing else to restore). */
 let pfLab = null;
-let pfReturnTo = 'hub';
-function enterPFLab(from) {
-  pfReturnTo = from;
-  if (from === 'hub') closeSceneNav();
-  if (!pfLab) pfLab = new PFLab(exitPFLab);
+function enterPFLab() {
+  if (!pfLab) pfLab = new PFLab(() => {});
   pfLab.enter();
-}
-function exitPFLab() {
-  if (pfReturnTo === 'hub') openSceneNav();
 }
 
 /* ---------------- New-version notice ----------------
@@ -1069,8 +1065,7 @@ function openSettings() {
 }
 $('btnSettings').addEventListener('click', openSettings);
 $('btnNavSettings').addEventListener('click', openSettings);
-  $('btnPFLab').addEventListener('click', () => enterPFLab('lab'));
-  $('btnEnterPF').addEventListener('click', () => enterPFLab('hub'));
+  $('btnPFLab').addEventListener('click', () => enterPFLab());
   $('btnUpdateReload').addEventListener('click', () => location.reload());
   $('btnUpdateDismiss').addEventListener('click', () => {
     updateDismissedFor = updateAvailable;
