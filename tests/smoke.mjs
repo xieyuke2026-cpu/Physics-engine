@@ -59,7 +59,7 @@ check('boot: state is paused', stState().includes('已暂停'), stState());
 check('boot: scene panel visible', doc.getElementById('panelBody').textContent.includes('场景属性'));
 check('boot: toolbar icons rendered (svg)', doc.querySelectorAll('#topbar svg').length >= 8,
   `svgs=${doc.querySelectorAll('#topbar svg').length}`);
-check('boot: 9 tool buttons with svg icons', doc.querySelectorAll('.tool-btn svg').length === 9,
+check('boot: 9 tool buttons with svg icons', doc.querySelectorAll('#toolrail .tool-btn svg').length === 9,
   `svgs=${doc.querySelectorAll('.tool-btn svg').length}`);
 check('renderer is drawing frames', drawCalls > 50, `drawCalls=${drawCalls}`);
 

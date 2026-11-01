@@ -2,9 +2,12 @@
    All reads are defensive: corrupt data falls back instead of throwing. */
 
 import { validateScene } from './scene.js';
+import { validateScene3D } from './scene3d.js';
 
 const KEY_SCENES = 'motionlab.scenes.v1';
 const KEY_AUTO = 'motionlab.autosave.v1';
+const KEY_SCENES_3D = 'motionlab.scenes3d.v1';
+const KEY_AUTO_3D = 'motionlab.autosave3d.v1';
 const KEY_UI = 'motionlab.ui.v1';
 const KEY_VISITED = 'motionlab.visited.v1';
 
@@ -61,6 +64,47 @@ export function loadAutosave() {
 }
 
 export function clearAutosave() { try { localStorage.removeItem(KEY_AUTO); } catch {} }
+
+/* ---------------- 3D library (kept fully separate from 2D) ---------------- */
+export function loadScenes3D() {
+  const obj = readJSON(KEY_SCENES_3D);
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+  const out = {};
+  for (const [name, raw] of Object.entries(obj)) {
+    const v = validateScene3D(raw);
+    if (v.ok) out[name] = v.scene;
+  }
+  return out;
+}
+
+export function saveScene3DToLibrary(scene) {
+  const scenes = loadScenes3D();
+  scenes[scene.name] = { ...scene, updatedAt: Date.now() };
+  return writeJSON(KEY_SCENES_3D, scenes);
+}
+
+export function deleteScene3DFromLibrary(name) {
+  const scenes = loadScenes3D();
+  delete scenes[name];
+  return writeJSON(KEY_SCENES_3D, scenes);
+}
+
+export function renameScene3DInLibrary(oldName, newName) {
+  const scenes = loadScenes3D();
+  if (!scenes[oldName] || scenes[newName]) return false;
+  scenes[newName] = { ...scenes[oldName], name: newName, updatedAt: Date.now() };
+  delete scenes[oldName];
+  return writeJSON(KEY_SCENES_3D, scenes);
+}
+
+export function saveAutosave3D(scene) { return writeJSON(KEY_AUTO_3D, scene); }
+
+export function loadAutosave3D() {
+  const raw = readJSON(KEY_AUTO_3D);
+  if (!raw) return null;
+  const v = validateScene3D(raw);
+  return v.ok ? v.scene : null;
+}
 
 export function loadUISettings() {
   const obj = readJSON(KEY_UI);

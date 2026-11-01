@@ -9,6 +9,8 @@ import { PhysicsEngine } from './engine/physics-engine.js';
 import { Renderer } from './render.js';
 import { Panel, renderSettings } from './ui.js';
 import * as store from './storage.js';
+import { presetScenes3D } from './scene3d.js';
+import { initLab3D, setLab3DActive, lab3DLoadScene, lab3DCurrentName, lab3DRename } from './lab3d.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('world');
@@ -535,9 +537,31 @@ function setNavView(view) {
   document.querySelectorAll('.side-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $('navSectionCurrent').hidden = view !== 'overview';
   $('navSectionSaved').hidden = view === 'presets';
+  $('navSectionSaved3D').hidden = view === 'presets';
   $('navSectionPresets').hidden = view === 'library';
+  $('navSectionPresets3D').hidden = view === 'library';
   $('navToolbar').style.display = view === 'presets' ? 'none' : '';
   $('navTitle').textContent = NAV_TITLES[view] || '我的项目';
+}
+
+/* ---------------- 2D / 3D mode switching ---------------- */
+let appMode = '2d';
+function setAppMode(m) {
+  appMode = m;
+  $('mode2d').classList.toggle('active', m === '2d');
+  $('mode3d').classList.toggle('active', m === '3d');
+  $('main').hidden = m !== '2d';
+  $('statusbar').hidden = m !== '2d';
+  $('main3d').hidden = m !== '3d';
+  $('statusbar3d').hidden = m !== '3d';
+  document.querySelectorAll('.lab2d-only').forEach((g) => { g.style.display = m === '2d' ? '' : 'none'; });
+  if (m === '3d') {
+    setLab3DActive(true);
+    $('projectName').value = lab3DCurrentName();
+  } else {
+    setLab3DActive(false);
+    $('projectName').value = sceneName;
+  }
 }
 
 /** Static thumbnail drawn from scene data (no physics): shapes + springs, fitted to the card. */
@@ -666,7 +690,7 @@ function renderSceneCards(filter = '') {
     const s = scenes[name];
     list.appendChild(sceneCard(s, {
       current: name === sceneName,
-      badge: name === sceneName ? '当前' : '',
+      badge: name === sceneName ? '2D · 当前' : '2D',
       actions: [
         ['打开', 'primary', () => openStoredScene(s)],
         ['重命名', '', () => {
@@ -697,16 +721,17 @@ function renderSceneNav() {
   $('navLogo').innerHTML = icon('logo', 26);
   document.querySelectorAll('.side-ic').forEach((s) => { s.innerHTML = icon(s.dataset.ic, 18); });
   const savedCount = Object.keys(store.loadScenes()).length;
-  const presetCount = presetScenes().length;
-  $('countLibrary').textContent = String(savedCount);
+  const saved3Count = Object.keys(store.loadScenes3D()).length;
+  const presetCount = presetScenes().length + presetScenes3D().length;
+  $('countLibrary').textContent = String(savedCount + saved3Count);
   $('countPresets').textContent = String(presetCount);
-  $('sideStorage').textContent = `保存在本机浏览器 · ${savedCount} 个场景 · ${presetCount} 个预设`;
+  $('sideStorage').textContent = `保存在本机浏览器 · 2D 场景 ${savedCount} · 3D 场景 ${saved3Count} · 预设 ${presetCount}`;
   // current + autosave cards
   const cur = $('navCurrent');
   cur.innerHTML = '';
   const now = currentScene();
   cur.appendChild(sceneCard(now, {
-    current: true, badge: '正在编辑',
+    current: true, badge: '2D · 正在编辑',
     actions: [
       ['保存到场景库', 'primary', () => { saveCurrent(); renderSceneNav(); }],
       ['继续编辑', '', () => closeSceneNav()],
@@ -715,12 +740,25 @@ function renderSceneNav() {
   const auto = store.loadAutosave();
   if (auto && JSON.stringify(auto.bodies) !== JSON.stringify(now.bodies)) {
     cur.appendChild(sceneCard({ ...auto, name: '上次自动保存', updatedAt: auto.updatedAt }, {
-      badge: '自动保存',
+      badge: '2D · 自动保存',
       actions: [['恢复这个进度', 'primary', () => openStoredScene(auto)]],
     }));
   }
+  // 3D lab entry card
+  const auto3 = store.loadAutosave3D();
+  const entry = document.createElement('article');
+  entry.className = 'scene-card';
+  entry.innerHTML = `<div class="scene-card-body">
+      <div class="scene-card-name">3D 实验室<span class="badge badge-3d">3D</span></div>
+      <div class="scene-sub">${auto3 ? `上次进度「${auto3.name}」 · ${auto3.bodies.length} 个物体` : '三维刚体物理：方块、球体、斜坡与堆叠'}</div>
+      <div class="scene-card-actions"><button class="mini-btn primary">进入 3D 实验室</button></div>
+    </div>`;
+  entry.querySelector('button').addEventListener('click', () => { closeSceneNav(); setAppMode('3d'); });
+  cur.appendChild(entry);
   renderPresetList();
+  renderPresetList3D();
   renderSceneCards($('sceneSearch').value.trim());
+  renderSceneCards3D($('sceneSearch').value.trim());
 }
 
 function loadPreset(p) {
@@ -735,7 +773,7 @@ function renderPresetList() {
   wrap.innerHTML = '';
   for (const p of presetScenes()) {
     const card = sceneCard({ ...p.scene, name: p.name }, {
-      badge: '预设',
+      badge: '2D',
       actions: [['载入并运行', 'primary', () => loadPreset(p)]],
     });
     card.classList.add('preset-card');
@@ -744,10 +782,187 @@ function renderPresetList() {
     wrap.appendChild(card);
   }
 }
+/* ---------------- home: 3D presets & 3D library ---------------- */
+function quatFromEuler(e) {
+  const cx = Math.cos(e.x / 2), sx = Math.sin(e.x / 2);
+  const cy = Math.cos(e.y / 2), sy = Math.sin(e.y / 2);
+  const cz = Math.cos(e.z / 2), sz = Math.sin(e.z / 2);
+  return {
+    x: sx * cy * cz + cx * sy * sz, y: cx * sy * cz - sx * cy * sz,
+    z: cx * cy * sz + sx * sy * cz, w: cx * cy * cz - sx * sy * sz,
+  };
+}
+function quatMat3(q) {
+  const { x, y, z, w } = q;
+  return [
+    1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
+    2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
+    2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y),
+  ];
+}
+/** Isometric-style overview thumbnail for a 3D scene (drawn from its data). */
+function drawThumb3D(canvas, scene) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#fafafa'; ctx.fillRect(0, 0, W, H);
+  const bodies = (scene.bodies || []).filter((b) => !b.isBound);
+  if (!bodies.length) return;
+  const th = 0.7, tilt = 0.52;
+  const proj = (x, y, z) => {
+    const x1 = x * Math.cos(th) - z * Math.sin(th);
+    const z1 = x * Math.sin(th) + z * Math.cos(th);
+    return [x1, -(y * Math.cos(tilt) - z1 * Math.sin(tilt)), y * Math.sin(tilt) + z1 * Math.cos(tilt)];
+  };
+  const extent = (b) => b.kind === 'sphere' ? b.radius : Math.hypot(b.sizeX, b.sizeY, b.sizeZ) / 2;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const probe = [];
+  for (const b of bodies) {
+    const e = extent(b);
+    for (const [dx, dy, dz] of [[-e, -e, -e], [e, e, e], [-e, e, e], [e, -e, -e]]) {
+      const p = proj(b.x + dx, b.y + dy, b.z + dz);
+      probe.push(p);
+      minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]);
+      minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]);
+    }
+  }
+  const pad = 12;
+  const scale = Math.min((W - pad * 2) / Math.max(0.5, maxX - minX), (H - pad * 2) / Math.max(0.5, maxY - minY));
+  const ox = pad + ((W - pad * 2) - (maxX - minX) * scale) / 2;
+  const oy = pad + ((H - pad * 2) - (maxY - minY) * scale) / 2;
+  const P = (x, y, z) => { const p = proj(x, y, z); return [ox + (p[0] - minX) * scale, oy + (p[1] - minY) * scale, p[2]]; };
+  const items = bodies.map((b) => ({ b, d: P(b.x, b.y, b.z)[2] })).sort((a, b2) => b2.d - a.d);
+  for (const { b } of items) {
+    ctx.strokeStyle = b.isStatic ? '#9a9da3' : '#3c4046';
+    ctx.fillStyle = b.isStatic ? '#e6e6ea' : 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1.1;
+    if (b.kind === 'sphere') {
+      const c = P(b.x, b.y, b.z);
+      ctx.beginPath(); ctx.arc(c[0], c[1], Math.max(2, b.radius * scale), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    } else {
+      const m = quatMat3(b.quaternion || quatFromEuler(b.euler || { x: 0, y: 0, z: 0 }));
+      const hx = b.sizeX / 2, hy = b.sizeY / 2, hz = b.sizeZ / 2;
+      const corners = [];
+      for (const [sx, sy, sz] of [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]) {
+        const lx = sx * hx, ly = sy * hy, lz = sz * hz;
+        corners.push(P(
+          b.x + m[0] * lx + m[1] * ly + m[2] * lz,
+          b.y + m[3] * lx + m[4] * ly + m[5] * lz,
+          b.z + m[6] * lx + m[7] * ly + m[8] * lz,
+        ));
+      }
+      const EDGES = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+      ctx.beginPath();
+      for (const [a, b2] of EDGES) { ctx.moveTo(corners[a][0], corners[a][1]); ctx.lineTo(corners[b2][0], corners[b2][1]); }
+      ctx.stroke();
+    }
+  }
+}
+
+function sceneCard3D(scene, opts = {}) {
+  const card = document.createElement('article');
+  card.className = 'scene-card';
+  const cv = document.createElement('canvas');
+  cv.className = 'thumb'; cv.width = 264; cv.height = 118;
+  card.appendChild(cv);
+  const body = document.createElement('div');
+  body.className = 'scene-card-body';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'scene-card-name';
+  nameEl.textContent = scene.name;
+  const bd = document.createElement('span');
+  bd.className = 'badge badge-3d'; bd.textContent = opts.badge || '3D';
+  nameEl.appendChild(bd);
+  const sub = document.createElement('div');
+  sub.className = 'scene-sub';
+  sub.textContent = `${scene.bodies.length} 个物体 · ${new Date(scene.updatedAt || Date.now()).toLocaleString()}`;
+  body.appendChild(nameEl); body.appendChild(sub);
+  const actions = document.createElement('div');
+  actions.className = 'scene-card-actions';
+  for (const [label, cls, fn] of opts.actions || []) {
+    const b = document.createElement('button');
+    b.className = 'mini-btn' + (cls ? ` ${cls}` : '');
+    b.textContent = label;
+    b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
+    actions.appendChild(b);
+  }
+  body.appendChild(actions);
+  card.appendChild(body);
+  requestAnimationFrame(() => drawThumb3D(cv, scene));
+  return card;
+}
+
+function openStoredScene3D(s, run = false) {
+  closeSceneNav();
+  setAppMode('3d');
+  lab3DLoadScene(s, { run });
+  toast(`已打开 3D 场景「${s.name}」`);
+}
+
+function renderPresetList3D() {
+  const wrap = $('presetList3d');
+  wrap.innerHTML = '';
+  for (const p of presetScenes3D()) {
+    const card = sceneCard3D({ ...p.scene, name: p.name }, {
+      badge: '3D 预设',
+      actions: [['在 3D 实验室运行', 'primary', () => openStoredScene3D(p.scene, true)]],
+    });
+    card.classList.add('preset-card');
+    card.addEventListener('click', () => openStoredScene3D(p.scene, true));
+    wrap.appendChild(card);
+  }
+}
+
+function renderSceneCards3D(filter = '') {
+  const list = $('sceneList3d');
+  list.innerHTML = '';
+  const scenes = store.loadScenes3D();
+  const names = Object.keys(scenes)
+    .filter((n) => !filter || n.toLowerCase().includes(filter.toLowerCase()))
+    .sort((a, b) => (scenes[b].updatedAt || 0) - (scenes[a].updatedAt || 0));
+  if (!names.length) {
+    list.appendChild(Object.assign(document.createElement('p'), {
+      className: 'empty-note',
+      textContent: filter ? '没有匹配的 3D 场景。' : '暂无已保存的 3D 场景。进入 3D 实验室后点「保存 3D 场景」即可存到这里。',
+    }));
+    return;
+  }
+  for (const name of names) {
+    const s = scenes[name];
+    list.appendChild(sceneCard3D(s, {
+      actions: [
+        ['打开', 'primary', () => openStoredScene3D(s)],
+        ['重命名', '', () => {
+          const nn = prompt('新的场景名称：', name);
+          if (!nn || !nn.trim() || nn.trim() === name) return;
+          if (store.renameScene3DInLibrary(name, nn.trim())) {
+            if (lab3DCurrentName() === name) lab3DRename(nn.trim());
+            renderSceneNav(); toast('已重命名');
+          } else toast('重命名失败：名称已存在或保存失败', 3000);
+        }],
+        ['复制', '', () => {
+          let nn = `${name} 副本`; let i = 2;
+          const all = store.loadScenes3D();
+          while (all[nn]) nn = `${name} 副本 ${i++}`;
+          if (store.saveScene3DToLibrary({ ...s, name: nn })) { renderSceneNav(); toast(`已复制为「${nn}」`); }
+        }],
+        ['导出', '', () => exportSceneData(s)],
+        ['删除', 'danger', () => {
+          if (!confirm(`删除 3D 场景「${name}」？此操作不可恢复。`)) return;
+          store.deleteScene3DFromLibrary(name); renderSceneNav(); toast('3D 场景已删除');
+        }],
+      ],
+    }));
+  }
+}
+
 $('btnScenes').addEventListener('click', openSceneNav);
 $('btnCloseNav').addEventListener('click', closeSceneNav);
 document.querySelectorAll('.side-item').forEach((b) => b.addEventListener('click', () => setNavView(b.dataset.view)));
-$('sceneSearch').addEventListener('input', () => renderSceneCards($('sceneSearch').value.trim()));
+$('sceneSearch').addEventListener('input', () => {
+  renderSceneCards($('sceneSearch').value.trim());
+  renderSceneCards3D($('sceneSearch').value.trim());
+});
 $('btnNewScene').addEventListener('click', () => { closeSceneNav(); newScene(); });
 $('btnDuplicateScene').addEventListener('click', () => {
   let nn = `${sceneName} 副本`; let i = 2;
@@ -861,6 +1076,14 @@ function initChrome() {
   });
   $('projectName').addEventListener('change', () => {
     const nn = $('projectName').value.trim();
+    if (appMode === '3d') {
+      if (!nn) { $('projectName').value = lab3DCurrentName(); return; }
+      const old = lab3DCurrentName();
+      lab3DRename(nn);
+      const lib3 = store.loadScenes3D();
+      if (lib3[old]) store.renameScene3DInLibrary(old, nn);
+      return;
+    }
     if (!nn) { $('projectName').value = sceneName; return; }
     const old = sceneName;
     sceneName = nn;
@@ -868,9 +1091,12 @@ function initChrome() {
     if (lib[old]) store.renameSceneInLibrary(old, nn);
     scheduleAutosave();
   });
+  $('mode2d').addEventListener('click', () => setAppMode('2d'));
+  $('mode3d').addEventListener('click', () => setAppMode('3d'));
   window.addEventListener('keydown', (e) => {
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+    if (appMode === '3d') return; // 2D shortcuts stay in the 2D lab
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); applyHistory(e.shiftKey ? 1 : -1); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); applyHistory(1); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveCurrent(); }
@@ -1020,6 +1246,10 @@ function initLanding() {
 /* ---------------- boot ---------------- */
 function boot() {
   initChrome();
+  initLab3D({
+    toast,
+    syncName: (n) => { if (appMode === '3d') $('projectName').value = n; },
+  });
   initLanding();
   renderer.resize();
   camera.fit(renderer.view);

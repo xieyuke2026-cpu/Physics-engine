@@ -90,7 +90,7 @@ check('nav: thumbnail actually drawn', drawCalls > 0);
 check('nav: presets listed as cards with overview thumbnails',
   doc.querySelectorAll('#presetList .preset-card').length === 10
   && !!doc.querySelector('#presetList .preset-card canvas.thumb'));
-check('nav: sidebar preset count is dynamic', doc.getElementById('countPresets').textContent === '10');
+check('nav: sidebar preset count is dynamic (2D 10 + 3D 4)', doc.getElementById('countPresets').textContent === '14');
 
 // search filters cards
 const search = doc.getElementById('sceneSearch');

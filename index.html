@@ -16,24 +16,28 @@
       <span id="logo" class="logo" aria-hidden="true"></span>
       <span class="brand-name">MotionLab</span>
     </div>
+    <div class="tb-group mode-switch" role="group" aria-label="实验室模式">
+      <button id="mode2d" class="mode-btn active">2D 实验室</button>
+      <button id="mode3d" class="mode-btn">3D 实验室</button>
+    </div>
     <div class="tb-group project">
       <input id="projectName" class="project-name" type="text" value="Untitled Scene" maxlength="60" aria-label="项目名称" spellcheck="false">
       <button id="btnScenes" class="tb-btn wide" title="我的项目：储存与打开场景"></button>
     </div>
-    <div class="tb-sep"></div>
-    <div class="tb-group">
+    <div class="tb-sep lab2d-only"></div>
+    <div class="tb-group lab2d-only">
       <button id="btnUndo" class="tb-btn icon" title="撤销 (Ctrl+Z)"></button>
       <button id="btnRedo" class="tb-btn icon" title="重做 (Ctrl+Shift+Z)"></button>
     </div>
-    <div class="tb-sep"></div>
-    <div class="tb-group transport">
+    <div class="tb-sep lab2d-only"></div>
+    <div class="tb-group transport lab2d-only">
       <button id="btnPlay" class="tb-btn primary" title="运行"></button>
       <button id="btnPause" class="tb-btn icon" title="暂停"></button>
       <button id="btnStep" class="tb-btn icon" title="单步运行一帧"></button>
       <button id="btnReset" class="tb-btn icon" title="重置场景"></button>
     </div>
     <div class="tb-spacer"></div>
-    <div class="tb-group">
+    <div class="tb-group lab2d-only">
       <button id="btnSave" class="tb-btn wide" title="保存场景 (Ctrl+S)"></button>
       <button id="btnShot" class="tb-btn icon" title="导出画布截图 PNG"></button>
       <button id="btnExport" class="tb-btn icon" title="导出 JSON"></button>
@@ -87,6 +91,43 @@
     <span class="st-item" id="stGravity">Gravity (0, 1)</span>
     <span class="st-item" id="stSpeed">Speed 1.0×</span>
     <span class="st-item" id="stZoom">Zoom 100%</span>
+  </footer>
+
+  <!-- ===== 3D lab ===== -->
+  <div id="main3d" hidden>
+    <nav id="toolrail3d" aria-label="3D 工具">
+      <button class="tool-btn t3" data-t3="select" title="选择 / 拖拽"></button>
+      <div class="rail-sep"></div>
+      <button class="tool-btn t3" data-t3="box" title="添加方块"></button>
+      <button class="tool-btn t3" data-t3="sphere" title="添加球体"></button>
+      <div class="rail-sep"></div>
+      <button class="tool-btn t3 danger" data-t3="delete" title="删除选中"></button>
+    </nav>
+    <section id="stage3d">
+      <canvas id="world3d"></canvas>
+      <div id="stage3dHint" class="stage-hint">拖动空白处旋转视角 · 滚轮缩放 · 拖动物体移动 · 右键拖动平移</div>
+      <div class="lab3d-bar">
+        <button id="btn3Play" class="tb-btn primary" title="运行"></button>
+        <button id="btn3Pause" class="tb-btn icon" title="暂停"></button>
+        <button id="btn3Step" class="tb-btn icon" title="单步"></button>
+        <button id="btn3Reset" class="tb-btn icon" title="重置场景"></button>
+        <div class="tb-sep"></div>
+        <button id="btn3Save" class="tb-btn wide" title="保存到 3D 场景库"></button>
+        <button id="btn3Cam" class="tb-btn wide" title="重置视角"></button>
+      </div>
+    </section>
+    <aside id="panel3d">
+      <div id="panel3dBody"></div>
+    </aside>
+  </div>
+  <footer id="statusbar3d" hidden>
+    <span class="st-item" id="st3Fps">FPS —</span>
+    <span class="st-item" id="st3Count">物体 0</span>
+    <span class="st-item" id="st3State">已暂停</span>
+    <span class="st-item" id="st3Render">渲染 —</span>
+    <span class="st-spacer"></span>
+    <span class="st-item" id="st3Gravity">Gravity (0, -9.82, 0)</span>
+    <span class="st-item" id="st3Speed">Speed 1.0×</span>
   </footer>
 </div>
 
@@ -151,12 +192,20 @@
         <div id="navCurrent" class="scene-grid"></div>
       </section>
       <section id="navSectionPresets">
-        <div class="panel-title"><span class="dot"></span>实验预设 Presets</div>
+        <div class="panel-title"><span class="dot"></span>2D 实验预设</div>
         <div id="presetList" class="scene-grid"></div>
       </section>
+      <section id="navSectionPresets3D">
+        <div class="panel-title"><span class="dot"></span>3D 实验预设</div>
+        <div id="presetList3d" class="scene-grid"></div>
+      </section>
       <section id="navSectionSaved">
-        <div class="panel-title"><span class="dot"></span>已保存场景</div>
+        <div class="panel-title"><span class="dot"></span>已保存的 2D 场景</div>
         <div id="sceneList" class="scene-grid"></div>
+      </section>
+      <section id="navSectionSaved3D">
+        <div class="panel-title"><span class="dot"></span>已保存的 3D 场景</div>
+        <div id="sceneList3d" class="scene-grid"></div>
       </section>
     </main>
   </div>
@@ -173,6 +222,7 @@
 <div id="toast" hidden></div>
 
 <script src="vendor/matter.min.js"></script>
+<script src="vendor/three.min.js"></script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>
