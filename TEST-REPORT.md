@@ -1,4 +1,11 @@
-# MotionLab — 测试报告（2026-11-02，v1.20 更新）
+# MotionLab — 测试报告（2026-11-02，v1.21 更新）
+
+## 0t. v1.21 PhysicsEngine 1.3.0 种子随机 + 钉板实测 + 应用内开发者文档更新
+
+- **种子随机**：引擎新增实例级 mulberry32 随机流——构造 `{ seed }`、`pe.seed` 读回、`setSeed(n)`（同时对齐 Matter 的 `Common._seed`）、`random / randomRange / randomInt / choice / shuffle`；不传 seed 时随机选种可读回。`snapshot()` 携带 `rng {seed, state}`，`load()` 后序列从快照处继续。引擎测试新增 8 项（同 seed 同序列、异 seed 异序列、边界、重置、快照续流、Matter 种子对齐）。
+- **钉板（Galton）实测**：按应用内「钉板概率」预设的几何（6 行交错钉阵 + 8 格）在引擎测试中以种子抖动落球 40 颗：同 seed 两次分格结果**逐格完全一致**；多 seed 实测（42/7/2026/1/12345）分格各不相同且 40/40 全部落格。观察：现预设几何下分布偏均匀、略偏左（格区相对钉阵有 8px 偏移），不是尖锐钟形——如实记录，未在本版改动预设。
+- **应用内开发者文档**（主界面 → 开发者文档）同步更新：Matter 版本 0.19→0.20 更正；构造签名补 `seed`；API 速览补 1.2.0 的查询/冲量与 1.3.0 的种子随机；新增「五、PF 引擎调用方式」章（PFEngine 门面示例、意图接口、AI 档位、UI 壳）；页首版本行新增 PFLab。GitHub 的 docs/DEVELOPER.md 同步至引擎 1.3.0 与应用 1.21，physics-engine 技能文档同步版本与测试口径。
+
 
 ## 0s. v1.20 引擎升级（PhysicsEngine 1.2.0 / PF 1.1.0 / Matter 0.20.0）+ GitHub 开发者文档 + 3D 残留清理
 

@@ -7,7 +7,7 @@ import { VERSION as ENGINE_VERSION } from './engine/physics-engine.js';
 import { PF_VERSION } from './pf/pf-config.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.20';
+export const APP_VERSION = '1.21';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);

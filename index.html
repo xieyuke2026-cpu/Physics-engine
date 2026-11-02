@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>MotionLab — 2D Physics Sandbox</title>
 <meta name="description" content="MotionLab: a minimalist, interactive 2D physics sandbox in the browser, powered by Matter.js.">
-<link rel="stylesheet" href="css/style.css?v=1.20">
+<link rel="stylesheet" href="css/style.css?v=1.21">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -218,7 +218,7 @@
       <section id="navSectionDocs" hidden>
         <div class="panel-title"><span class="dot"></span>开发者文档 · 通用物理引擎 PhysicsEngine</div>
         <div class="docs">
-          <p>MotionLab 的物理层是一个与项目无关的通用核心 <code>PhysicsEngine</code>（基于 Matter.js）：只吃纯数据描述符，不依赖 DOM、渲染或任何文件格式。你可以把它单独下载到自己的项目里，用同一套 API 搭建物理模拟。核心文件只有两个：<code>physics-engine.js</code>（引擎本体，ES 模块）和 <code>matter.min.js</code>（Matter.js 0.19 本体）。</p>
+          <p>MotionLab 的物理层是一个与项目无关的通用核心 <code>PhysicsEngine</code>（基于 Matter.js）：只吃纯数据描述符，不依赖 DOM、渲染或任何文件格式。你可以把它单独下载到自己的项目里，用同一套 API 搭建物理模拟。核心文件只有两个：<code>physics-engine.js</code>（引擎本体，ES 模块）和 <code>matter.min.js</code>（Matter.js 0.20 本体）。</p>
           <p><b>当前版本</b>：<span id="docsVersions">MotionLab — · PhysicsEngine — · Matter.js —</span>。引擎版本在代码里可读 <code>PhysicsEngine.VERSION</code>（模块同时导出 <code>VERSION</code> 常量）；设置面板的「关于」一栏显示的也是同一组版本号。</p>
           <h4>一、如何下载</h4>
           <ul>
@@ -248,11 +248,13 @@
 &lt;/script&gt;</pre>
           <h4>三、常用 API 速览</h4>
           <ul>
-            <li><b>构造</b>：<code>new PhysicsEngine({ gravity: { x: 0, y: 1 }, enableSleeping, fixedDt, maxSteps, substeps })</code>，<code>setGravity(x, y, enabled)</code> 改重力</li>
+            <li><b>构造</b>：<code>new PhysicsEngine({ gravity: { x: 0, y: 1 }, enableSleeping, fixedDt, maxSteps, substeps, seed })</code>，<code>setGravity(x, y, enabled)</code> 改重力</li>
             <li><b>物体</b>：<code>addBody(desc)</code> / <code>removeBody(id)</code> / <code>clear()</code> / <code>allBodies()</code> / <code>count</code>。desc 字段：<code>kind</code>（<code>'circle' | 'rect' | 'polygon'</code>）、<code>x, y</code>、<code>radius</code>（圆与多边形）、<code>width, height</code>（矩形）、<code>sides</code>（多边形边数）、<code>density, friction, frictionAir, restitution, isStatic, lockRotation, vx, vy, angle</code>（弧度）、<code>userData</code>（宿主自定义数据，原样透传）</li>
             <li><b>约束（弹簧 / 连杆）</b>：<code>addConstraint({ bodyA, bodyB, pointA, pointB, stiffness, damping, length })</code>。<code>bodyA</code> 传 <code>null</code> 表示固定在世界坐标 <code>pointA</code>；<code>stiffness</code> 接近 1 即为硬连杆；<code>removeConstraint(id)</code> 删除，删物体会自动清理它的约束</li>
             <li><b>推进</b>：<code>advance(elapsedMs, speed)</code> 固定步长累加器（任意刷新率都稳定）；<code>stepOnce()</code> 单步；<code>setSubsteps(1–8)</code> 子步防穿模（拖拽除外）</li>
-            <li><b>存取</b>：<code>snapshot()</code> 导出纯 JSON <code>{ bodies, constraints }</code>；<code>load(data)</code> 还原</li>
+            <li><b>存取</b>：<code>snapshot()</code> 导出纯 JSON <code>{ bodies, constraints, rng }</code>；<code>load(data)</code> 还原（含随机流位置）</li>
+            <li><b>查询与冲量</b>（1.2.0）：<code>queryRegion(x, y, w, h)</code> 区域内物体；<code>raycast(x1, y1, x2, y2)</code> 射线命中（由近到远，含命中点）；<code>addVelocity(body, dvx, dvy)</code> 叠加速度；<code>applyRadialImpulse(cx, cy, { radius, base, power, filter })</code> 径向冲击波（大小 = base + power×(1 − 距离/半径)，返回推开数量）</li>
+            <li><b>随机种子</b>（1.3.0）：构造传 <code>{ seed }</code> 后，<code>random()</code> / <code>randomRange(min, max)</code> / <code>randomInt(min, max)</code> / <code>choice(arr)</code> / <code>shuffle(arr)</code> 走引擎自己的可复现随机流：同 seed 同序列，适合程序化场景与出生抖动；不传 seed 时随机选一个，可从 <code>pe.seed</code> 读回以便复现；<code>setSeed(n)</code> 随时重置，并同步 Matter 的内部种子</li>
             <li><b>交互</b>：<code>pick(x, y)</code> 拾取；<code>beginDrag(body, x, y)</code> / <code>moveDrag(x, y)</code> / <code>endDrag()</code> 物理拖拽（可甩掷）；<code>onCollision((a, b, pair) =&gt; …)</code> 碰撞回调</li>
             <li><b>改属性</b>：<code>setVelocity / setPosition / setAngleDeg / setDensity / setFriction / setRestitution / setStatic / setLockRotation / stopMotion</code>，都以单个 body 为单位，修改时会自动唤醒休眠物体</li>
           </ul>
@@ -261,6 +263,24 @@
             <li>坐标单位为像素，y 轴向下；角度用弧度（<code>setAngleDeg</code> 除外，它收角度）。</li>
             <li>核心不做渲染：宿主每帧读取 <code>body.position</code> 与 <code>body.angle</code> 自行绘制；MotionLab 本身就是用这套核心搭的，它的 <code>js/physics.js</code> 只是场景格式适配层。</li>
             <li>同一核心还有一份独立打包（含说明与测试）在本机 <code>~/workspace/physics-engine/</code>，与站内版本保持同步。</li>
+          </ul>
+          <h4>五、PF 引擎调用方式（平台格斗）</h4>
+          <p>PFLab 背后的 <b>PF 引擎</b>（<code>js/pf/</code>，版本 <code>PFEngine.VERSION</code>）建立在 PhysicsEngine 之上：角色控制器、战斗判定与确定性 AI 状态机都只经适配层调用引擎公开 API。推荐用门面 <code>PFEngine</code> 接入：</p>
+          <pre>import { PFEngine } from './js/pf/pf-lab.js';
+
+// 无头对局（无 DOM，可在工具/测试里跑）
+const match = PFEngine.createMatch({ ai: 'normal' }); // 'calm' | 'normal' | 'sharp' 或覆盖对象
+match.step({ move: 1, jump: false, attack: false, dash: false }); // 每步喂一个意图
+match.state;        // 'fight' | 'over'；match.winner 看胜负
+match.debugInfo();  // 双方状态/伤害/速度、AI 状态、步数、最近命中
+
+// 调参（作用于共享参数表）
+PFEngine.tune({ attack: { damage: 9 } });</pre>
+          <ul>
+            <li><b>意图接口</b>：玩家与 AI 同构——<code>{ move: -1|0|1, jump, attack, dash, face }</code>，后三者为按下那一步触发。</li>
+            <li><b>AI 档位</b>：<code>calm</code>（决策 16 步/攻击冷却 48）、<code>normal</code>（10/30）、<code>sharp</code>（6/18）；也可传任意覆盖对象，只影响该 AI 实例。</li>
+            <li><b>UI 壳</b>：<code>PFEngine.createLab(onExit)</code> 得到 MotionLab 同款全屏界面（需要页面带有 <code>#pfLab</code> 标记），<code>enter()</code> 打开、<code>exit()</code> 退出并释放全部资源。</li>
+            <li>完整文档（含参数表与 PhysicsEngine 全部 API）见仓库 <code>docs/DEVELOPER.md</code>，在 GitHub 上可直接阅读。</li>
           </ul>
         </div>
       </section>
@@ -332,6 +352,6 @@
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.20"></script>
+<script type="module" src="js/app.js?v=1.21"></script>
 </body>
 </html>

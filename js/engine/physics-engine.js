@@ -29,11 +29,13 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.2.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.3.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
              (addVelocity / applyRadialImpulse), allocation-free pick()
+     1.3.0 — seeded RNG (seed option, random / randomRange / randomInt /
+             choice / shuffle, setSeed; RNG state rides along in snapshots)
    ========================================================================== */
 
 let _M = null;
@@ -54,7 +56,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 
 export class PhysicsEngine {
   /** Core version; same value as the module-level VERSION export. */
@@ -76,6 +78,9 @@ export class PhysicsEngine {
    *        prevents fast bodies tunnelling through thin colliders; 2 is a
    *        good default for scenes with thin statics. User dragging is
    *        exempt by design (the drag constraint is position-driven).
+   * @param {number} [opts.seed] seed for the engine's RNG stream (see
+   *        random()). Omit it and a random seed is chosen — read it back
+   *        via `pe.seed` to reproduce the run later.
    */
   constructor(opts = {}) {
     const M = opts.matter || matter();
@@ -94,6 +99,9 @@ export class PhysicsEngine {
     this._seq = 1;
     this._drag = null;
     this._pickPt = { x: 0, y: 0 }; // scratch point for pick() — no per-call allocation
+    this._seed = 0;                // RNG: the seed the current stream started from
+    this._rngState = 0;            // RNG: mulberry32 state (uint32)
+    this.setSeed(opts.seed === undefined ? (Math.random() * 4294967296) >>> 0 : opts.seed);
     this.onChange = null;          // () => void, structural changes
     this._collisionCbs = [];
     if (opts.gravity) this.setGravity(opts.gravity.x, opts.gravity.y, opts.gravity.enabled !== false);
@@ -335,11 +343,18 @@ export class PhysicsEngine {
     for (const d of data.bodies || []) this.addBody(d);
     for (const c of data.constraints || []) this.addConstraint(c);
     if (data.gravity) this.setGravity(data.gravity.x, data.gravity.y, data.gravity.enabled !== false);
+    if (data.rng && Number.isFinite(data.rng.state)) {
+      // Restore the RNG stream exactly where the snapshot left it, so a
+      // loaded world keeps producing the same random sequence.
+      this._seed = num(data.rng.seed, this._seed) >>> 0;
+      this._rngState = data.rng.state >>> 0;
+    }
   }
   snapshot() {
     return {
       bodies: this.allBodies().map((b) => this.describeBody(b)),
       constraints: this.describeConstraints(),
+      rng: { seed: this._seed, state: this._rngState },
     };
   }
 
@@ -502,6 +517,44 @@ export class PhysicsEngine {
   }
   get dragging() { return !!this._drag; }
   get dragBody() { return this._drag ? this._drag.bodyB : null; }
+
+  /* ---------------- seeded RNG ----------------
+     A mulberry32 stream owned by this engine instance: same seed -> same
+     sequence, independent of Math.random and of other engines. Use it for
+     anything that must be reproducible (procedural scenes, spawn jitter,
+     random impulses) — share the seed and the run can be replayed exactly.
+     Setting a seed also aligns Matter's own Common._seed, so Matter-level
+     helpers that draw randomness start from the same origin. */
+  setSeed(n) {
+    this._seed = (Number.isFinite(Number(n)) ? Number(n) : 0) >>> 0;
+    this._rngState = this._seed;
+    if (this.M && this.M.Common) this.M.Common._seed = this._seed;
+  }
+  /** The seed the current RNG stream started from. */
+  get seed() { return this._seed; }
+
+  /** Next float in [0, 1). */
+  random() {
+    this._rngState = (this._rngState + 0x6D2B79F5) >>> 0;
+    let t = this._rngState;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  /** Float in [min, max). */
+  randomRange(min, max) { return min + this.random() * (max - min); }
+  /** Integer in [min, max], both ends inclusive. */
+  randomInt(min, max) { return Math.floor(min + this.random() * (Math.floor(max) - min + 1)); }
+  /** A random element of the array (undefined for an empty array). */
+  choice(arr) { return arr && arr.length ? arr[Math.floor(this.random() * arr.length)] : undefined; }
+  /** Fisher–Yates shuffle driven by this stream; in place, returns the array. */
+  shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(this.random() * (i + 1));
+      const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
 
   /* ---------------- events ---------------- */
   onCollision(cb) { if (typeof cb === 'function') this._collisionCbs.push(cb); }

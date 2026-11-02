@@ -12,8 +12,8 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.20 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.2.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| MotionLab（应用） | 1.21 | `js/ui.js` 的 `APP_VERSION` |
+| PhysicsEngine（2D 核心） | 1.3.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -34,7 +34,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.2.0'
+  console.log(VERSION); // '1.3.0'
 </script>
 ```
 
@@ -83,10 +83,21 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 | 冲量（1.2.0 新增） | `addVelocity(body, dvx, dvy)`；`applyRadialImpulse(cx, cy, { radius, base, power, filter })` 径向冲击（大小 = base + power×(1−距离/半径)，返回受影响数量） |
 | 存取 | `snapshot() / load(data)` |
 | 事件 | `onCollision((bodyA, bodyB, pair) => …)`；`pe.onChange` 结构变化回调 |
+| 随机种子（1.3.0 新增） | `new PhysicsEngine({ seed })`、`pe.seed`（读回种子）、`setSeed(n)`、`random()`、`randomRange(min, max)`、`randomInt(min, max)`、`choice(arr)`、`shuffle(arr)` |
 
 坐标系：像素、y 向下；角度为弧度（`setAngleDeg` 除外）。约束描述符的端点
 字段是 **`bodyA` / `bodyB`**（id 字符串；`bodyA: null` 表示世界锚点，锚点
 坐标取 `pointA` 的世界坐标）。
+
+### 随机种子（1.3.0）
+
+引擎内置一条 mulberry32 随机流（实例独立，与 `Math.random` 无关）：
+构造时传 `{ seed }` 即得到**可复现**的序列——同一个 seed 产生同样的
+`random()` 结果序列，适合程序化生成场景、出生点抖动、随机冲量等需要
+「发个 seed 就能重演」的场合。不传 seed 时引擎随机选一个，可从
+`pe.seed` 读回记录。`setSeed(n)` 随时重置序列，并同步 Matter 的
+`Common._seed`。`snapshot()` 会带上 RNG 状态，`load()` 后随机流从
+快照处继续，序列不跳变。
 
 ### 版本历史
 
@@ -94,6 +105,7 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 - 1.1.0 — `substeps` 防穿模
 - 1.2.0 — 空间查询（`queryRegion` / `raycast`）、冲量助手
   （`addVelocity` / `applyRadialImpulse`）、`pick()` 零分配优化
+- 1.3.0 — 种子随机（`seed` 选项、`random` 系列 API、快照携带 RNG 状态）
 
 ---
 

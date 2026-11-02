@@ -9,6 +9,7 @@ import { PhysicsEngine } from './engine/physics-engine.js';
 import { Renderer } from './render.js';
 import { Panel, renderSettings, APP_VERSION } from './ui.js';
 import { PFLab } from './pf/pf-lab.js';
+import { PF_VERSION } from './pf/pf-config.js';
 import * as store from './storage.js';
 import { presetScenes3D, defaultScene3D } from './scene3d.js';
 import { initLab3D, setLab3DActive, lab3DLoadScene, lab3DCurrentName, lab3DRename } from './lab3d.js';
@@ -559,7 +560,7 @@ function stampDocsVersions() {
   const el = $('docsVersions');
   if (!el) return;
   const matter = (typeof window !== 'undefined' && window.Matter && window.Matter.version) || '—';
-  el.textContent = `MotionLab ${APP_VERSION} · PhysicsEngine ${PhysicsEngine.VERSION} · Matter.js ${matter}`;
+  el.textContent = `MotionLab ${APP_VERSION} · PhysicsEngine ${PhysicsEngine.VERSION} · Matter.js ${matter} · PFLab ${PF_VERSION}`;
 }
 
 /* ---------------- PFLab (platform fighter module) ----------------

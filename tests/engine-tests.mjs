@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.2.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.3.0');
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
 pe.addBody({ kind: 'rect', x: 100, y: 400, width: 500, height: 20, isStatic: true });
@@ -164,6 +164,81 @@ check('tunnelling: substeps=4 stops the same shot at the wall', tunnelTrial(4) <
   check('applyRadialImpulse: affects only in-radius dynamic bodies', n === 1 && near(inBody.velocity.x, 8.5, 0.6) && outBody.velocity.x === 0 && statBody.velocity.x === 0, `n=${n} vx=${inBody.velocity.x}`);
   const n2 = peB.applyRadialImpulse(100, 100, { radius: 100, base: 2, power: 13, filter: () => false });
   check('applyRadialImpulse: filter can veto everything', n2 === 0);
+}
+
+/* --- v1.3.0: seeded RNG --- */
+{
+  const seq = (seed, n = 8) => { const e = new PhysicsEngine({ seed }); return Array.from({ length: n }, () => e.random()); };
+  const a = seq(42), b = seq(42), c = seq(7);
+  check('rng: same seed reproduces the same stream', a.every((v, i) => v === b[i]));
+  check('rng: a different seed gives a different stream', a.some((v, i) => v !== c[i]));
+  check('rng: values stay in [0, 1)', a.every((v) => v >= 0 && v < 1));
+  const e = new PhysicsEngine({ seed: 99 });
+  e.random(); e.random();
+  e.setSeed(99);
+  check('rng: setSeed restarts the stream', e.random() === seq(99, 1)[0] && e.seed === 99);
+  const e2 = new PhysicsEngine({ seed: 5 });
+  let rangeOk = true, intOk = true;
+  for (let i = 0; i < 500; i++) {
+    const r = e2.randomRange(2, 5); if (!(r >= 2 && r < 5)) rangeOk = false;
+    const k = e2.randomInt(1, 6); if (!(Number.isInteger(k) && k >= 1 && k <= 6)) intOk = false;
+  }
+  check('rng: randomRange / randomInt respect their bounds', rangeOk && intOk);
+  check('rng: choice picks a member; shuffle permutes',
+    [10, 20, 30].includes(e2.choice([10, 20, 30]))
+    && [...e2.shuffle([1, 2, 3, 4, 5, 6, 7, 8])].sort((x, y) => x - y).join() === '1,2,3,4,5,6,7,8');
+  check('rng: seed aligns Matter Common._seed', globalThis.Matter.Common._seed === 5);
+  // Snapshot/restore keeps the stream position.
+  const e3 = new PhysicsEngine({ seed: 77 });
+  e3.random(); e3.random();
+  const snap = e3.snapshot();
+  const nextA = [e3.random(), e3.random(), e3.random()];
+  const e4 = new PhysicsEngine({ seed: 1 });
+  e4.load(JSON.parse(JSON.stringify(snap)));
+  const nextB = [e4.random(), e4.random(), e4.random()];
+  check('rng: snapshot -> load resumes the same stream', nextA.every((v, i) => v === nextB[i]) && e4.seed === 77);
+}
+
+/* --- v1.3.0: Galton board (钉板) — seeded spawn jitter, modelled on the
+       MotionLab 钉板概率 preset geometry. The seed must make the whole
+       rain of balls exactly reproducible. --- */
+function galtonBins(seed) {
+  const pe = new PhysicsEngine({ enableSleeping: true, seed });
+  pe.addBody({ kind: 'rect', x: 640, y: 580, width: 1240, height: 40, isStatic: true });
+  pe.addBody({ kind: 'rect', x: 330, y: 300, width: 16, height: 600, isStatic: true });
+  pe.addBody({ kind: 'rect', x: 950, y: 300, width: 16, height: 600, isStatic: true });
+  for (let row = 0; row < 6; row++) {
+    const y = 208 + row * 40, off = row % 2 ? 32 : 0;
+    for (let x = 424 + off; x <= 856; x += 64)
+      pe.addBody({ kind: 'circle', x, y, radius: 7, isStatic: true, friction: 0.05, restitution: 0.4 });
+  }
+  for (let i = 0; i <= 8; i++)
+    pe.addBody({ kind: 'rect', x: 392 + i * 64, y: 492, width: 8, height: 96, isStatic: true, friction: 0.2 });
+  const balls = [];
+  let si = 0;
+  for (let s = 0; s < 1700; s++) {
+    if (si < 40 && s % 14 === 0) {
+      balls.push(pe.addBody({ kind: 'circle', x: 640 + pe.randomRange(-10, 10), y: 30, radius: 11, restitution: 0.35, friction: 0.05, frictionAir: 0.002 }));
+      si++;
+    }
+    pe.stepOnce();
+  }
+  const bins = new Array(8).fill(0);
+  let counted = 0;
+  for (const b of balls) {
+    if (b.position.y < 440) continue;
+    bins[Math.max(0, Math.min(7, Math.floor((b.position.x - 392) / 64)))]++;
+    counted++;
+  }
+  return { bins, counted };
+}
+{
+  const g1 = galtonBins(42), g2 = galtonBins(42), g3 = galtonBins(7);
+  check('galton: every ball lands in a bin', g1.counted === 40, `counted=${g1.counted}`);
+  check('galton: same seed -> identical bin counts', JSON.stringify(g1.bins) === JSON.stringify(g2.bins), `${g1.bins} vs ${g2.bins}`);
+  check('galton: different seed -> different outcome', JSON.stringify(g1.bins) !== JSON.stringify(g3.bins), `${g1.bins} vs ${g3.bins}`);
+  check('galton: balls spread across the board (no single dominant bin)',
+    g1.bins.filter((n) => n > 0).length >= 6 && Math.max(...g1.bins) <= 18, `${g1.bins}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
