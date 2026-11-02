@@ -29,9 +29,11 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.1.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.2.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
+     1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
+             (addVelocity / applyRadialImpulse), allocation-free pick()
    ========================================================================== */
 
 let _M = null;
@@ -52,7 +54,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 
 export class PhysicsEngine {
   /** Core version; same value as the module-level VERSION export. */
@@ -91,6 +93,7 @@ export class PhysicsEngine {
     this._cons = new Map();        // id -> {constraint, desc}
     this._seq = 1;
     this._drag = null;
+    this._pickPt = { x: 0, y: 0 }; // scratch point for pick() — no per-call allocation
     this.onChange = null;          // () => void, structural changes
     this._collisionCbs = [];
     if (opts.gravity) this.setGravity(opts.gravity.x, opts.gravity.y, opts.gravity.enabled !== false);
@@ -205,12 +208,47 @@ export class PhysicsEngine {
   /** Topmost body containing the world point, or null. */
   pick(wx, wy) {
     const arr = this._bodies();
+    const pt = this._pickPt;
+    pt.x = wx; pt.y = wy;
     for (let i = arr.length - 1; i >= 0; i--) {
       const b = arr[i];
-      if (this.M.Bounds.contains(b.bounds, { x: wx, y: wy }) &&
-          this.M.Vertices.contains(b.vertices, { x: wx, y: wy })) return b;
+      if (this.M.Bounds.contains(b.bounds, pt) &&
+          this.M.Vertices.contains(b.vertices, pt)) return b;
     }
     return null;
+  }
+
+  /** All bodies whose AABB intersects the rectangle (x, y, w, h). Broadphase
+   *  only (bounds, not exact shape) — ideal for area effects and culling. */
+  queryRegion(x, y, w, h) {
+    const x2 = x + w, y2 = y + h;
+    const out = [];
+    for (const b of this._bodies()) {
+      const bd = b.bounds;
+      if (bd.min.x <= x2 && bd.max.x >= x && bd.min.y <= y2 && bd.max.y >= y) out.push(b);
+    }
+    return out;
+  }
+
+  /**
+   * Bodies intersected by the segment (x1, y1) -> (x2, y2), nearest first.
+   * Each hit: { id, body, point, distance } — point is the contact support
+   * closest to the segment start. Built on Matter's Query.ray.
+   */
+  raycast(x1, y1, x2, y2) {
+    const hits = this.M.Query.ray(this._bodies(), { x: x1, y: y1 }, { x: x2, y: y2 });
+    const seen = new Map();
+    for (const h of hits) {
+      const body = h.body && h.body.parent ? h.body.parent : h.body;
+      if (!body || seen.has(body)) continue;
+      const s = (h.collision && h.collision.supports && h.collision.supports[0]) || body.position;
+      seen.set(body, {
+        id: this.idOf(body), body,
+        point: { x: s.x, y: s.y },
+        distance: Math.hypot(s.x - x1, s.y - y1),
+      });
+    }
+    return [...seen.values()].sort((a, b) => a.distance - b.distance);
   }
 
   /** Live snapshot of one body merged over its stored descriptor. */
@@ -397,6 +435,40 @@ export class PhysicsEngine {
     this.wake(body);
     this.M.Body.setVelocity(body, { x: 0, y: 0 });
     this.M.Body.setAngularVelocity(body, 0);
+  }
+
+  /** Add to a body's velocity (an impulse-like shove). Static bodies are ignored. */
+  addVelocity(body, dvx, dvy) {
+    if (!body || body.isStatic) return;
+    this.wake(body);
+    this.M.Body.setVelocity(body, { x: body.velocity.x + dvx, y: body.velocity.y + dvy });
+  }
+
+  /**
+   * Radial shove: every non-static body within `radius` of (cx, cy) gains
+   * velocity pointing away from the centre, with magnitude
+   *   base + power * (1 - distance / radius)
+   * Bodies at the exact centre are pushed straight up. An optional
+   * `filter(body)` may veto bodies (e.g. host-level boundary walls).
+   * Returns the number of bodies affected.
+   */
+  applyRadialImpulse(cx, cy, opts = {}) {
+    const radius = Math.max(1, num(opts.radius, 200));
+    const base = num(opts.base, 0), power = num(opts.power, 10);
+    const filter = typeof opts.filter === 'function' ? opts.filter : null;
+    let hit = 0;
+    for (const b of this._bodies()) {
+      if (b.isStatic) continue;
+      if (filter && !filter(b)) continue;
+      const dx = b.position.x - cx, dy = b.position.y - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > radius) continue;
+      const mag = base + power * (1 - dist / radius);
+      const ux = dist > 1 ? dx / dist : 0, uy = dist > 1 ? dy / dist : -1;
+      this.addVelocity(b, ux * mag, uy * mag);
+      hit++;
+    }
+    return hit;
   }
 
   /** Resize by rebuilding in place: keeps id, material, velocity and userData. */

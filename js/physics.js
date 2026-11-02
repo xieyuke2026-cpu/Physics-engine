@@ -66,6 +66,10 @@ export class PhysicsWorld {
   allBodies() { return this.core.allBodies(); }
   get count() { return this.core.count; }
   pick(wx, wy) { return this.core.pick(wx, wy); }
+  /** Radial shove via the engine; world-boundary bodies are never pushed. */
+  applyRadialImpulse(x, y, opts) {
+    return this.core.applyRadialImpulse(x, y, { ...opts, filter: (b) => !this.isBound(b) });
+  }
 
   serializeBody(body) {
     const d = this.core.describeBody(body);

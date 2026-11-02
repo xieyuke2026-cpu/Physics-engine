@@ -13,17 +13,21 @@ import { FighterAI } from './pf-ai.js';
 import { PFRenderer } from './pf-renderer.js';
 import { PFInput } from './pf-input.js';
 import { PLATFORMS, SPAWNS, isBlasted } from './pf-stage.js';
-import { STEP_MS, MAX_FRAME_MS, MAX_STEPS_PER_FRAME, DEBUG } from './pf-config.js';
+import { STEP_MS, MAX_FRAME_MS, MAX_STEPS_PER_FRAME, DEBUG, PF_VERSION, WORLD, FIGHTER, ATTACK, AI, BLAST } from './pf-config.js';
 
 export class PFMatch {
-  constructor() { this.reset(); }
+  /** @param {object} [opts] opts.ai: AI profile name or overrides for the dummy. */
+  constructor(opts = {}) {
+    this.aiProfile = opts.ai;
+    this.reset();
+  }
 
   reset() {
     this.physics = new PFPhysics();
     for (const p of PLATFORMS) this.physics.addPlatform(p);
     this.player = new Character(this.physics, 'player', SPAWNS[0]);
     this.dummy = new Character(this.physics, 'dummy', SPAWNS[1]);
-    this.ai = new FighterAI();
+    this.ai = new FighterAI(this.aiProfile);
     this.combat = new Combat();
     this.state = 'fight';      // 'fight' | 'over'
     this.winner = null;        // 'player' | 'dummy' | 'draw'
@@ -195,3 +199,30 @@ export class PFLab {
     if (this._frames % (4 * DEBUG.panelEverySteps) === 0) { /* panel cadence marker (writes above are cheap) */ }
   }
 }
+
+/* ------------------------- PFEngine facade -------------------------
+   The public entry point for embedding the platform-fighter engine in
+   another page or tool (see docs/DEVELOPER.md, "PF 引擎调用方式"):
+   - createMatch(): a headless, DOM-free match you step yourself.
+   - createLab():   the full-screen UI shell MotionLab itself uses.
+   - tune():        adjust the shared tuning tables for future matches. */
+export const PFEngine = {
+  VERSION: PF_VERSION,
+  createMatch(opts) { return new PFMatch(opts); },
+  createLab(onExit) { return new PFLab(onExit); },
+  /**
+   * Merge partial overrides into the shared config tables, e.g.
+   * PFEngine.tune({ attack: { damage: 9 }, ai: { decideEvery: 8 } }).
+   * Sections: world / fighter / attack / ai / blast. Applies to matches
+   * created afterwards (and to live reads of the same tables).
+   */
+  tune(patch = {}) {
+    const tables = { world: WORLD, fighter: FIGHTER, attack: ATTACK, ai: AI, blast: BLAST };
+    for (const [section, values] of Object.entries(patch)) {
+      const table = tables[section];
+      if (table && values && typeof values === 'object') Object.assign(table, values);
+    }
+  },
+  config: { WORLD, FIGHTER, ATTACK, AI, BLAST },
+  stage: { PLATFORMS, SPAWNS, isBlasted },
+};

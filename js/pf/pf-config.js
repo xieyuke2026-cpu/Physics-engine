@@ -2,6 +2,9 @@
    Units: pixels, fixed steps (60 steps = 1 second). Change values here to
    tune game feel; nothing else in PFLab hard-codes these numbers. */
 
+/** PF engine version (the platform-fighter module set under js/pf/). */
+export const PF_VERSION = '1.1.0';
+
 export const STEP_MS = 1000 / 60;      // fixed timestep
 export const MAX_FRAME_MS = 100;       // clamp for background-tab time jumps
 export const MAX_STEPS_PER_FRAME = 5;  // spiral-of-death guard
@@ -54,6 +57,14 @@ export const AI = {
   retreatDamage: 75,    // at/above this damage the dummy prefers distance
   retreatSteps: 26,     // how long a retreat lasts once started
   edgeMargin: 60,       // distance from a platform edge considered dangerous
+};
+
+/** Named AI difficulty profiles: partial overrides merged over AI.
+    calm = slower reactions, longer pauses; sharp = fast and relentless. */
+export const AI_PROFILES = {
+  calm: { decideEvery: 16, attackCooldown: 48 },
+  normal: {},
+  sharp: { decideEvery: 6, attackCooldown: 18 },
 };
 
 export const BLAST = {

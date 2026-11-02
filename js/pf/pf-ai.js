@@ -3,17 +3,24 @@
    (it only produces the same intent objects a human player produces).
 
    States: idle / approach / attack / retreat / recover.
-   Decisions are evaluated every AI.decideEvery steps — never per frame and
+   Decisions are evaluated every `decideEvery` steps — never per frame and
    never randomly. Between decisions the previous intent is held (edge
    inputs fire only on the decision step itself). */
 
-import { AI } from './pf-config.js';
+import { AI, AI_PROFILES } from './pf-config.js';
 import { STAGE_SPAN, isOffStage } from './pf-stage.js';
 
 const CENTER_X = (STAGE_SPAN.left + STAGE_SPAN.right) / 2;
 
 export class FighterAI {
-  constructor() {
+  /**
+   * @param {string|object} [profile] an AI_PROFILES name ('calm' | 'normal'
+   *   | 'sharp') or a partial AI override object. Merged over the AI defaults
+   *   into this instance's own config — other fighters are unaffected.
+   */
+  constructor(profile) {
+    const overrides = typeof profile === 'string' ? (AI_PROFILES[profile] || {}) : (profile || {});
+    this.cfg = { ...AI, ...overrides };
     this.state = 'idle';
     this.stateT = 0;                    // steps left in the current state (retreat)
     this.decideIn = 0;                  // steps until the next evaluation
@@ -38,7 +45,7 @@ export class FighterAI {
       if (this.stateT > 0) this.stateT--;
       return out;
     }
-    this.decideIn = AI.decideEvery;
+    this.decideIn = this.cfg.decideEvery;
     this._decide(self, foe, out);
     this.held.move = out.move;
     this.held.face = out.face;
@@ -67,7 +74,7 @@ export class FighterAI {
     if (this.state === 'retreat' && this.stateT > 0) {
       const retreatDir = -towardFoe;
       const distBehind = retreatDir < 0 ? self.x - STAGE_SPAN.left : STAGE_SPAN.right - self.x;
-      if (distBehind < AI.edgeMargin) {
+      if (distBehind < this.cfg.edgeMargin) {
         this.state = 'approach'; // cornered: stop retreating
       } else {
         out.move = retreatDir;
@@ -77,9 +84,9 @@ export class FighterAI {
     }
 
     // 3) In range and able → attack (subject to the post-attack cooldown).
-    if (adx <= AI.attackRangeX && Math.abs(dy) <= AI.attackRangeY && !self.attacking && this.atkCd <= 0) {
+    if (adx <= this.cfg.attackRangeX && Math.abs(dy) <= this.cfg.attackRangeY && !self.attacking && this.atkCd <= 0) {
       this.state = 'attack';
-      this.atkCd = AI.attackCooldown;
+      this.atkCd = this.cfg.attackCooldown;
       out.move = 0;
       out.face = towardFoe;
       out.attack = true;
@@ -87,16 +94,16 @@ export class FighterAI {
     }
 
     // 4) Hurt and pressured → start retreating.
-    if (self.damage >= AI.retreatDamage && adx < 120 && self.grounded) {
+    if (self.damage >= this.cfg.retreatDamage && adx < 120 && self.grounded) {
       this.state = 'retreat';
-      this.stateT = AI.retreatSteps;
+      this.stateT = this.cfg.retreatSteps;
       out.move = -towardFoe;
       out.face = towardFoe;
       return;
     }
 
     // 5) Otherwise close the distance (chasing a higher foe means jumping).
-    if (adx > AI.attackRangeX * 0.75 || Math.abs(dy) > AI.attackRangeY) {
+    if (adx > this.cfg.attackRangeX * 0.75 || Math.abs(dy) > this.cfg.attackRangeY) {
       this.state = 'approach';
       out.move = towardFoe;
       out.face = towardFoe;

@@ -6,10 +6,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>MotionLab — 2D Physics Sandbox</title>
 <meta name="description" content="MotionLab: a minimalist, interactive 2D physics sandbox in the browser, powered by Matter.js.">
-<link rel="stylesheet" href="css/style.css?v=1.19">
+<link rel="stylesheet" href="css/style.css?v=1.20">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
-<body>
+<!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
+     keyed on body.no-3d keep every 3D surface hidden even before JS runs;
+     remove this class together with flipping the flag. -->
+<body class="no-3d">
 <div id="app">
   <!-- ===== Top toolbar ===== -->
   <header id="topbar">
@@ -329,6 +332,6 @@
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.19"></script>
+<script type="module" src="js/app.js?v=1.20"></script>
 </body>
 </html>

@@ -283,6 +283,9 @@ svg{display:block}
 .pf-tbtn.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 @media (pointer: coarse) { .pf-touch { display: flex; } }
 @media (max-width: 760px) { .pf-debug { display: none; } }
+/* 3D hidden (FEATURE_3D = false): structural guards so no 3D surface can
+   appear even before/without JS. Remove together with body.no-3d. */
+body.no-3d .mode-switch, body.no-3d #navSectionPresets3D, body.no-3d #navSectionSaved3D { display: none !important; }
 .side-launch { margin-top: 12px; border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 650; }
 .side-launch:hover { background: var(--accent); color: #fff; }
 

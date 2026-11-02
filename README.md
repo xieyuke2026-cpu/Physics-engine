@@ -11,6 +11,8 @@
 - GitHub Pages：仓库启用 Pages 后访问 `https://xieyuke2026-cpu.github.io/Physics-engine/`
 - 本地：任意静态服务器即可，例如在本目录执行 `python3 -m http.server 8000` 后打开 `http://localhost:8000`
 - 无后端、无构建步骤、无 API Key；直接部署静态文件即可（GitHub Pages 兼容）。
+- **开发者文档**：[docs/DEVELOPER.md](docs/DEVELOPER.md) —— PhysicsEngine 与
+  **PF 引擎**的完整调用方式（API 速览、无头对局与 UI 壳示例、AI 档位与调参）。
 
 ## 功能
 
@@ -53,20 +55,11 @@
 - 每帧只取一次刚体列表（此前主体、轨迹、速度矢量各自复制一份）；网格线改为纯算术投影，
   不再逐线分配坐标对象；轨迹的存活集合改为复用，休眠物体不再记录轨迹点
 
-**3D 实验室（v1.7 加入；v1.8 起按 Ryan 要求隐藏，未删除）**
-- 隐藏方式：`js/app.js` 顶部 `FEATURE_3D = false`。模式切换、3D 实验室、首页的 3D 分组与
-  入口卡都不再显示，侧边栏计数回到 2D 口径；3D 的代码、预设与已存的 3D 场景数据原样保留，
-  把开关改回 `true` 即可完整恢复。
-
-**3D 实验室功能（隐藏中）**
-- 顶部 **2D / 3D 模式切换**：3D 实验室基于通用 `PhysicsEngine3D` 核心（cannon-es）+ three.js 渲染
-  （WebGL 不可用时自动回退软件线框渲染）；轨道相机（拖动旋转、滚轮缩放、右键平移、双指捏合），
-  拖动物体用真实物理约束牵引；工具：选择/方块/球体/删除；右侧面板编辑位置/尺寸/质量/速度/静态/锁定旋转，
-  场景级重力、摩擦、弹性（cannon-es 按材质对结算接触，故 3D 的摩擦/弹性为全局设置，已在面板标注）
-- 3D 场景格式 `motionlab-scene-3d`，与 2D 完全分开存储（`motionlab.scenes3d.v1` / 自动保存独立）
-- 3D 预设 4 个：方块高塔 3D、立体金字塔、斜坡滚球 3D、多米诺走廊
-- **首页按维度区分**：预设与场景库分 2D / 3D 两组，卡片带 2D / 3D 徽章与各自的概览图
-  （3D 为等距线框缩略图）；首页有「3D 实验室」入口卡；侧边栏计数合并两个维度
+**3D 界面已下线（v1.7 加入，v1.8 起隐藏，v1.20 清理残留）**
+- 3D 实验室界面不再提供入口：`FEATURE_3D = false` 之外，页面带有 `body.no-3d`
+  结构护栏，模式切换与首页的 3D 分组在样式层即被隐藏，不依赖脚本时序。
+  3D 核心代码与已存的 3D 场景数据保留未删；PhysicsEngine3D 的独立用法见
+  [开发者文档](docs/DEVELOPER.md)。
 
 **物理引擎优化（v1.6）**
 - 刚体列表缓存：结构变化时才重建，`pick()` / `allBodies()` 不再每次调用都复制整个列表
@@ -141,8 +134,8 @@ UI、物理引擎、场景管理三层分离：`ui.js` 不直接接触 Matter，
 
 **v1.13 版本号体系与弹窗层级**：MotionLab / PhysicsEngine / Matter 三方版本号补齐并各自
 单一来源——应用版本在 `js/ui.js` 的 `APP_VERSION`；PhysicsEngine 导出 `VERSION` /
-`PhysicsEngine.VERSION`（当前 1.1.0；3D 核心为 1.0.0）；Matter 版本运行时读实际加载的
-`Matter.version`（0.19.0）。设置「关于」行与开发者文档页展示同一组三方版本。同时修复
+`PhysicsEngine.VERSION`（3D 核心为 1.0.0）；Matter 版本运行时读实际加载的
+`Matter.version`。当前各组件版本见 [开发者文档的版本表](docs/DEVELOPER.md)。同时修复
 设置弹窗层级：弹窗 z-index（100）曾低于首页（150），在主界面点设置会开在首页下层、
 进实验室才显形；现弹窗 300、toast 400，设置在主界面点击即在主界面上打开。
 

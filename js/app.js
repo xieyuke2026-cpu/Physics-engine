@@ -313,18 +313,10 @@ function setTool(t) {
 const BLAST_RADIUS = 280;
 let blastFx = null; // {x, y, radius, startedAt} — renderer draws the expanding ring
 function applyBlast(w) {
-  let hit = 0;
-  for (const b of world.allBodies()) {
-    if (b.isStatic || world.isBound(b)) continue;
-    const dx = b.position.x - w.x, dy = b.position.y - w.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist > BLAST_RADIUS) continue;
-    const falloff = 1 - dist / BLAST_RADIUS;
-    const mag = 2 + 13 * falloff;
-    const ux = dist > 1 ? dx / dist : 0, uy = dist > 1 ? dy / dist : -1;
-    world.setVelocity(b, b.velocity.x + ux * mag, b.velocity.y + uy * mag);
-    hit++;
-  }
+  // The shove itself is PhysicsEngine.applyRadialImpulse (v1.2.0) via the
+  // adapter, which keeps world-boundary bodies out. base/power reproduce the
+  // original hand-tuned curve: magnitude 2 + 13 * (1 - distance / radius).
+  const hit = world.applyRadialImpulse(w.x, w.y, { radius: BLAST_RADIUS, base: 2, power: 13 });
   blastFx = { x: w.x, y: w.y, radius: BLAST_RADIUS, startedAt: performance.now() };
   if (hit) toast(`冲击波推开了 ${hit} 个物体`);
   scheduleAutosave();

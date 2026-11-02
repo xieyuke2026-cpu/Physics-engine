@@ -8,7 +8,9 @@ globalThis.Matter = require('../vendor/matter.min.js');
 const { PFPhysics } = await import('../js/pf/pf-physics.js');
 const { Character } = await import('../js/pf/pf-character.js');
 const { Combat } = await import('../js/pf/pf-combat.js');
-const { PFMatch } = await import('../js/pf/pf-lab.js');
+const { PFMatch, PFEngine } = await import('../js/pf/pf-lab.js');
+const { PF_VERSION, ATTACK } = await import('../js/pf/pf-config.js');
+const { FighterAI } = await import('../js/pf/pf-ai.js');
 const { PLATFORMS, SPAWNS, isBlasted } = await import('../js/pf/pf-stage.js');
 
 let pass = 0, fail = 0;
@@ -177,6 +179,26 @@ check('blast: centre is safe, outside is out', !isBlasted(480, 270) && isBlasted
   m.dummy.damage = 42;
   m.reset();
   check('reset: fresh match state', m.state === 'fight' && m.stepCount === 0 && m.dummy.damage === 0 && m.player.damage === 0);
+}
+
+/* --- PF engine 1.1.0: version, facade, AI profiles, tune --- */
+{
+  check('pf version: PFEngine.VERSION is 1.1.0', PFEngine.VERSION === '1.1.0' && PF_VERSION === '1.1.0');
+  const m = PFEngine.createMatch();
+  check('facade: createMatch returns a running headless match', m.state === 'fight' && typeof m.step === 'function');
+  for (let i = 0; i < 30; i++) m.step(idle);
+  check('facade: headless match advances steps', m.stepCount === 30, `steps=${m.stepCount}`);
+
+  check('ai profiles: calm/sharp presets resolve', new FighterAI('calm').cfg.decideEvery === 16 && new FighterAI('sharp').cfg.decideEvery === 6 && new FighterAI('sharp').cfg.attackCooldown === 18);
+  check('ai profiles: object overrides merge over defaults', new FighterAI({ decideEvery: 3 }).cfg.decideEvery === 3 && new FighterAI({ decideEvery: 3 }).cfg.attackRangeX === 64);
+  const m2 = PFEngine.createMatch({ ai: 'calm' });
+  check('facade: match opts.ai reaches the dummy brain', m2.ai.cfg.decideEvery === 16);
+
+  const before = ATTACK.damage;
+  PFEngine.tune({ attack: { damage: before + 5 } });
+  const tuned = ATTACK.damage === before + 5;
+  PFEngine.tune({ attack: { damage: before } });
+  check('facade: tune() merges into the shared tables (and restores)', tuned && ATTACK.damage === before);
 }
 
 console.log(`\nPFLab logic: ${pass} passed, ${fail} failed`);

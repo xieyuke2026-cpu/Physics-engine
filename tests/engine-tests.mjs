@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.1.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.2.0');
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
 pe.addBody({ kind: 'rect', x: 100, y: 400, width: 500, height: 20, isStatic: true });
@@ -133,6 +133,38 @@ function tunnelTrial(substeps) {
 }
 check('tunnelling: substeps=1 lets a 36px/step shot through a 12px wall (baseline)', tunnelTrial(1) > 306, `x=${tunnelTrial(1)}`);
 check('tunnelling: substeps=4 stops the same shot at the wall', tunnelTrial(4) < 294, `x=${tunnelTrial(4)}`);
+
+/* --- v1.2.0: spatial queries + impulse helpers --- */
+{
+  const peQ = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  const wallA = peQ.addBody({ kind: 'rect', x: 300, y: 300, width: 20, height: 200, isStatic: true });
+  const wallB = peQ.addBody({ kind: 'rect', x: 500, y: 300, width: 20, height: 200, isStatic: true });
+  const free = peQ.addBody({ kind: 'circle', x: 100, y: 100, radius: 10, frictionAir: 0 });
+
+  const hits = peQ.raycast(0, 300, 800, 300);
+  check('raycast: hits both walls, nearest first', hits.length === 2 && hits[0].body === wallA && hits[1].body === wallB && hits[0].distance < hits[1].distance, `hits=${hits.length}`);
+  check('raycast: short segment stops before the first wall', peQ.raycast(0, 300, 200, 300).length === 0);
+  check('raycast: vertical miss returns empty', peQ.raycast(0, 50, 800, 50).length === 0);
+
+  const region = peQ.queryRegion(250, 200, 100, 200);
+  check('queryRegion: finds the overlapping wall only', region.length === 1 && region[0] === wallA, `n=${region.length}`);
+  check('queryRegion: empty area returns empty', peQ.queryRegion(600, 0, 50, 50).length === 0);
+
+  peQ.addVelocity(free, 3, -2);
+  check('addVelocity: accumulates onto velocity', near(free.velocity.x, 3, 0.01) && near(free.velocity.y, -2, 0.01), `v=${free.velocity.x},${free.velocity.y}`);
+  peQ.addVelocity(wallA, 5, 5);
+  check('addVelocity: static bodies are ignored', wallA.velocity.x === 0 && wallA.velocity.y === 0);
+
+  // Radial impulse: body at distance 50 of radius 100 -> mag = 2 + 13 * 0.5 = 8.5 outward (+x).
+  const peB = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  const inBody = peB.addBody({ kind: 'circle', x: 150, y: 100, radius: 10, frictionAir: 0 });
+  const outBody = peB.addBody({ kind: 'circle', x: 400, y: 100, radius: 10, frictionAir: 0 });
+  const statBody = peB.addBody({ kind: 'rect', x: 120, y: 100, width: 20, height: 20, isStatic: true });
+  const n = peB.applyRadialImpulse(100, 100, { radius: 100, base: 2, power: 13 });
+  check('applyRadialImpulse: affects only in-radius dynamic bodies', n === 1 && near(inBody.velocity.x, 8.5, 0.6) && outBody.velocity.x === 0 && statBody.velocity.x === 0, `n=${n} vx=${inBody.velocity.x}`);
+  const n2 = peB.applyRadialImpulse(100, 100, { radius: 100, base: 2, power: 13, filter: () => false });
+  check('applyRadialImpulse: filter can veto everything', n2 === 0);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

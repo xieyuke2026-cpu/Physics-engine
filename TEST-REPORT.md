@@ -1,4 +1,14 @@
-# MotionLab — 测试报告（2026-11-02，v1.19 更新）
+# MotionLab — 测试报告（2026-11-02，v1.20 更新）
+
+## 0s. v1.20 引擎升级（PhysicsEngine 1.2.0 / PF 1.1.0 / Matter 0.20.0）+ GitHub 开发者文档 + 3D 残留清理
+
+- **PhysicsEngine 1.2.0**：新增空间查询 `queryRegion`（AABB 区域）与 `raycast`（射线命中、近→远、含命中点/距离，基于 Matter Query.ray）；新增冲量助手 `addVelocity` 与 `applyRadialImpulse`（径向冲击，大小 = base + power×(1−距离/半径)，支持 filter 否决与受影响计数）；`pick()` 改用复用暂存点、零逐次分配。MotionLab 的冲击波工具已改为经适配层调用引擎 `applyRadialImpulse`（base 2 / power 13 与原手调曲线一致，边界体由适配层过滤）。新 API 在双份引擎测试中各加 9 项断言。两处引擎副本保持字节一致。
+- **PF 引擎 1.1.0**：新增版本常量 `PF_VERSION` 与对外门面 `PFEngine`（`createMatch` 无头对局 / `createLab` UI 壳 / `tune` 调参 / `config` / `stage`）；`PFMatch` 支持 `opts.ai`；AI 改为实例级配置，支持档位 `calm`（16/48）/`normal`（10/30）/`sharp`（6/18）与任意覆盖对象合并。设置「关于」行新增 PFLab 版本。PF 逻辑测试新增 7 项。
+- **Matter.js 0.19.0 → 0.20.0**：先在副本中以新 vendored 文件跑引擎/逻辑/PF/UI 全部套件，除版本号字符串断言外**零失败、零断言放宽**，才正式替换双份 vendored 文件；`ui.js` 的兜底版本字符串同步为 0.20.0（正常路径运行时读 `Matter.version`）。
+- **3D 界面残留清理**：`<body class="no-3d">` + 样式层护栏（`body.no-3d` 下模式切换与首页 3D 分组 `display:none !important`），3D 表面不再依赖脚本时序隐藏；README 的 3D 功能罗列改为一段下线说明。代码与已存 3D 数据仍保留未删。lab3d 冒烟新增结构护栏断言（13 项）。
+- **GitHub 开发者文档**：新增 `docs/DEVELOPER.md`（GitHub 可直接阅读）：版本表、PhysicsEngine 加载/快速开始/API 速览/版本历史、**PF 引擎调用方式**（门面与直接用类两种、intent 接口、AI 档位表、参数表）、PhysicsEngine3D 说明、Matter 升级策略、测试命令。README 顶部已加链接。
+- 全量结果：MotionLab 九套件 262 项全过（引擎 40、3D 引擎 22、逻辑 65、PF 逻辑 27、PF UI 10、UI 冒烟 42、导航 30、落地 13、3D 隐藏 13）；独立包 62 项全过（引擎 40 + 3D 22）。
+
 
 ## 0r. v1.19 文档版本号动态化
 

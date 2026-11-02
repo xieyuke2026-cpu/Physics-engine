@@ -56,6 +56,14 @@ await wait(350);
 
 /* --- the switch and the lab stay hidden; even a click cannot enter 3D --- */
 check('hidden: mode switch is not displayed', doc.querySelector('.mode-switch').style.display === 'none');
+{
+  // v1.20 structural guards: the hiding no longer depends on JS timing —
+  // body carries no-3d in the markup and the stylesheet kills 3D surfaces.
+  const cssText = fs.readFileSync(new URL('../css/style.css', import.meta.url), 'utf8');
+  check('v1.20: body starts with the no-3d structural guard',
+    doc.body.classList.contains('no-3d') && html.includes('<body class="no-3d">')
+    && cssText.includes('body.no-3d .mode-switch') && cssText.includes('body.no-3d #navSectionPresets3D'));
+}
 check('hidden: 3D lab DOM stays hidden', doc.getElementById('main3d').hidden && doc.getElementById('statusbar3d').hidden);
 click(doc.getElementById('mode3d'));
 await wait(80);
