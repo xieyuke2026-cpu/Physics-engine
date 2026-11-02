@@ -45,7 +45,7 @@ await wait(300);
 
 /* --- v1.5: hub is the home page, with a sidebar --- */
 check('home: hub is shown on boot (return visit)', !doc.getElementById('sceneNav').hidden);
-check('home: sidebar has four views', doc.querySelectorAll('.side-item').length === 4);
+check('home: sidebar has four views', doc.querySelectorAll('.side-item[data-view]').length === 4);
 const viewBtn = (v) => doc.querySelector(`.side-item[data-view="${v}"]`);
 click(viewBtn('presets'));
 await wait(60);

@@ -33,6 +33,7 @@ const PATHS = {
   grid: '<path d="M4 4h16v16H4zM4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16"/>',
   spring: '<path d="M2.5 12h2.2l1.6-4.5 2.1 9 2.1-9 2.1 9 2.1-9 2.1 9 1.6-4.5h3.1"/>',
   burst: '<circle cx="12" cy="12" r="3.1"/><path d="M12 3v2.6M12 18.4V21M3 12h2.6M18.4 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>',
+  gamepad: '<rect x="2.5" y="7.5" width="19" height="10" rx="5"/><path d="M8 10.8v3.4M6.3 12.5h3.4"/><circle cx="15.8" cy="11.6" r="0.4" fill="currentColor"/><circle cx="18" cy="13.8" r="0.4" fill="currentColor"/>',
   triangle: '<path d="M12 4.2 20.3 19.5H3.7Z"/>',
   step: '<path d="M6.5 5.8v12.4L15 12Z"/><path d="M17.5 5.5v13"/>',
   camera: '<rect x="3.5" y="7.5" width="17" height="12" rx="1.2"/><circle cx="12" cy="13.5" r="3.4"/><path d="M9 7.5 10.4 5h3.2L15 7.5"/>',

@@ -563,12 +563,19 @@ function closeSceneNav() { $('sceneNav').hidden = true; }
 
 /* ---------------- PFLab (platform fighter module) ----------------
    Single entry point: the PFLab button in the home hub's sidebar
-   (the main interface). Entering closes the hub; exiting returns to it. */
+   (the main interface). The overlay is opened FIRST and the hub is closed
+   only after it succeeds — a failure must never strand the user in the lab
+   behind (an earlier version closed the hub first and did exactly that). */
 let pfLab = null;
 function enterPFLab() {
-  closeSceneNav();
-  if (!pfLab) pfLab = new PFLab(() => openSceneNav());
-  pfLab.enter();
+  try {
+    if (!pfLab) pfLab = new PFLab(() => openSceneNav());
+    pfLab.enter();
+    closeSceneNav();
+  } catch (err) {
+    console.error('PFLab failed to open:', err);
+    toast(`PFLab 打开失败：${err && err.message ? err.message : err}`);
+  }
 }
 
 /* ---------------- New-version notice ----------------

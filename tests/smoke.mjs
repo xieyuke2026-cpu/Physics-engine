@@ -197,10 +197,21 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.17')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.18')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.1.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.19.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
+{
+  // Stylesheet integrity guard: a truncated rule once left an unclosed block
+  // that silently disabled every later rule in real browsers (all of PFLab's
+  // styles included) while text greps kept passing. Braces must balance.
+  const cssText = fs.readFileSync(new URL('../css/style.css', import.meta.url), 'utf8');
+  const stripped = cssText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/"[^"]*"|'[^']*'/g, '""');
+  let depth = 0, okDepth = true;
+  for (const ch of stripped) { if (ch === '{') depth++; else if (ch === '}') depth--; if (depth < 0) okDepth = false; }
+  check('v1.18: stylesheet braces balanced, no truncation markers',
+    okDepth && depth === 0 && !cssText.includes('[truncated'), `depth=${depth}`);
+}
 click(resetBtn); // window.confirm is stubbed to true in this harness
 await wait(500);
 check('v1.11: 2D library key wiped', window.localStorage.getItem('motionlab.scenes.v1') === null);
