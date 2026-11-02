@@ -561,6 +561,15 @@ function openSceneNav() {
 }
 function closeSceneNav() { $('sceneNav').hidden = true; }
 
+/* The developer-docs page shows the same version trio as Settings → About,
+   stamped from the single sources of truth so the prose can never go stale. */
+function stampDocsVersions() {
+  const el = $('docsVersions');
+  if (!el) return;
+  const matter = (typeof window !== 'undefined' && window.Matter && window.Matter.version) || '—';
+  el.textContent = `MotionLab ${APP_VERSION} · PhysicsEngine ${PhysicsEngine.VERSION} · Matter.js ${matter}`;
+}
+
 /* ---------------- PFLab (platform fighter module) ----------------
    Single entry point: the PFLab button in the home hub's sidebar
    (the main interface). The overlay is opened FIRST and the hub is closed
@@ -1079,6 +1088,7 @@ $('btnNavSettings').addEventListener('click', openSettings);
   // missing optional buttons must not abort the rest of the chrome setup.
   const sidePF = $('btnSidePF');
   if (sidePF) sidePF.addEventListener('click', () => enterPFLab());
+  stampDocsVersions();
   const btnReload = $('btnUpdateReload');
   if (btnReload) btnReload.addEventListener('click', () => location.reload());
   const btnDismiss = $('btnUpdateDismiss');

@@ -6,7 +6,7 @@ import { icon } from './icons.js';
 import { VERSION as ENGINE_VERSION } from './engine/physics-engine.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.18';
+export const APP_VERSION = '1.19';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
