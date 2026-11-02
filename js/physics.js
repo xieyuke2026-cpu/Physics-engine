@@ -16,6 +16,9 @@ function mlToDesc(d) {
     density: d.density, friction: d.friction, frictionAir: d.frictionAir,
     restitution: d.restitution, isStatic: d.isStatic, lockRotation: d.lockRotation,
     vx: d.vx, vy: d.vy, label: d.label,
+    // The scene label doubles as the engine-level body name (1.4.0), so
+    // scene bodies are addressable via core.getBodyByName(label) too.
+    name: d.label || '',
     userData: { mlType: d.type, isBound: d.isBound, sides: d.sides },
   };
 }
@@ -60,6 +63,10 @@ export class PhysicsWorld {
   }
 
   bodyById(dataId) { return this.core.bodyById(dataId); }
+  /** Engine-level naming (1.4.0): find / rename scene bodies by label-name. */
+  bodyByName(name) { return this.core.getBodyByName(name); }
+  bodiesByName(name) { return this.core.getBodiesByName(name); }
+  renameBody(bodyOrId, name) { return this.core.renameBody(bodyOrId, name); }
   dataIdOf(body) { return this.core.idOf(body); }
   typeOf(body) { return this.core.userDataOf(body).mlType || 'rectangle'; }
   isBound(body) { return this.core.userDataOf(body).isBound === true; }
@@ -83,7 +90,8 @@ export class PhysicsWorld {
       density: d.density, friction: d.friction, frictionAir: d.frictionAir,
       restitution: d.restitution, isStatic: d.isStatic,
       isBound: ud.isBound === true, lockRotation: d.lockRotation,
-      vx: d.vx, vy: d.vy, label: d.label,
+      // A rename done through the engine wins over the creation label.
+      vx: d.vx, vy: d.vy, label: d.name || d.label,
     });
   }
 

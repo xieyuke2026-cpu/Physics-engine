@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>示例 · 流体浮力 — PhysicsEngine</title>
+<style>
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f4f5f6; color: #1c1e21; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 32px; }
+  h1 { font-size: 20px; margin: 4px 0 6px; }
+  p { color: #4a5058; font-size: 14px; line-height: 1.6; margin: 4px 0 12px; }
+  code { background: #e8eaec; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  canvas { background: #ffffff; border: 1px solid #dde1e5; border-radius: 10px; width: 100%; height: auto; display: block; }
+  button { font-size: 14px; padding: 7px 16px; border-radius: 8px; border: 1px solid #2f6db3; background: #2f6db3; color: #fff; cursor: pointer; }
+  a { color: #2f6db3; }
+  .hint { font-size: 13px; color: #7a828c; }
+</style>
+</head>
+<body>
+<main>
+  <h1>流体浮力</h1>
+  <p>PhysicsEngine 1.4.0 的 <code>addFluid({ density, drag })</code>：物体按「流体密度 ÷ 物体密度 × 浸没比例」
+     受到浮力——阿基米德原理。木块（0.0004）高高浮起、软木塞（0.0002）浮得更高、冰块（0.0009）只露出一点点、铁块（0.01）直接沉底。
+     每个物体都用 <code>name</code> 命了名，画布上标的就是它的名字。返回 <a href="../index.html">MotionLab</a> · <a href="../docs/DEVELOPER.md">开发者文档</a></p>
+  <canvas id="cv" width="960" height="600"></canvas>
+  <p><button id="drop">再掉一组</button> <span class="hint">新一组的位置抖动来自引擎种子随机（seed = 7），每次打开页面顺序都一样。</span></p>
+</main>
+<script src="../vendor/matter.min.js"></script>
+<script type="module">
+import { PhysicsEngine } from '../js/engine/physics-engine.js';
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+const pe = new PhysicsEngine({ enableSleeping: true, seed: 7 });
+const WATER = { x: 480, y: 430, width: 880, height: 260, density: 0.0012, drag: 0.02 };
+pe.addFluid({ id: 'water', ...WATER });
+pe.addBody({ kind: 'rect', x: 480, y: 580, width: 960, height: 40, isStatic: true, name: 'floor' });
+pe.addBody({ kind: 'rect', x: 8, y: 300, width: 16, height: 600, isStatic: true, name: 'wall-l' });
+pe.addBody({ kind: 'rect', x: 952, y: 300, width: 16, height: 600, isStatic: true, name: 'wall-r' });
+
+const KINDS = [
+  { label: '软木塞', kind: 'circle', radius: 15, density: 0.0002, color: '#e8c882' },
+  { label: '木块', kind: 'rect', width: 44, height: 30, density: 0.0004, color: '#b08954' },
+  { label: '冰块', kind: 'rect', width: 36, height: 36, density: 0.0009, color: '#bfe3f2' },
+  { label: '铁块', kind: 'rect', width: 30, height: 30, density: 0.01, color: '#5a6167' },
+];
+let round = 0;
+function dropSet() {
+  round++;
+  KINDS.forEach((k, i) => {
+    const x = 180 + i * 200 + pe.randomRange(-30, 30);
+    const b = pe.addBody({ ...k, x, y: 60 + pe.randomRange(0, 40), name: `${k.label}${round > 1 ? `-${round}` : ''}` });
+    b.plugin.pe.desc.color = k.color;
+  });
+}
+dropSet();
+document.getElementById('drop').addEventListener('click', dropSet);
+
+let last = performance.now();
+function frame(now) {
+  pe.advance(now - last, 1); last = now;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  // water
+  ctx.fillStyle = 'rgba(47, 109, 179, 0.18)';
+  ctx.fillRect(WATER.x - WATER.width / 2, WATER.y - WATER.height / 2, WATER.width, WATER.height);
+  ctx.strokeStyle = 'rgba(47, 109, 179, 0.65)';
+  ctx.beginPath();
+  ctx.moveTo(WATER.x - WATER.width / 2, WATER.y - WATER.height / 2);
+  ctx.lineTo(WATER.x + WATER.width / 2, WATER.y - WATER.height / 2);
+  ctx.stroke();
+  pe.forEachBody((b) => {
+    const d = b.plugin.pe.desc;
+    ctx.save();
+    ctx.translate(b.position.x, b.position.y);
+    ctx.rotate(b.angle);
+    ctx.fillStyle = d.color || '#c9ced4';
+    ctx.strokeStyle = '#3c4249';
+    if (d.kind === 'circle') { ctx.beginPath(); ctx.arc(0, 0, d.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    else { ctx.fillRect(-d.width / 2, -d.height / 2, d.width, d.height); ctx.strokeRect(-d.width / 2, -d.height / 2, d.width, d.height); }
+    ctx.restore();
+    if (!b.isStatic) {
+      ctx.fillStyle = '#1c1e21'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(pe.nameOf(b), b.position.x, b.position.y - 24);
+    }
+  });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

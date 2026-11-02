@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>示例 · 万有引力轨道 — PhysicsEngine</title>
+<style>
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f4f5f6; color: #1c1e21; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 32px; }
+  h1 { font-size: 20px; margin: 4px 0 6px; }
+  p { color: #4a5058; font-size: 14px; line-height: 1.6; margin: 4px 0 12px; }
+  code { background: #e8eaec; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  canvas { background: #101418; border-radius: 10px; width: 100%; height: auto; display: block; touch-action: none; }
+  a { color: #2f6db3; }
+  .hint { font-size: 13px; color: #7a828c; }
+</style>
+</head>
+<body>
+<main>
+  <h1>万有引力轨道</h1>
+  <p>PhysicsEngine 1.4.0 的 <code>setGravitation(G)</code>：全体物体两两吸引（牛顿公式 + 软化防奇点）。
+     三颗行星的初速度由 <code>Formulas.orbitVelocity(G, M, r)</code> 算出，所以轨道近乎正圆。
+     <b>点击画布</b>可在该处放一颗新行星——它会自动获得该半径的环绕速度。返回 <a href="../index.html">MotionLab</a> · <a href="../docs/DEVELOPER.md">开发者文档</a></p>
+  <canvas id="cv" width="960" height="600"></canvas>
+  <p class="hint">行星用 name 命名（sun / 行星-半径），渲染时按名字着色与标注——命名 API 见文档「命名物体」。</p>
+</main>
+<script src="../vendor/matter.min.js"></script>
+<script type="module">
+import { PhysicsEngine, Formulas } from '../js/engine/physics-engine.js';
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const CX = 480, CY = 300, G = 30;
+
+const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 }, gravitation: { G, softening: 100 } });
+const sun = pe.addBody({ kind: 'circle', x: CX, y: CY, radius: 26, isStatic: true, density: 0.004, name: 'sun' });
+const sunMass = Math.PI * 26 * 26 * 0.004; // static bodies: mass = area x descriptor density
+
+const trails = new Map();
+function addOrbiter(r, color) {
+  const v = Formulas.orbitVelocity(G, sunMass, r);
+  const b = pe.addBody({ kind: 'circle', x: CX + r, y: CY, radius: 7, density: 0.001, frictionAir: 0, name: `planet-${r}`, vx: 0, vy: -v });
+  b.plugin.pe.desc.color = color;
+  trails.set(pe.idOf(b), []);
+  return b;
+}
+addOrbiter(110, '#e0a458'); addOrbiter(180, '#7fb2e5'); addOrbiter(250, '#a5d6a7');
+
+cv.addEventListener('pointerdown', (e) => {
+  const rect = cv.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (cv.width / rect.width);
+  const y = (e.clientY - rect.top) * (cv.height / rect.height);
+  const dx = x - CX, dy = y - CY, r = Math.max(50, Math.hypot(dx, dy));
+  const v = Formulas.orbitVelocity(G, sunMass, r);
+  // tangential direction (perpendicular to the radius, counterclockwise)
+  const ux = -dy / r, uy = dx / r;
+  const b = pe.addBody({ kind: 'circle', x, y, radius: 6, density: 0.001, frictionAir: 0, name: `planet-${Math.round(r)}`, vx: ux * v, vy: uy * v });
+  b.plugin.pe.desc.color = '#ce93d8';
+  trails.set(pe.idOf(b), []);
+});
+
+let last = performance.now();
+function frame(now) {
+  pe.advance(now - last, 1); last = now;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  pe.forEachBody((b) => {
+    const id = pe.idOf(b);
+    if (!b.isStatic) {
+      const t = trails.get(id) || [];
+      t.push({ x: b.position.x, y: b.position.y });
+      if (t.length > 90) t.shift();
+      trails.set(id, t);
+      ctx.beginPath();
+      t.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.stroke();
+    }
+    const d = b.plugin.pe.desc;
+    ctx.beginPath();
+    ctx.arc(b.position.x, b.position.y, d.radius, 0, Math.PI * 2);
+    ctx.fillStyle = b.isStatic ? '#f2c14e' : (d.color || '#dfe5ea');
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(pe.nameOf(b), b.position.x, b.position.y - d.radius - 5);
+  });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

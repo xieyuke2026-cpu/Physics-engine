@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>示例 · 种子钉板 — PhysicsEngine</title>
+<style>
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f4f5f6; color: #1c1e21; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 32px; }
+  h1 { font-size: 20px; margin: 4px 0 6px; }
+  p { color: #4a5058; font-size: 14px; line-height: 1.6; margin: 4px 0 12px; }
+  code { background: #e8eaec; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  canvas { background: #ffffff; border: 1px solid #dde1e5; border-radius: 10px; width: 100%; height: auto; display: block; }
+  input { font-size: 14px; padding: 6px 8px; width: 110px; border: 1px solid #c6ccd2; border-radius: 8px; }
+  button { font-size: 14px; padding: 7px 16px; border-radius: 8px; border: 1px solid #2f6db3; background: #2f6db3; color: #fff; cursor: pointer; }
+  a { color: #2f6db3; }
+  .hint { font-size: 13px; color: #7a828c; }
+</style>
+</head>
+<body>
+<main>
+  <h1>种子钉板（高尔顿板）</h1>
+  <p>落球的出生抖动来自引擎的种子随机流（<code>new PhysicsEngine({ seed })</code> + <code>randomRange()</code>）：
+     <b>同一个 seed，每次打开、每台设备，分格结果都逐格一致</b>；换一个 seed 就是另一组结果。
+     这条性质有自动化测试守着（引擎测试「钉板」一节）。返回 <a href="../index.html">MotionLab</a> · <a href="../docs/DEVELOPER.md">开发者文档</a></p>
+  <canvas id="cv" width="960" height="600"></canvas>
+  <p>seed：<input id="seed" type="number" value="42"> <button id="go">用这个 seed 重跑</button>
+     <span class="hint" id="counts"></span></p>
+</main>
+<script src="../vendor/matter.min.js"></script>
+<script type="module">
+import { PhysicsEngine } from '../js/engine/physics-engine.js';
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const countsEl = document.getElementById('counts');
+
+const CX = 480, BW = 48, ROWS = 6, BALLS = 40;
+let pe = null, balls = [], spawnTimer = 0, spawned = 0;
+
+function build(seed) {
+  pe = new PhysicsEngine({ enableSleeping: true, seed });
+  pe.addBody({ kind: 'rect', x: CX, y: 560, width: 700, height: 24, isStatic: true, name: 'floor' });
+  pe.addBody({ kind: 'rect', x: CX - 210, y: 300, width: 14, height: 520, isStatic: true, name: 'wall-l' });
+  pe.addBody({ kind: 'rect', x: CX + 210, y: 300, width: 14, height: 520, isStatic: true, name: 'wall-r' });
+  for (let row = 0; row < ROWS; row++) {
+    const y = 150 + row * 42, off = row % 2 ? BW / 2 : 0;
+    for (let x = CX - 3.5 * BW + off; x <= CX + 3.5 * BW; x += BW)
+      pe.addBody({ kind: 'circle', x, y, radius: 6, isStatic: true, friction: 0.05, restitution: 0.35, name: 'peg' });
+  }
+  for (let i = 0; i <= 8; i++)
+    pe.addBody({ kind: 'rect', x: CX - 4 * BW + i * BW, y: 500, width: 6, height: 96, isStatic: true, name: 'bin-wall' });
+  balls = []; spawned = 0; spawnTimer = 0;
+}
+const binLeft = () => CX - 4 * BW;
+function binIndex(x) { return Math.max(0, Math.min(7, Math.floor((x - binLeft()) / BW))); }
+
+document.getElementById('go').addEventListener('click', () => build(Number(document.getElementById('seed').value) || 0));
+build(42);
+
+let last = performance.now();
+function frame(now) {
+  const steps = pe.advance(now - last, 1); last = now;
+  spawnTimer += steps;
+  while (spawned < BALLS && spawnTimer >= 12) {
+    spawnTimer -= 12; spawned++;
+    balls.push(pe.addBody({ kind: 'circle', x: CX + pe.randomRange(-8, 8), y: 36, radius: 10, restitution: 0.35, friction: 0.05, frictionAir: 0.002, name: `ball-${spawned}` }));
+  }
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  pe.forEachBody((b) => {
+    const d = b.plugin.pe.desc;
+    ctx.beginPath();
+    if (d.kind === 'circle') ctx.arc(b.position.x, b.position.y, d.radius, 0, Math.PI * 2);
+    else ctx.rect(b.position.x - d.width / 2, b.position.y - d.height / 2, d.width, d.height);
+    ctx.fillStyle = b.isStatic ? '#9aa3ab' : '#2f6db3';
+    ctx.fill();
+  });
+  const bins = new Array(8).fill(0);
+  for (const b of balls) if (b.position.y > 430) bins[binIndex(b.position.x)]++;
+  ctx.fillStyle = '#1c1e21'; ctx.font = '15px sans-serif'; ctx.textAlign = 'center';
+  bins.forEach((n, j) => ctx.fillText(String(n), binLeft() + (j + 0.5) * BW, 590));
+  countsEl.textContent = `分格计数：${bins.join(' · ')}（已落 ${balls.filter((b) => b.position.y > 430).length} / ${BALLS}）`;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

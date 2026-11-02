@@ -29,13 +29,17 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.3.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.4.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
              (addVelocity / applyRadialImpulse), allocation-free pick()
      1.3.0 — seeded RNG (seed option, random / randomRange / randomInt /
              choice / shuffle, setSeed; RNG state rides along in snapshots)
+     1.4.0 — named bodies (name / renameBody / getBodyByName), pairwise
+             gravitation, fluid regions (buoyancy + drag), a Formulas
+             library of pure physics helpers, and stability hardening
+             (descriptor validation, non-finite setter guards, maxSpeed)
    ========================================================================== */
 
 let _M = null;
@@ -56,11 +60,82 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.3.0';
+export const VERSION = '1.4.0';
+
+/* ============================================================================
+   Formulas — pure physics helpers (no engine state).
+
+   Units follow the engine's world: distances in px, velocities in px/step,
+   mass = density × area. `gravity` parameters are accelerations in
+   px/step² (a falling body under engine gravity y=1 gains ≈0.28 px/step
+   per step; measure your world with a test drop if you need it exactly).
+   ========================================================================== */
+export const Formulas = {
+  /** Kinetic energy of translation: ½·m·|v|² */
+  kineticEnergy: (mass, vx, vy) => 0.5 * mass * (vx * vx + vy * vy),
+  /** Rotational kinetic energy: ½·I·ω² */
+  rotationalEnergy: (inertia, angularVelocity) => 0.5 * inertia * angularVelocity * angularVelocity,
+  /** Linear momentum vector: m·v */
+  momentum: (mass, vx, vy) => ({ x: mass * vx, y: mass * vy }),
+  /** Impulse needed to change a body's velocity by (dvx, dvy): m·Δv */
+  impulseForDeltaV: (mass, dvx, dvy) => ({ x: mass * dvx, y: mass * dvy }),
+  /** Newton's law of gravitation — force magnitude: G·m1·m2 / r² */
+  gravitationalForce: (G, m1, m2, distance) => (distance > 0 ? (G * m1 * m2) / (distance * distance) : 0),
+  /** Circular-orbit speed around a central mass: √(G·M / r) */
+  orbitVelocity: (G, centralMass, radius) => Math.sqrt((G * centralMass) / Math.max(1e-9, radius)),
+  /** Escape velocity from a central mass at radius r: √(2·G·M / r) */
+  escapeVelocity: (G, centralMass, radius) => Math.sqrt((2 * G * centralMass) / Math.max(1e-9, radius)),
+  /** Hooke's law — spring force magnitude: k·x (direction opposes stretch) */
+  springForce: (stiffness, displacement) => stiffness * displacement,
+  /** Elastic potential energy stored in a spring: ½·k·x² */
+  springEnergy: (stiffness, displacement) => 0.5 * stiffness * displacement * displacement,
+  /** Small-angle pendulum period: 2π·√(L / g) */
+  pendulumPeriod: (length, gravity) => 2 * Math.PI * Math.sqrt(length / Math.max(1e-9, gravity)),
+  /** Archimedes (2D) — buoyant force: ρ_fluid · submergedArea · g */
+  buoyancyForce: (fluidDensity, submergedArea, gravity) => fluidDensity * submergedArea * gravity,
+  /** Quadratic drag force magnitude: c·v² (apply opposite the motion) */
+  dragForce: (coefficient, speed) => coefficient * speed * speed,
+  /** Maximum static friction force: μ·N */
+  frictionForce: (mu, normalForce) => mu * normalForce,
+  /** Projectile range on flat ground: v²·sin(2θ) / g */
+  projectileRange: (speed, angleRad, gravity) => (speed * speed * Math.sin(2 * angleRad)) / Math.max(1e-9, gravity),
+  /** Centripetal acceleration for circular motion: v² / r */
+  centripetalAcceleration: (speed, radius) => (speed * speed) / Math.max(1e-9, radius),
+  /** Gravitational potential energy relative to a reference: m·g·h */
+  potentialEnergy: (mass, gravity, height) => mass * gravity * height,
+};
 
 export class PhysicsEngine {
   /** Core version; same value as the module-level VERSION export. */
   static get VERSION() { return VERSION; }
+
+  /** The pure-formula library (also exported standalone as `Formulas`). */
+  static get Formulas() { return Formulas; }
+
+  /**
+   * Check a body descriptor without creating anything. Returns a list of
+   * human-readable problems (empty = valid). addBody() itself stays lenient
+   * (it coerces bad values to defaults); use this in tools/importers that
+   * would rather reject bad data than silently fix it.
+   */
+  static validateDescriptor(d) {
+    const problems = [];
+    if (!d || typeof d !== 'object') return ['descriptor is not an object'];
+    if (d.kind !== undefined && !BODY_KINDS.includes(d.kind)) problems.push(`unknown kind: ${String(d.kind)}`);
+    for (const k of ['x', 'y', 'angle', 'density', 'friction', 'frictionAir', 'restitution']) {
+      if (d[k] !== undefined && !Number.isFinite(Number(d[k]))) problems.push(`${k} is not a finite number`);
+    }
+    const kind = d.kind || 'rect';
+    if (kind === 'circle' || kind === 'polygon') {
+      if (d.radius !== undefined && !(Number(d.radius) > 0)) problems.push('radius must be > 0');
+    } else {
+      if (d.width !== undefined && !(Number(d.width) > 0)) problems.push('width must be > 0');
+      if (d.height !== undefined && !(Number(d.height) > 0)) problems.push('height must be > 0');
+    }
+    if (d.density !== undefined && Number(d.density) < 0) problems.push('density must be >= 0');
+    if (d.name !== undefined && typeof d.name !== 'string') problems.push('name must be a string');
+    return problems;
+  }
 
   /** Inject the Matter.js module explicitly (optional; global fallback works). */
   static setMatter(m) { _M = m; }
@@ -81,6 +156,12 @@ export class PhysicsEngine {
    * @param {number} [opts.seed] seed for the engine's RNG stream (see
    *        random()). Omit it and a random seed is chosen — read it back
    *        via `pe.seed` to reproduce the run later.
+   * @param {number} [opts.maxSpeed] velocity cap in px/step (0 = off).
+   *        A stability guard: no dynamic body ever exceeds it, so a bad
+   *        impulse cannot explode a scene or tunnel through everything.
+   * @param {{G:number, softening?:number}|number} [opts.gravitation]
+   *        pairwise Newtonian attraction between all bodies (see
+   *        setGravitation). Off by default.
    */
   constructor(opts = {}) {
     const M = opts.matter || matter();
@@ -102,6 +183,13 @@ export class PhysicsEngine {
     this._seed = 0;                // RNG: the seed the current stream started from
     this._rngState = 0;            // RNG: mulberry32 state (uint32)
     this.setSeed(opts.seed === undefined ? (Math.random() * 4294967296) >>> 0 : opts.seed);
+    this._maxSpeed = Math.max(0, num(opts.maxSpeed, 0)); // 0 = uncapped
+    this._gravitation = null;      // { G, softening } | null
+    if (opts.gravitation !== undefined && opts.gravitation !== null) {
+      const g = typeof opts.gravitation === 'number' ? { G: opts.gravitation } : opts.gravitation;
+      this.setGravitation(g.G, g);
+    }
+    this._fluids = new Map();      // id -> {id, x, y, width, height, density, drag}
     this.onChange = null;          // () => void, structural changes
     this._collisionCbs = [];
     if (opts.gravity) this.setGravity(opts.gravity.x, opts.gravity.y, opts.gravity.enabled !== false);
@@ -125,9 +213,11 @@ export class PhysicsEngine {
    * Create a body from a plain descriptor and add it to the world.
    * desc: { id?, kind:'circle'|'rect'|'polygon', x, y, angle?(rad), width,
    *   height, radius, sides, density, friction, frictionAir, restitution,
-   *   isStatic, lockRotation, vx, vy, label, userData }
-   * Returns the Matter body. The (normalized) descriptor is kept on the body
-   * and can be read back with describeBody().
+   *   isStatic, lockRotation, vx, vy, label, name, userData }
+   * `name` is a developer-facing identifier (see getBodyByName); it is
+   * independent of Matter's `label`. Returns the Matter body. The
+   * (normalized) descriptor is kept on the body and can be read back
+   * with describeBody().
    */
   addBody(partial = {}) {
     const M = this.M;
@@ -149,6 +239,7 @@ export class PhysicsEngine {
       lockRotation: partial.lockRotation === true,
       vx: num(partial.vx, 0), vy: num(partial.vy, 0),
       label: typeof partial.label === 'string' ? partial.label : '',
+      name: typeof partial.name === 'string' ? partial.name : '',
       userData: partial.userData && typeof partial.userData === 'object' ? partial.userData : {},
     };
     const opts = {
@@ -192,6 +283,7 @@ export class PhysicsEngine {
     for (const b of this._byId.values()) this.M.Composite.remove(this.world, b);
     this._byId.clear();
     this._locked.clear();
+    this._fluids.clear();
     this.endDrag();
     this._acc = 0;
     this._emitChange();
@@ -201,6 +293,32 @@ export class PhysicsEngine {
   idOf(body) { return body && body.plugin && body.plugin.pe ? body.plugin.pe.id : null; }
   kindOf(body) { return body && body.plugin && body.plugin.pe ? body.plugin.pe.kind : 'rect'; }
   userDataOf(body) { return body && body.plugin && body.plugin.pe ? body.plugin.pe.desc.userData : {}; }
+
+  /* ---------------- names ----------------
+     Bodies can carry a developer-facing `name` (descriptor field, kept in
+     snapshots). Names need NOT be unique — scenes often reuse them
+     ("peg", "ball") — so lookups come in two forms: first match, or all
+     matches, both in insertion order. */
+  /** The body's name ('' when unnamed or not an engine body). */
+  nameOf(body) { return body && body.plugin && body.plugin.pe ? body.plugin.pe.desc.name : ''; }
+  /** First body with this name, or null. */
+  getBodyByName(name) {
+    for (const b of this._byId.values()) if (b.plugin.pe.desc.name === name) return b;
+    return null;
+  }
+  /** All bodies with this name, in insertion order. */
+  getBodiesByName(name) {
+    const out = [];
+    for (const b of this._byId.values()) if (b.plugin.pe.desc.name === name) out.push(b);
+    return out;
+  }
+  /** Rename a body (accepts the body itself or its id). Returns success. */
+  renameBody(bodyOrId, name) {
+    const body = typeof bodyOrId === 'string' ? this._byId.get(bodyOrId) : bodyOrId;
+    if (!body || !body.plugin || !body.plugin.pe) return false;
+    body.plugin.pe.desc.name = typeof name === 'string' ? name : '';
+    return true;
+  }
   /** Cached array view (insertion order). Rebuilt only after a structural change;
    *  internal use — callers must not mutate it. */
   _bodies() {
@@ -338,10 +456,17 @@ export class PhysicsEngine {
   }
 
   /* ---------------- bulk load ---------------- */
+  /**
+   * Replace the world from plain data ({ bodies, constraints, fluids?,
+   * gravity?, rng? }). Malformed entries (non-objects) are skipped rather
+   * than crashing the load. Returns how many of each kind were loaded.
+   */
   load(data = {}) {
     this.clear();
-    for (const d of data.bodies || []) this.addBody(d);
-    for (const c of data.constraints || []) this.addConstraint(c);
+    let bodies = 0, constraints = 0, fluids = 0;
+    for (const d of data.bodies || []) { if (d && typeof d === 'object') { this.addBody(d); bodies++; } }
+    for (const c of data.constraints || []) { if (c && typeof c === 'object' && this.addConstraint(c)) constraints++; }
+    for (const f of data.fluids || []) { if (f && typeof f === 'object') { this.addFluid(f); fluids++; } }
     if (data.gravity) this.setGravity(data.gravity.x, data.gravity.y, data.gravity.enabled !== false);
     if (data.rng && Number.isFinite(data.rng.state)) {
       // Restore the RNG stream exactly where the snapshot left it, so a
@@ -349,11 +474,13 @@ export class PhysicsEngine {
       this._seed = num(data.rng.seed, this._seed) >>> 0;
       this._rngState = data.rng.state >>> 0;
     }
+    return { bodies, constraints, fluids };
   }
   snapshot() {
     return {
       bodies: this.allBodies().map((b) => this.describeBody(b)),
       constraints: this.describeConstraints(),
+      fluids: this.fluids(),
       rng: { seed: this._seed, state: this._rngState },
     };
   }
@@ -388,6 +515,9 @@ export class PhysicsEngine {
   }
 
   _stepOnce() {
+    // Gravitation kicks velocities once per fixed step (not per substep),
+    // so its strength does not depend on the anti-tunnelling setting.
+    if (this._gravitation) this._applyGravitation();
     // Split the fixed step into `substeps` engine updates (anti-tunnelling:
     // a body can move at most fixedDt/substeps worth of travel per update).
     const n = this.substeps;
@@ -407,14 +537,200 @@ export class PhysicsEngine {
         if (!b.isStatic && b.angularVelocity !== 0) this.M.Body.setAngularVelocity(b, 0);
       }
     }
+    // Stability guard: cap speeds before the solver sees them, so one bad
+    // impulse can never poison the world with a runaway body.
+    if (this._maxSpeed > 0) {
+      const cap = this._maxSpeed, capSq = cap * cap;
+      for (const b of this._byId.values()) {
+        if (b.isStatic) continue;
+        const v = b.velocity, spSq = v.x * v.x + v.y * v.y;
+        if (spSq > capSq) {
+          const s = cap / Math.sqrt(spSq);
+          this.M.Body.setVelocity(b, { x: v.x * s, y: v.y * s });
+        }
+      }
+    }
+    // Fluid forces must be applied right before the update: Matter clears
+    // accumulated forces as part of every Engine.update.
+    if (this._fluids.size) this._applyFluids();
     this.M.Engine.update(this.engine, dt);
   }
 
-  /* ---------------- property setters (engine stays source of truth) ---------------- */
+  /* ---------------- gravitation (pairwise, Newtonian) ----------------
+     Every body attracts every other body: a = G · m_other · d / (|d|² + ε²)^1.5
+     applied as a velocity kick once per fixed step. G is in engine units
+     (px/step² per unit mass); ε (softening, px²) avoids the singularity
+     when bodies overlap. Static bodies attract but are not moved; their
+     effective mass is area × density (Matter reports Infinity for them).
+     Cost is O(n²) per step — built for tens of bodies, not thousands. */
+  /** Enable/retune pairwise gravitation. `setGravitation(0)` disables. */
+  setGravitation(G, opts = {}) {
+    const g = num(G, 0);
+    if (!(g > 0)) { this._gravitation = null; return; }
+    this._gravitation = { G: g, softening: Math.max(0, num(opts.softening, 100)) };
+  }
+  /** Current gravitation config ({ G, softening }) or null when off. */
+  get gravitation() { return this._gravitation ? { ...this._gravitation } : null; }
+
+  _gravMass(body) {
+    if (!body.isStatic) return body.mass;
+    // Matter sets a static body's density to Infinity; the descriptor
+    // keeps the density the body was created (or last set) with.
+    const d = body.plugin && body.plugin.pe ? body.plugin.pe.desc.density : 0;
+    return body.area * (Number.isFinite(d) ? d : 0);
+  }
+
+  _applyGravitation() {
+    const { G, softening } = this._gravitation;
+    const arr = this._bodies();
+    const n = arr.length;
+    for (let i = 0; i < n; i++) {
+      const a = arr[i];
+      if (a.isStatic) continue;
+      let ax = 0, ay = 0;
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        const b = arr[j];
+        const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y;
+        const dSq = dx * dx + dy * dy + softening;
+        const inv = 1 / (dSq * Math.sqrt(dSq));
+        const s = G * this._gravMass(b) * inv;
+        ax += dx * s; ay += dy * s;
+      }
+      if (ax || ay) {
+        if (a.isSleeping) this.M.Sleeping.set(a, false);
+        this.M.Body.setVelocity(a, { x: a.velocity.x + ax, y: a.velocity.y + ay });
+      }
+    }
+  }
+
+  /* ---------------- fluid regions (buoyancy + drag) ----------------
+     A fluid is an axis-aligned rectangle given by its CENTER (x, y) and
+     size; the surface is its top edge. A dynamic body overlapping the
+     region feels an upward force mirroring world gravity, scaled by
+     (fluid density / body density) × submerged fraction of its bounds —
+     so a body floats when the submerged fraction balances its density
+     ratio, exactly Archimedes' principle in 2D. `drag` (0..1) bleeds
+     velocity per substep while submerged. */
+  /**
+   * Add a fluid region: { id?, x, y, width, height, density = 0.0012,
+   * drag = 0.02 }. Returns the stored record (a copy).
+   */
+  addFluid(partial = {}) {
+    const rec = {
+      id: typeof partial.id === 'string' && partial.id ? partial.id : `fluid-${this._seq++}`,
+      x: num(partial.x, 0), y: num(partial.y, 0),
+      width: Math.max(1, num(partial.width, 200)), height: Math.max(1, num(partial.height, 200)),
+      density: Math.max(0, num(partial.density, 0.0012)),
+      drag: Math.min(1, Math.max(0, num(partial.drag, 0.02))),
+    };
+    this._fluids.set(rec.id, rec);
+    return { ...rec };
+  }
+  removeFluid(id) { return this._fluids.delete(id); }
+  clearFluids() { this._fluids.clear(); }
+  fluidById(id) { const f = this._fluids.get(id); return f ? { ...f } : null; }
+  /** All fluid regions (copies), in insertion order. */
+  fluids() { return [...this._fluids.values()].map((f) => ({ ...f })); }
+  get fluidCount() { return this._fluids.size; }
+
+  _applyFluids() {
+    const g = this.engine.gravity;
+    if (!g || (g.x === 0 && g.y === 0)) return;
+    const scale = g.scale !== undefined ? g.scale : 0.001;
+    const { Body } = this.M;
+    for (const f of this._fluids.values()) {
+      const top = f.y - f.height / 2, bottom = f.y + f.height / 2;
+      const left = f.x - f.width / 2, right = f.x + f.width / 2;
+      for (const b of this._byId.values()) {
+        if (b.isStatic) continue;
+        const bd = b.bounds;
+        if (bd.max.x < left || bd.min.x > right || bd.max.y < top || bd.min.y > bottom) continue;
+        const bh = Math.max(1, bd.max.y - bd.min.y);
+        const frac = Math.min(1, Math.max(0, (bd.max.y - top) / bh));
+        if (frac <= 0) continue;
+        const ratio = b.density > 0 ? f.density / b.density : 0;
+        // Buoyancy through Matter's own force channel, mirroring how
+        // gravity itself is applied (force = mass · g · scale), so a
+        // fully submerged body with ratio 1 is exactly neutrally buoyant.
+        Body.applyForce(b, b.position, {
+          x: -g.x * b.mass * ratio * frac * scale,
+          y: -g.y * b.mass * ratio * frac * scale,
+        });
+        if (f.drag > 0) {
+          const keep = 1 - f.drag * frac;
+          Body.setVelocity(b, { x: b.velocity.x * keep, y: b.velocity.y * keep });
+        }
+      }
+    }
+  }
+
+  /* ---------------- measurements (live Formulas over world state) -------- */
+  /** Kinetic energy of one body (translation + rotation). */
+  bodyKineticEnergy(body) {
+    if (!body) return 0;
+    return Formulas.kineticEnergy(body.mass, body.velocity.x, body.velocity.y)
+      + (Number.isFinite(body.inertia) ? Formulas.rotationalEnergy(body.inertia, body.angularVelocity) : 0);
+  }
+  /** Total kinetic energy of all dynamic bodies. */
+  totalKineticEnergy() {
+    let e = 0;
+    for (const b of this._byId.values()) if (!b.isStatic) e += this.bodyKineticEnergy(b);
+    return e;
+  }
+  /** Momentum vector of one body. */
+  bodyMomentum(body) { return body ? Formulas.momentum(body.mass, body.velocity.x, body.velocity.y) : { x: 0, y: 0 }; }
+  /** Total momentum of all dynamic bodies — conserved in collisions and
+   *  under symmetric internal forces like gravitation. */
+  totalMomentum() {
+    let x = 0, y = 0;
+    for (const b of this._byId.values()) {
+      if (b.isStatic) continue;
+      x += b.mass * b.velocity.x; y += b.mass * b.velocity.y;
+    }
+    return { x, y };
+  }
+  /** Centre of mass of all dynamic bodies: { x, y, mass } (mass 0 → origin). */
+  centerOfMass() {
+    let m = 0, x = 0, y = 0;
+    for (const b of this._byId.values()) {
+      if (b.isStatic) continue;
+      m += b.mass; x += b.position.x * b.mass; y += b.position.y * b.mass;
+    }
+    return m > 0 ? { x: x / m, y: y / m, mass: m } : { x: 0, y: 0, mass: 0 };
+  }
+
+  /* ---------------- property setters (engine stays source of truth) ----------------
+     Stability rule: setters IGNORE non-finite inputs (NaN / Infinity)
+     instead of letting them into the world — a single NaN position would
+     otherwise poison every body it touches. Use findNonFiniteBodies() to
+     audit a world that came from untrusted data. */
   wake(body) { if (body.isSleeping) this.M.Sleeping.set(body, false); }
-  setPosition(body, x, y) { this.wake(body); this.M.Body.setPosition(body, { x, y }); }
-  setVelocity(body, vx, vy) { if (!body.isStatic) { this.wake(body); this.M.Body.setVelocity(body, { x: vx, y: vy }); } }
-  setAngleDeg(body, deg) { this.wake(body); this.M.Body.setAngle(body, deg * Math.PI / 180); }
+  setPosition(body, x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    this.wake(body); this.M.Body.setPosition(body, { x, y });
+  }
+  setVelocity(body, vx, vy) {
+    if (!Number.isFinite(vx) || !Number.isFinite(vy)) return;
+    if (!body.isStatic) { this.wake(body); this.M.Body.setVelocity(body, { x: vx, y: vy }); }
+  }
+  setAngleDeg(body, deg) {
+    if (!Number.isFinite(deg)) return;
+    this.wake(body); this.M.Body.setAngle(body, deg * Math.PI / 180);
+  }
+  /** Velocity cap in px/step (0 = off) — see the constructor option. */
+  setMaxSpeed(v) { this._maxSpeed = Math.max(0, num(v, 0)); }
+  get maxSpeed() { return this._maxSpeed; }
+  /** Ids of bodies whose position or velocity is NaN/Infinity (should
+   *  always be empty in a healthy world). */
+  findNonFiniteBodies() {
+    const out = [];
+    for (const b of this._byId.values()) {
+      if (!Number.isFinite(b.position.x) || !Number.isFinite(b.position.y)
+        || !Number.isFinite(b.velocity.x) || !Number.isFinite(b.velocity.y)) out.push(this.idOf(b));
+    }
+    return out;
+  }
   setDensity(body, v) {
     this.M.Body.setDensity(body, Math.max(0.00001, v));
     if (body.plugin.pe.desc.lockRotation && !body.isStatic) this.M.Body.setInertia(body, Infinity);
@@ -455,6 +771,7 @@ export class PhysicsEngine {
   /** Add to a body's velocity (an impulse-like shove). Static bodies are ignored. */
   addVelocity(body, dvx, dvy) {
     if (!body || body.isStatic) return;
+    if (!Number.isFinite(dvx) || !Number.isFinite(dvy)) return;
     this.wake(body);
     this.M.Body.setVelocity(body, { x: body.velocity.x + dvx, y: body.velocity.y + dvy });
   }

@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 globalThis.Matter = require('../vendor/matter.min.js');
 
-const { PhysicsEngine, VERSION } = await import('../js/engine/physics-engine.js');
+const { PhysicsEngine, VERSION, Formulas } = await import('../js/engine/physics-engine.js');
 
 let pass = 0, fail = 0;
 function check(name, cond, extra = '') {
@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.3.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.4.0');
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
 pe.addBody({ kind: 'rect', x: 100, y: 400, width: 500, height: 20, isStatic: true });
@@ -239,6 +239,122 @@ function galtonBins(seed) {
   check('galton: different seed -> different outcome', JSON.stringify(g1.bins) !== JSON.stringify(g3.bins), `${g1.bins} vs ${g3.bins}`);
   check('galton: balls spread across the board (no single dominant bin)',
     g1.bins.filter((n) => n > 0).length >= 6 && Math.max(...g1.bins) <= 18, `${g1.bins}`);
+}
+
+/* --- v1.4.0: named bodies --- */
+{
+  const pe = new PhysicsEngine({});
+  const hero = pe.addBody({ kind: 'circle', x: 10, y: 10, radius: 8, name: 'hero' });
+  pe.addBody({ kind: 'circle', x: 40, y: 10, radius: 8, name: 'coin' });
+  pe.addBody({ kind: 'circle', x: 70, y: 10, radius: 8, name: 'coin' });
+  check('names: getBodyByName finds the body', pe.getBodyByName('hero') === hero);
+  check('names: duplicates allowed, getBodiesByName returns all', pe.getBodiesByName('coin').length === 2);
+  check('names: unknown name -> null / empty', pe.getBodyByName('ghost') === null && pe.getBodiesByName('ghost').length === 0);
+  check('names: renameBody by id and by body',
+    pe.renameBody(pe.idOf(hero), 'knight') && pe.getBodyByName('knight') === hero && pe.nameOf(hero) === 'knight');
+  const pe2 = new PhysicsEngine({});
+  pe2.load(JSON.parse(JSON.stringify(pe.snapshot())));
+  check('names: name survives snapshot -> load', pe2.getBodyByName('knight') !== null && pe2.getBodiesByName('coin').length === 2);
+}
+
+/* --- v1.4.0: stability hardening --- */
+{
+  check('validate: clean descriptor has no problems', PhysicsEngine.validateDescriptor({ kind: 'circle', x: 1, y: 2, radius: 5 }).length === 0);
+  const bad = PhysicsEngine.validateDescriptor({ kind: 'circle', x: NaN, radius: -3 });
+  check('validate: NaN / negative radius flagged; unknown kind flagged',
+    bad.length === 2 && PhysicsEngine.validateDescriptor({ kind: 'blob' }).length === 1, bad.join('; '));
+  const pe = new PhysicsEngine({});
+  const b = pe.addBody({ kind: 'circle', x: 50, y: 50, radius: 8 });
+  pe.setPosition(b, NaN, 100);
+  pe.setVelocity(b, Infinity, 0);
+  check('guards: non-finite setter input is ignored', b.position.x === 50 && b.position.y === 50 && b.velocity.x === 0);
+  check('guards: healthy world reports no non-finite bodies', pe.findNonFiniteBodies().length === 0);
+  const pe2 = new PhysicsEngine({ maxSpeed: 10, gravity: { x: 0, y: 0 } });
+  const fast = pe2.addBody({ kind: 'circle', x: 0, y: 0, radius: 6, vx: 60, vy: 80, frictionAir: 0 });
+  pe2.stepOnce();
+  const sp = Math.hypot(fast.velocity.x, fast.velocity.y);
+  check('guards: maxSpeed caps velocity', sp <= 10.01 && sp > 9.0, `speed=${sp.toFixed(2)}`);
+  const res = pe2.load({ bodies: [null, 42, { kind: 'circle', x: 1, y: 1, radius: 4 }], constraints: [null] });
+  check('guards: load skips malformed entries instead of crashing', res.bodies === 1 && pe2.count === 1);
+}
+
+/* --- v1.4.0: Formulas + measurements --- */
+{
+  check('formulas: kineticEnergy', Formulas.kineticEnergy(2, 3, 4) === 25);
+  check('formulas: gravitationalForce', Math.abs(Formulas.gravitationalForce(2, 3, 4, 5) - 0.96) < 1e-9);
+  check('formulas: orbitVelocity', Formulas.orbitVelocity(1, 100, 25) === 2);
+  check('formulas: pendulumPeriod', Math.abs(Formulas.pendulumPeriod(9.8, 9.8) - 2 * Math.PI) < 1e-9);
+  check('formulas: spring + buoyancy + projectile',
+    Formulas.springForce(0.5, 10) === 5 && Formulas.springEnergy(0.5, 10) === 25
+    && Formulas.buoyancyForce(0.0012, 1000, 10) === 12
+    && Math.abs(Formulas.projectileRange(10, Math.PI / 4, 10) - 10) < 1e-9);
+  check('formulas: exposed on the class too', PhysicsEngine.Formulas === Formulas);
+  const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  const a = pe.addBody({ kind: 'rect', x: 100, y: 100, width: 20, height: 20, density: 0.001 });
+  const b = pe.addBody({ kind: 'rect', x: 300, y: 100, width: 20, height: 20, density: 0.001 });
+  pe.setVelocity(a, 3, 4);
+  check('measure: bodyKineticEnergy matches Formulas', Math.abs(pe.bodyKineticEnergy(a) - Formulas.kineticEnergy(a.mass, 3, 4)) < 1e-6);
+  const com = pe.centerOfMass();
+  check('measure: centerOfMass of two equal bodies is the midpoint', Math.abs(com.x - 200) < 0.01 && Math.abs(com.y - 100) < 0.01);
+  const p = pe.totalMomentum();
+  check('measure: totalMomentum sums m*v', Math.abs(p.x - a.mass * 3) < 1e-9 && Math.abs(p.y - a.mass * 4) < 1e-9);
+}
+
+/* --- v1.4.0: gravitation --- */
+{
+  const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  const a = pe.addBody({ kind: 'circle', x: 250, y: 300, radius: 10, density: 0.002, frictionAir: 0 });
+  const b = pe.addBody({ kind: 'circle', x: 400, y: 300, radius: 10, density: 0.002, frictionAir: 0 });
+  pe.setGravitation(500, { softening: 50 });
+  check('gravitation: config readable, setGravitation(0) disables', pe.gravitation && pe.gravitation.G === 500);
+  const d0 = 150;
+  for (let s = 0; s < 120; s++) pe.stepOnce();
+  const d1 = Math.hypot(b.position.x - a.position.x, b.position.y - a.position.y);
+  const p = pe.totalMomentum();
+  check('gravitation: bodies attract', d1 < d0 - 60, `${d0} -> ${d1.toFixed(1)}`);
+  check('gravitation: total momentum conserved', Math.hypot(p.x, p.y) < 0.01, `|p|=${Math.hypot(p.x, p.y).toFixed(4)}`);
+  pe.setGravitation(0);
+  check('gravitation: disabled config reads null', pe.gravitation === null);
+}
+{
+  // Circular orbit: orbiter launched at Formulas.orbitVelocity around a
+  // static sun (its gravitation mass is area x descriptor density).
+  const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  pe.addBody({ kind: 'circle', x: 480, y: 300, radius: 26, isStatic: true, density: 0.004, name: 'sun' });
+  const G = 30, r = 180, M = Math.PI * 26 * 26 * 0.004;
+  const orb = pe.addBody({ kind: 'circle', x: 480 + r, y: 300, radius: 8, density: 0.001, frictionAir: 0, name: 'orbiter' });
+  pe.setVelocity(orb, 0, -Formulas.orbitVelocity(G, M, r));
+  pe.setGravitation(G, { softening: 100 });
+  let minR = 1e9, maxR = 0, prevA = 0, swept = 0;
+  for (let s = 0; s < 600; s++) {
+    pe.stepOnce();
+    const dx = orb.position.x - 480, dy = orb.position.y - 300;
+    const rr = Math.hypot(dx, dy); if (rr < minR) minR = rr; if (rr > maxR) maxR = rr;
+    const ang = Math.atan2(dy, dx);
+    let da = ang - prevA; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI;
+    swept += da; prevA = ang;
+  }
+  check('gravitation: orbit radius stays near-circular', minR > r * 0.9 && maxR < r * 1.1, `[${minR.toFixed(1)}, ${maxR.toFixed(1)}]`);
+  check('gravitation: orbiter actually orbits (> 2.5 rad in 600 steps)', Math.abs(swept) > 2.5, `swept=${Math.abs(swept).toFixed(2)}`);
+}
+
+/* --- v1.4.0: fluid regions (buoyancy) --- */
+{
+  const pe = new PhysicsEngine({});
+  pe.addFluid({ id: 'water', x: 400, y: 420, width: 600, height: 240, density: 0.0012, drag: 0.02 });
+  pe.addBody({ kind: 'rect', x: 400, y: 570, width: 700, height: 20, isStatic: true });
+  const wood = pe.addBody({ kind: 'circle', x: 300, y: 180, radius: 16, density: 0.0004, name: 'wood' });
+  const iron = pe.addBody({ kind: 'rect', x: 520, y: 180, width: 30, height: 30, density: 0.01, name: 'iron' });
+  for (let s = 0; s < 900; s++) pe.stepOnce();
+  check('fluids: light body floats at the surface (surface y = 300)',
+    wood.position.y > 275 && wood.position.y < 320 && Math.hypot(wood.velocity.x, wood.velocity.y) < 0.1,
+    `y=${wood.position.y.toFixed(1)}`);
+  check('fluids: dense body sinks to the floor', iron.position.y > 530, `y=${iron.position.y.toFixed(1)}`);
+  check('fluids: snapshot carries fluids; registry reads back',
+    pe.snapshot().fluids.length === 1 && pe.fluidById('water').density === 0.0012 && pe.fluidCount === 1);
+  pe.removeFluid('water');
+  for (let s = 0; s < 240; s++) pe.stepOnce();
+  check('fluids: removing the fluid lets the floater sink', wood.position.y > 500, `y=${wood.position.y.toFixed(1)}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

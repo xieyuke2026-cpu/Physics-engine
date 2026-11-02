@@ -1,4 +1,15 @@
-# MotionLab — 测试报告（2026-11-02，v1.21 更新）
+# MotionLab — 测试报告（2026-11-02，v1.22 更新）
+
+## 0u. v1.22 PhysicsEngine 1.4.0（命名/引力/浮力/公式/稳定性）+ 开源生态
+
+- **命名**：描述符 `name` + `getBodyByName/getBodiesByName/renameBody/nameOf`（可重名，快照保留）；MotionLab 适配层以场景 label 为引擎名，改名经 serialize 回写 label。引擎测试 +5 项。
+- **万有引力**：`setGravitation(G, {softening})` 两两引力（静态体质量 = 面积 × 描述符密度——Matter 静态体 density 为 Infinity，首版原型因此算出 Infinity 轨道速度，改用描述符密度后修复）；实测：相吸 150→19px、总动量守恒 |p|=0.0000；轨道（G=30、r=180、orbitVelocity 初速）600 步半径 [179.8, 181.9]、扫过 3.92 rad。引擎测试 +5 项。
+- **流体浮力**：`addFluid` 区域（密度比 × 浸没比例，阿基米德 2D）；实测木块（0.0004）稳停在液面 y=294.8（理论 ≈295）、铁块（0.01）沉底、撤除流体后木块下沉至池底。引擎测试 +4 项。快照携带 fluids；`load()` 返回载入计数并跳过坏条目。
+- **Formulas 公式库**：16 个纯函数（动能/动量/冲量/引力/轨道/逃逸/弹簧/单摆/浮力/阻力/摩擦/抛射程/向心/势能等）+ 实例测量（动能/总动量/质心）。引擎测试 +9 项（含 2 项校验/守卫与 maxSpeed——maxSpeed 首测因重力步后加速误报 10.22，改零重力世界后断言成立，语义为「入求解器前封顶」）。
+- **稳定性**：`validateDescriptor` 静态校验、setter/addVelocity 非有限输入守卫、`maxSpeed` 封顶、`findNonFiniteBodies()` 审计。引擎测试累计 **82 项**（双份一致）。
+- **生态小坑**：独立包 package.json 初版带 `"type": "module"` 时，Node 会把 UMD 的 matter.min.js 当 ESM 加载导致独立包测试整体起不来；去掉 type 字段后恢复（82+22 全过）。已记入本节备忘。
+- **开源生态**：仓库新增 MIT LICENSE、CHANGELOG.md、CONTRIBUTING.md、`examples/` 三个示例页（轨道/浮力/种子钉板，Pages 可直接打开）；README 加徽章与「开源与 PhysicsEngine」节；独立包新增 package.json（physics-engine 1.4.0）与 LICENSE、README 同步；docs/DEVELOPER.md 与应用内文档、physics-engine 技能同步 1.4.0。
+
 
 ## 0t. v1.21 PhysicsEngine 1.3.0 种子随机 + 钉板实测 + 应用内开发者文档更新
 

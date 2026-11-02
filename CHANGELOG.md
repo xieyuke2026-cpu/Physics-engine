@@ -1,0 +1,65 @@
+# 更新日志 Changelog
+
+本仓库包含两个版本线：**MotionLab**（应用）与 **PhysicsEngine**（可复用物理核心，
+位于 `js/engine/physics-engine.js`，另有 3D 核心 PhysicsEngine3D 1.0.0）。
+格式参考 Keep a Changelog；最新在上。
+
+## [MotionLab 1.22 / PhysicsEngine 1.4.0] — 2026-11-02
+
+### PhysicsEngine 1.4.0
+
+- **命名物体**：描述符新增 `name`；`getBodyByName` / `getBodiesByName`（可重名）、
+  `renameBody`、`nameOf`；名字随快照保存。MotionLab 的物体标签即其引擎名。
+- **万有引力**：`setGravitation(G, { softening })` 全体两两引力（静态体质量 = 面积 × 描述符密度），
+  `setGravitation(0)` 关闭；总动量在引力下守恒（有测试）。
+- **流体浮力**：`addFluid({ x, y, width, height, density, drag })` 流体区域——浮力按
+  密度比 × 浸没比例施加，另带水中阻尼；快照携带流体。
+- **公式库 Formulas**：动能/动量/冲量/万有引力/轨道与逃逸速度/胡克定律/单摆周期/浮力/
+  阻力/摩擦/抛射程/向心加速度/势能等纯函数；实例测量 `bodyKineticEnergy`、
+  `totalKineticEnergy`、`bodyMomentum`、`totalMomentum`、`centerOfMass`。
+- **稳定性**：`PhysicsEngine.validateDescriptor()` 静态校验；setter 忽略非有限输入；
+  构造选项 `maxSpeed` 速度封顶；`load()` 跳过坏条目并返回载入计数；
+  `findNonFiniteBodies()` 健康审计。
+- 测试：引擎单测 82 项（含轨道稳定性、浮沉、钉板确定性）。
+
+### 开源生态
+
+- 新增 MIT `LICENSE`、`CONTRIBUTING.md`、本更新日志。
+- 新增 `examples/` 三个可直接打开的示例：万有引力轨道、流体浮力、种子钉板
+  （GitHub Pages 上同样可访问：`examples/orbit.html` 等）。
+
+## [MotionLab 1.21 / PhysicsEngine 1.3.0] — 2026-11-02
+
+- **种子随机**：构造 `{ seed }`、`random / randomRange / randomInt / choice / shuffle`、
+  `setSeed`（对齐 Matter 内部种子）；快照携带 RNG 状态。钉板确定性测试：同 seed 分格逐格一致。
+
+## [MotionLab 1.20 / PhysicsEngine 1.2.0 / PF 引擎 1.1.0] — 2026-11-02
+
+- PhysicsEngine 1.2.0：`queryRegion` / `raycast` 空间查询、`addVelocity` / `applyRadialImpulse`
+  冲量助手、`pick()` 零分配。
+- PF 引擎 1.1.0：`PFEngine` 门面（`createMatch` 无头对局 / `createLab` / `tune`）、AI 档位
+  calm / normal / sharp。
+- Matter.js 0.19.0 → 0.20.0（全套件零失败后替换）。
+- 新增 `docs/DEVELOPER.md`（GitHub 直读的开发者文档）；3D 界面残留以结构护栏隐藏（代码保留）。
+
+## [MotionLab 1.19] — 2026-11-02
+
+- 开发者文档页版本号改为从单一事实源动态填充，不再写死。
+
+## [MotionLab 1.18] — 2026-11-02
+
+- 修复样式表一处被截断的规则导致其后全部样式（PFLab、文档页等）失效的问题；
+  测试新增样式完整性守卫。PFLab 入口改到主界面侧边栏（手柄图标）。
+
+## 更早版本（摘要）
+
+- 1.14–1.17：PFLab 平台格斗实验室（独立模块，基于 PhysicsEngine 公开 API）。
+- 1.13：版本号单一事实源；弹窗层级修复。
+- 1.12：真实齿轮设置图标；开发者文档视图。
+- 1.11：恢复出厂（重置全部本地数据）。
+- 1.10：过山车回环预设重做；引擎 substeps 防穿模（PhysicsEngine 1.1.0）。
+- 1.9：冲击波工具；保龄球预设。
+- 1.8：3D 实验室下线隐藏（代码与数据保留，PhysicsEngine3D 1.0.0 仍在独立包中）。
+- 1.3–1.7：首次访问落地页、项目主页（主界面）、3D 实验室、预设缩略图。
+- 1.2：PhysicsEngine 从应用中抽离为通用核心（1.0.0）。
+- 1.0–1.1：2D 物理沙盒本体、弹簧/连杆约束。

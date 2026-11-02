@@ -12,8 +12,8 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.21 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.3.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| MotionLab（应用） | 1.22 | `js/ui.js` 的 `APP_VERSION` |
+| PhysicsEngine（2D 核心） | 1.4.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -34,7 +34,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.3.0'
+  console.log(VERSION); // '1.4.0'
 </script>
 ```
 
@@ -84,6 +84,11 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 | 存取 | `snapshot() / load(data)` |
 | 事件 | `onCollision((bodyA, bodyB, pair) => …)`；`pe.onChange` 结构变化回调 |
 | 随机种子（1.3.0 新增） | `new PhysicsEngine({ seed })`、`pe.seed`（读回种子）、`setSeed(n)`、`random()`、`randomRange(min, max)`、`randomInt(min, max)`、`choice(arr)`、`shuffle(arr)` |
+| 命名（1.4.0 新增） | 描述符 `name` 字段、`nameOf(body)`、`getBodyByName(name)`、`getBodiesByName(name)`、`renameBody(bodyOrId, name)` |
+| 万有引力（1.4.0 新增） | `setGravitation(G, { softening })`、`gravitation`（读配置）、`setGravitation(0)` 关闭 |
+| 流体浮力（1.4.0 新增） | `addFluid({ id?, x, y, width, height, density, drag })`、`removeFluid(id)`、`fluids()`、`fluidById(id)`、`fluidCount` |
+| 公式与测量（1.4.0 新增） | `Formulas.*`（纯函数，见下）、`bodyKineticEnergy(body)`、`totalKineticEnergy()`、`bodyMomentum(body)`、`totalMomentum()`、`centerOfMass()` |
+| 稳定性（1.4.0 新增） | `PhysicsEngine.validateDescriptor(desc)`、`findNonFiniteBodies()`、`{ maxSpeed }` / `setMaxSpeed(v)` |
 
 坐标系：像素、y 向下；角度为弧度（`setAngleDeg` 除外）。约束描述符的端点
 字段是 **`bodyA` / `bodyB`**（id 字符串；`bodyA: null` 表示世界锚点，锚点
@@ -99,6 +104,60 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 `Common._seed`。`snapshot()` 会带上 RNG 状态，`load()` 后随机流从
 快照处继续，序列不跳变。
 
+### 命名物体（1.4.0）
+
+描述符可带 `name`（字符串，可重名——场景里常有几十个 `peg`）。
+`getBodyByName` 返回第一个匹配，`getBodiesByName` 返回全部（插入序），
+`renameBody` 接受物体或 id。名字随 `snapshot()` 保存、随 `load()` 还原。
+在 MotionLab 中，物体的标签（label）即其引擎名。
+
+### 万有引力（1.4.0）
+
+`setGravitation(G, { softening = 100 })` 打开全体两两引力：每个动态体
+每步受到 `a = Σ G·m_j·d / (|d|² + softening)^1.5` 的速度踢（每固定步一次，
+与 substeps 无关）。静态体只吸引不移动，其质量按 **面积 × 描述符密度**
+计算（Matter 中静态体的 density 是 Infinity，不能直接用）。总动量守恒。
+复杂度 O(n²)/步，适合几十个体量级的轨道/行星模拟。轨道初速度用
+`Formulas.orbitVelocity(G, M, r)` 计算即可得到近圆轨道（见示例
+`examples/orbit.html`）。
+
+### 流体区域与浮力（1.4.0）
+
+`addFluid({ x, y, width, height, density = 0.0012, drag = 0.02 })`：
+(x, y) 为区域**中心**，上沿即液面。动态体与区域重叠时，浮力经 Matter 的
+力通道施加，大小与世界重力镜像、按 `(流体密度 / 物体密度) × 浸没比例`
+缩放——全浸且密度相等时恰好中性悬浮；`drag` 为浸没时每子步的速度保留
+衰减。浮力只在世界重力非零时生效。快照携带 `fluids` 数组。
+
+### Formulas 公式库（1.4.0）
+
+`import { Formulas } from '.../physics-engine.js'`（或
+`PhysicsEngine.Formulas`）。全部为纯函数，单位与引擎一致（px、px/步）：
+
+| 公式 | 函数 |
+|---|---|
+| 动能 / 转动动能 | `kineticEnergy(m, vx, vy)` / `rotationalEnergy(I, ω)` |
+| 动量 / 改速冲量 | `momentum(m, vx, vy)` / `impulseForDeltaV(m, dvx, dvy)` |
+| 万有引力大小 | `gravitationalForce(G, m1, m2, r)` |
+| 环绕 / 逃逸速度 | `orbitVelocity(G, M, r)` / `escapeVelocity(G, M, r)` |
+| 胡克定律 / 弹簧势能 | `springForce(k, x)` / `springEnergy(k, x)` |
+| 单摆周期 | `pendulumPeriod(L, g)` |
+| 阿基米德浮力（2D） | `buoyancyForce(ρ, 浸没面积, g)` |
+| 二次阻力 / 最大静摩擦 | `dragForce(c, v)` / `frictionForce(μ, N)` |
+| 抛射程 / 向心加速度 / 势能 | `projectileRange(v, θ, g)` / `centripetalAcceleration(v, r)` / `potentialEnergy(m, g, h)` |
+
+配合实例测量（`totalMomentum()`、`centerOfMass()` 等）可直接验证守恒律。
+
+### 稳定性与校验（1.4.0）
+
+- `PhysicsEngine.validateDescriptor(desc)` 静态校验，返回问题清单（不抛错）；
+  `addBody` 本身保持宽容（坏值回退默认值），导入器可用前者做严格把关。
+- 位置/速度/角度 setter 与 `addVelocity` **忽略非有限输入**，防止 NaN 毒化世界；
+  `findNonFiniteBodies()` 可审计世界健康。
+- `{ maxSpeed }`（或 `setMaxSpeed(v)`）给速度封顶（px/步，0 = 关）：封顶在求解器
+  之前执行，失控冲量不会把物体送出世界。
+- `load()` 跳过非对象条目并返回 `{ bodies, constraints, fluids }` 载入计数。
+
 ### 版本历史
 
 - 1.0.0 — 从 MotionLab 抽离为通用核心
@@ -106,6 +165,8 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 - 1.2.0 — 空间查询（`queryRegion` / `raycast`）、冲量助手
   （`addVelocity` / `applyRadialImpulse`）、`pick()` 零分配优化
 - 1.3.0 — 种子随机（`seed` 选项、`random` 系列 API、快照携带 RNG 状态）
+- 1.4.0 — 命名物体、万有引力、流体浮力、Formulas 公式库、稳定性加固
+  （校验 / 非有限守卫 / 速度封顶）
 
 ---
 

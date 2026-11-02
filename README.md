@@ -1,5 +1,10 @@
 # MotionLab — 2D Physics Sandbox
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.4.0-blue.svg)
+![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
+![Tests](https://img.shields.io/badge/tests-304%20passing-brightgreen.svg)
+
 一个运行在浏览器中的 2D 物理模拟与实验平台。基于 **Matter.js** 的真实刚体物理：
 重力、碰撞、摩擦、弹性、旋转与不同质量的物体，都可以在画布中创建、拖拽、调参并保存为实验场景。
 
@@ -13,6 +18,23 @@
 - 无后端、无构建步骤、无 API Key；直接部署静态文件即可（GitHub Pages 兼容）。
 - **开发者文档**：[docs/DEVELOPER.md](docs/DEVELOPER.md) —— PhysicsEngine 与
   **PF 引擎**的完整调用方式（API 速览、无头对局与 UI 壳示例、AI 档位与调参）。
+
+## 开源与 PhysicsEngine
+
+本仓库以 **MIT 许可证开源**（见 [LICENSE](LICENSE)），主目标之一就是把物理核心
+做成一个**任何项目都能直接复用的开源引擎**：
+
+- **PhysicsEngine**（`js/engine/physics-engine.js`）：与应用无关的 2D 物理核心——
+  纯数据描述符、固定步进、种子随机、物体命名、万有引力、流体浮力、Formulas 公式库。
+  复制这一个文件（加 `vendor/matter.min.js`）即可在你自己的项目里用。
+- **在线示例**（GitHub Pages 可直接打开）：
+  [万有引力轨道](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) ·
+  [流体浮力](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) ·
+  [种子钉板](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html)
+  （源码在 `examples/`）
+- **PF 引擎**（`js/pf/`）：建立在 PhysicsEngine 之上的平台格斗模块，同样可独立调用。
+- 参与开发：[CONTRIBUTING.md](CONTRIBUTING.md) · 更新记录：[CHANGELOG.md](CHANGELOG.md) ·
+  测试报告：[TEST-REPORT.md](TEST-REPORT.md)
 
 ## 功能
 
