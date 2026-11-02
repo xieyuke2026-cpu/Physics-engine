@@ -7,7 +7,7 @@ import { VERSION as ENGINE_VERSION } from './engine/physics-engine.js';
 import { PF_VERSION } from './pf/pf-config.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.22';
+export const APP_VERSION = '1.23';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -47,7 +47,9 @@ const TYPE_LABELS = { circle: 'Circle · 圆形', rectangle: 'Rectangle · 矩�
 export class Panel {
   /** cb: { onBodyProp(key,value), onBodySize(key,value), onSceneProp(key,value),
    *        onDeleteSelected(), onDuplicateSelected(), onSaveScene(), onNewScene(),
-   *        onBodyAction(action), onSelectBody(id), onDeleteBody(id), onGravityPreset(key) } */
+   *        onBodyAction(action), onSelectBody(id), onDeleteBody(id), onGravityPreset(key),
+   *        onBodyRename(name), onAddFluid(), onSelectFluid(id), onDeleteFluid(id),
+   *        onFluidProp(id,key,value), onShowScene() } */
   constructor(root, cb) {
     this.root = root;
     this.cb = cb;
@@ -82,12 +84,13 @@ export class Panel {
     });
   }
 
-  showScene(settings, bodies) {
+  showScene(settings, bodies, fluids) {
     const list = Array.isArray(bodies) ? bodies : [];
-    const sig = list.map((b) => b.id).join(',');
+    const flist = Array.isArray(fluids) ? fluids : [];
+    const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',');
     if (this.mode === 'scene' && this.root.childElementCount && this._sceneSig === sig) { this.refreshScene(settings, list.length); return; }
     this._sceneSig = sig;
-    this.mode = 'scene'; this.selectedId = null;
+    this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title('场景属性 Scene'));
     const ro = el(`<div class="readonly-grid"><span>物体数量</span><b data-ro="count">${list.length}</b>
@@ -109,6 +112,29 @@ export class Panel {
     r.appendChild(row(gx, gy));
     r.appendChild(sliderField('Simulation Speed', 'speed', settings.speed, 0.1, 2, 0.1));
     r.appendChild(switchRow('启用重力 Enable Gravity', 'gravityEnabled', settings.gravityEnabled));
+    r.appendChild(title('世界效应 · 引力与浮力'));
+    r.appendChild(el('<p class="empty-note">万有引力让所有物体两两相吸（牛顿公式，连地面和墙壁也会参与），适合行星轨道类实验；建议同时关掉上面的普通重力，或直接载入「万有引力轨道」预设。G = 0 即关闭。</p>'));
+    r.appendChild(sliderField('万有引力 Gravitation G', 'gravitation', settings.gravitation || 0, 0, 60, 1));
+    r.appendChild(row(
+      numField('引力强度 G', 'gravitation', settings.gravitation || 0, { step: 1, min: 0, max: 500 }),
+      numField('软化 Softening', 'gravitationSoftening', settings.gravitationSoftening ?? 100, { step: 10, min: 0, max: 2000 }),
+    ));
+    r.appendChild(el('<p class="empty-note">流体区域提供浮力：密度比流体小的物体浮起、大的沉底。点「添加」放一个默认水池，再点选蓝色区域编辑它的密度与范围。</p>'));
+    const addFluid = el(`<button class="btn block">${icon('plus', 16)} 添加流体区域（浮力）</button>`);
+    addFluid.addEventListener('click', () => this.cb.onAddFluid());
+    r.appendChild(addFluid);
+    if (flist.length) {
+      const fwrap = el('<div class="obj-list"></div>');
+      flist.forEach((f, i) => {
+        const rowEl = el(`<button class="obj-row"><span class="o-name">流体 ${i + 1}</span><span class="o-type">密度 ${f.density} · ${Math.round(f.width)}×${Math.round(f.height)}</span></button>`);
+        rowEl.addEventListener('click', () => this.cb.onSelectFluid(f.id));
+        const del = el(`<span class="tb-btn icon o-del">${icon('trash', 16)}</span>`);
+        del.addEventListener('click', (e) => { e.stopPropagation(); this.cb.onDeleteFluid(f.id); });
+        rowEl.appendChild(del);
+        fwrap.appendChild(rowEl);
+      });
+      r.appendChild(fwrap);
+    }
     r.appendChild(title('显示'));
     r.appendChild(switchRow('显示网格 Grid', 'showGrid', settings.showGrid));
     r.appendChild(switchRow('速度向量 Vectors', 'showVectors', settings.showVectors));
@@ -133,7 +159,7 @@ export class Panel {
       }
       r.appendChild(wrap);
     }
-    r.appendChild(el('<p class="empty-note">在画布上点选一个物体，这里会显示它的物理参数。空白处双击可添加物体。</p>'));
+    r.appendChild(el('<p class="empty-note">在画布上点选一个物体，这里会显示它的物理参数；点选蓝色流体区域可编辑浮力参数，在上方「名称」框里还能给物体改名。</p>'));
     this._wireNumbers(r, (k, v) => this.cb.onSceneProp(k, v));
     this._collectInputs();
   }
@@ -148,12 +174,18 @@ export class Panel {
   showBody(data, live) {
     const sameTarget = this.mode === 'body' && this.selectedId === data.id;
     if (sameTarget) { this.refreshBody(live); return; }
-    this.mode = 'body'; this.selectedId = data.id;
+    this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title('物体属性 Object'));
     const head = el(`<div class="readonly-grid"><span>类型 Type</span><b>${TYPE_LABELS[data.type] || data.type}</b>
       <span>ID</span><b>${data.id.split('-').slice(0, 2).join('-')}</b></div>`);
     r.appendChild(head);
+    const nameField = el('<div class="field"><label>名称 Name（可重命名，改完按回车）</label><input type="text" data-name-input maxlength="60" spellcheck="false"></div>');
+    const nameInput = nameField.querySelector('input');
+    nameInput.value = data.label || '';
+    nameInput.addEventListener('change', () => this.cb.onBodyRename(nameInput.value.trim()));
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') nameInput.blur(); e.stopPropagation(); });
+    r.appendChild(nameField);
     r.appendChild(title('位置与尺寸'));
     r.appendChild(row(
       numField('Position X', 'x', live.x, { step: 1 }),
@@ -232,6 +264,35 @@ export class Panel {
     // static switch handled via checkbox wiring above using data-key=isStatic -> onBodyProp
     this._collectInputs();
     this.refreshBody(live);
+  }
+
+  /** Fluid-region editor: geometry + density/drag, wired to onFluidProp. */
+  showFluid(fluid) {
+    if (this.mode === 'fluid' && this.selectedFluidId === fluid.id && this.root.childElementCount) return;
+    this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id;
+    const r = this.root; r.innerHTML = '';
+    r.appendChild(title('流体区域 Fluid · 浮力'));
+    r.appendChild(el('<p class="empty-note">区域上沿是液面。浮力按「流体密度 ÷ 物体密度 × 浸没比例」计算：物体密度小于流体就浮起，大于就沉底。默认水的密度约 0.0012。</p>'));
+    r.appendChild(row(
+      numField('中心 X', 'fx', fluid.x, { step: 5 }),
+      numField('中心 Y', 'fy', fluid.y, { step: 5 }),
+    ));
+    r.appendChild(row(
+      numField('Width 宽度', 'fwidth', fluid.width, { step: 10, min: 20, max: 4000 }),
+      numField('Height 高度', 'fheight', fluid.height, { step: 10, min: 10, max: 2000 }),
+    ));
+    r.appendChild(numField('Density 流体密度', 'fdensity', fluid.density, { step: 0.0002, min: 0.00005, max: 0.05 }));
+    r.appendChild(sliderField('Drag 水中阻尼', 'fdrag', fluid.drag, 0, 0.2, 0.005));
+    const back = el(`<button class="btn block">返回场景属性</button>`);
+    back.addEventListener('click', () => this.cb.onShowScene());
+    const del = el(`<button class="btn danger block">${icon('trash', 16)} 删除流体区域</button>`);
+    del.addEventListener('click', () => this.cb.onDeleteFluid(fluid.id));
+    r.appendChild(back); r.appendChild(del);
+    this._wireNumbers(r, (k, v) => {
+      const map = { fx: 'x', fy: 'y', fwidth: 'width', fheight: 'height', fdensity: 'density', fdrag: 'drag' };
+      if (map[k]) this.cb.onFluidProp(fluid.id, map[k], v);
+    });
+    this._collectInputs();
   }
 
   _setIfIdle(key, value) {

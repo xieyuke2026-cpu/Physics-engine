@@ -72,6 +72,15 @@ svg{display:block}
 .tool-btn.active{background:var(--accent-soft);color:var(--accent);border-color:#c9dcee}
 .tool-btn.danger.active{background:var(--danger-soft);color:var(--danger);border-color:#ecc9c3}
 .rail-sep{width:26px;height:1px;background:var(--border);margin:5px 0}
+/* Tool-rail hover tips (1.23): a dark bubble to the right of the rail that
+   spells out what the tool does and how to operate it. Mouse hover and
+   keyboard focus only; touch users get the same text in the stage hint. */
+.tool-btn[data-tip]{position:relative}
+.tool-btn[data-tip]::after{content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;
+  transform:translateY(-50%);background:#26282c;color:#f2f2f3;font-size:12px;line-height:1.5;
+  padding:7px 10px;border-radius:8px;white-space:nowrap;opacity:0;pointer-events:none;
+  transition:opacity .15s ease .25s;z-index:90;box-shadow:0 4px 14px rgba(20,24,30,.18)}
+.tool-btn[data-tip]:hover::after,.tool-btn[data-tip]:focus-visible::after{opacity:1}
 
 /* ---------- Stage ---------- */
 #stage{flex:1;position:relative;min-width:0;background:var(--canvas-bg)}

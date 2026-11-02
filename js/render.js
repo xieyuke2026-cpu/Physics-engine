@@ -46,7 +46,7 @@ export class Renderer {
 
   draw(world, opts) {
     const { ctx, view, camera } = this;
-    const { selectedId = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null } = opts;
+    const { selectedId = null, selectedFluidId = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null } = opts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = '#fafafa';
     ctx.fillRect(0, 0, view.w, view.h);
@@ -57,6 +57,10 @@ export class Renderer {
     ctx.translate(-camera.x, -camera.y);
     ctx.lineJoin = 'round';
 
+    // fluid regions sit behind everything else (drawn first, under bodies)
+    if (typeof world.fluids === 'function') {
+      for (const f of world.fluids()) this._fluid(f, f.id === selectedFluidId);
+    }
     // fetch the body list ONCE per frame (allBodies() copies; trails/vectors reuse it)
     const bodies = world.allBodies();
     if (showTrails) this._trails(world, bodies);
@@ -97,6 +101,25 @@ export class Renderer {
     }
     if (preview) this._preview(preview);
     ctx.restore();
+  }
+
+  /** A fluid (buoyancy) region: translucent fill, a firm surface line on the
+   *  top edge, and a small caption so the region reads as water, not a box. */
+  _fluid(f, isSel) {
+    const { ctx, camera } = this;
+    const x = f.x - f.width / 2, y = f.y - f.height / 2;
+    ctx.fillStyle = 'rgba(47,109,179,0.10)';
+    ctx.fillRect(x, y, f.width, f.height);
+    ctx.strokeStyle = isSel ? COLORS.accent : 'rgba(47,109,179,0.45)';
+    ctx.lineWidth = (isSel ? 2 : 1.2) / Math.sqrt(camera.zoom);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + f.width, y); ctx.stroke();
+    ctx.strokeStyle = isSel ? COLORS.accent : 'rgba(47,109,179,0.25)';
+    ctx.setLineDash([6 / camera.zoom, 5 / camera.zoom]);
+    ctx.strokeRect(x, y, f.width, f.height);
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(47,109,179,0.75)';
+    ctx.font = `${12 / camera.zoom}px sans-serif`;
+    ctx.fillText('流体 Fluid · 浮力', x + 8 / camera.zoom, y + 16 / camera.zoom);
   }
 
   _grid() {

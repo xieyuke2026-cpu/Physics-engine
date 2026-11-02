@@ -39,7 +39,10 @@ export class PhysicsWorld {
   get onChange() { return this.core.onChange; }
   set onChange(fn) { this.core.onChange = fn; }
 
-  applySettings(s) { this.core.setGravity(s.gravityX, s.gravityY, s.gravityEnabled); }
+  applySettings(s) {
+    this.core.setGravity(s.gravityX, s.gravityY, s.gravityEnabled);
+    this.core.setGravitation(Number(s.gravitation) || 0, { softening: s.gravitationSoftening });
+  }
   step(dtMs, speed = 1) { this.core.step(dtMs, speed); }
   advance(elapsedMs, speed = 1) { return this.core.advance(elapsedMs, speed); }
   stepOnce() { this.core.stepOnce(); }
@@ -59,8 +62,24 @@ export class PhysicsWorld {
     this.core.clear();
     for (const d of scene.bodies) this.addBody(d);
     for (const c of scene.constraints || []) this.addConstraint(c);
+    for (const f of scene.fluids || []) this.core.addFluid(f);
     this.applySettings(scene.settings);
   }
+
+  /* ---------- fluids (buoyancy regions) + gravitation ---------- */
+  addFluid(f) { return this.core.addFluid(f); }
+  removeFluid(id) { return this.core.removeFluid(id); }
+  fluidById(id) { return this.core.fluidById(id); }
+  fluids() { return this.core.fluids(); }
+  get fluidCount() { return this.core.fluidCount; }
+  /** Replace a fluid's fields (the engine has no in-place update). */
+  updateFluid(id, patch) {
+    const f = this.core.fluidById(id);
+    if (!f) return null;
+    this.core.removeFluid(id);
+    return this.core.addFluid({ ...f, ...patch, id });
+  }
+  get gravitation() { return this.core.gravitation; }
 
   bodyById(dataId) { return this.core.bodyById(dataId); }
   /** Engine-level naming (1.4.0): find / rename scene bodies by label-name. */
@@ -99,6 +118,7 @@ export class PhysicsWorld {
     return {
       bodies: this.allBodies().map((b) => this.serializeBody(b)),
       constraints: this.serializeConstraints(),
+      fluids: this.core.fluids(),
     };
   }
 

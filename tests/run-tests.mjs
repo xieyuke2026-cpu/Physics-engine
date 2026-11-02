@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 globalThis.Matter = require('../vendor/matter.min.js');
 
-const { validateScene, defaultScene, sceneData, bodyData, constraintData, presetScenes } = await import('../js/scene.js');
+const { validateScene, defaultScene, sceneData, bodyData, constraintData, fluidData, presetScenes } = await import('../js/scene.js');
 const { PhysicsWorld } = await import('../js/physics.js');
 
 let pass = 0, fail = 0;
@@ -187,10 +187,60 @@ check('stop motion zeroes velocity', lk.velocity.x === 0 && lk.velocity.y === 0 
 
 /* --- v1.1/v1.6: presets --- */
 const presets = presetScenes();
-check('twelve presets exist', presets.length === 12, `got ${presets.length}`);
+check('fourteen presets exist', presets.length === 14, `got ${presets.length}`);
 for (const p of presets) {
   check(`preset ${p.key} validates`, validateScene(JSON.parse(JSON.stringify(p.scene))).ok);
 }
+/* --- v1.23: gravitation / fluids / rename get lab entries (scene level) --- */
+{
+  const fd = fluidData({});
+  check('fluidData defaults are a sane pool', fd.width === 760 && fd.height === 170 && Math.abs(fd.density - 0.0012) < 1e-9 && fd.drag === 0.02);
+  const sc = sceneData({ name: 'FX', fluids: [fluidData({ density: 0.002 })], settings: { gravitation: 25 } });
+  const rt = JSON.parse(JSON.stringify(sc));
+  check('scene roundtrip keeps fluids + gravitation', rt.fluids.length === 1 && rt.fluids[0].density === 0.002 && rt.settings.gravitation === 25);
+  check('validate accepts fluids + gravitation', validateScene(rt).ok);
+  const bad = JSON.parse(JSON.stringify(sc)); bad.fluids[0].density = 'wet';
+  check('validate rejects a non-numeric fluid density', !validateScene(bad).ok);
+  const neg = JSON.parse(JSON.stringify(sc)); neg.settings.gravitation = -5;
+  check('validate rejects negative gravitation', !validateScene(neg).ok);
+
+  // Orbit preset: gravitation wired through loadScene, planet stays in orbit.
+  const orbit = presets.find((p) => p.key === 'orbit');
+  check('orbit preset carries gravitation settings', orbit.scene.settings.gravitation === 30 && orbit.scene.settings.gravityEnabled === false);
+  const wo = new PhysicsWorld();
+  wo.loadScene(orbit.scene);
+  check('orbit preset activates engine gravitation', wo.gravitation && wo.gravitation.G === 30);
+  const planetStart = orbit.scene.bodies.find((b) => b.label === 'Planet 行星');
+  const planet = wo.allBodies().find((b) => Math.abs(b.position.x - planetStart.x) < 2 && Math.abs(b.position.y - planetStart.y) < 2);
+  let minR = Infinity, maxR = 0;
+  for (let i = 0; i < 600; i++) {
+    wo.advance(1000 / 60, 1);
+    const r = Math.hypot(planet.position.x - 640, planet.position.y - 290);
+    minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+  }
+  check('orbit preset: planet radius stays near 180 for 600 steps', minR > 150 && maxR < 215, `[${minR.toFixed(1)}, ${maxR.toFixed(1)}]`);
+
+  // Buoyancy preset: the fluid reaches the world; densities sort themselves.
+  const buoy = presets.find((p) => p.key === 'buoyancy');
+  const wb = new PhysicsWorld();
+  wb.loadScene(buoy.scene);
+  check('buoyancy preset loads one fluid region', wb.fluidCount === 1);
+  for (let i = 0; i < 700; i++) wb.advance(1000 / 60, 1);
+  const byLabel = (lb) => wb.allBodies().find((b) => wb.serializeBody(b).label === lb);
+  const cork = byLabel('Cork 软木'), wood = byLabel('Wood 木块'), iron = byLabel('Iron 铁块');
+  check('buoyancy: cork floats at the surface (centre 350..430)', cork.position.y > 350 && cork.position.y < 430, `y=${cork.position.y.toFixed(1)}`);
+  check('buoyancy: wood floats lower than cork', wood.position.y > cork.position.y + 5, `wood=${wood.position.y.toFixed(1)} cork=${cork.position.y.toFixed(1)}`);
+  check('buoyancy: iron sinks to the tank floor', iron.position.y > 480, `y=${iron.position.y.toFixed(1)}`);
+
+  // Rename through the adapter (the panel's name box calls exactly this).
+  const wr = new PhysicsWorld();
+  wr.loadScene(defaultScene());
+  const ball = wr.allBodies().find((b) => wr.serializeBody(b).label === 'Ball');
+  wr.renameBody(ball, '主角球');
+  check('rename via adapter sticks in serialization', wr.serializeBody(ball).label === '主角球');
+  check('renamed body is findable by name', wr.bodyByName('主角球') === ball);
+}
+
 const cradle = presets.find((p) => p.key === 'cradle');
 check('cradle preset has 5 rod constraints', cradle.scene.constraints.length === 5, `got ${cradle.scene.constraints.length}`);
 const wcr = new PhysicsWorld();

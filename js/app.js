@@ -3,7 +3,7 @@
    drawing in render.js, panel DOM in ui.js, persistence in storage.js. */
 
 import { icon, TOOL_ICONS } from './icons.js';
-import { sceneData, bodyData, constraintData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS } from './scene.js';
+import { sceneData, bodyData, constraintData, fluidData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS } from './scene.js';
 import { PhysicsWorld } from './physics.js';
 import { PhysicsEngine } from './engine/physics-engine.js';
 import { Renderer } from './render.js';
@@ -32,6 +32,7 @@ let sceneName = 'Untitled Scene';
 let running = false;
 let tool = 'select';
 let selectedId = null;
+let selectedFluidId = null;
 let initialSnapshot = null;   // for Reset: state at load / last save
 let preview = null;
 let dragPoint = null;
@@ -54,6 +55,7 @@ function currentScene() {
     settings: { ...settings },
     bodies: world.allBodies().map((b) => world.serializeBody(b)),
     constraints: world.serializeConstraints(),
+    fluids: world.fluids(),
   });
 }
 
@@ -64,6 +66,7 @@ function loadScene(scene, { markInitial = true } = {}) {
   $('projectName').value = sceneName;
   world.loadScene(s);
   selectedId = null;
+  selectedFluidId = null;
   springStart = null; springCur = null;
   renderer.clearTrails();
   if (markInitial) initialSnapshot = JSON.stringify(currentScene());
@@ -177,6 +180,7 @@ const panel = new Panel($('panelBody'), {
   onSelectBody(id) {
     if (!world.bodyById(id)) return;
     selectedId = id;
+    selectedFluidId = null;
     refreshPanel();
   },
   onDeleteBody(id) {
@@ -215,12 +219,55 @@ const panel = new Panel($('panelBody'), {
   onDuplicateSelected() { duplicateSelected(); },
   onSaveScene() { saveCurrent(); },
   onNewScene() { newScene(); },
+  onBodyRename(name) {
+    const b = selectedBody(); if (!b) return;
+    world.renameBody(b, name);
+    pushHistorySoon(); scheduleAutosave();
+    toast(name ? `已重命名为「${name}」` : '已清除物体名称');
+  },
+  onAddFluid() {
+    const f = world.addFluid(fluidData({}));
+    selectedFluidId = f.id; selectedId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast('已添加流体区域：点选蓝色区域可调密度与范围，往里面丢不同密度的物体试试浮力');
+  },
+  onSelectFluid(id) {
+    if (!world.fluidById(id)) return;
+    selectedFluidId = id; selectedId = null;
+    refreshPanel();
+  },
+  onDeleteFluid(id) {
+    world.removeFluid(id);
+    if (selectedFluidId === id) selectedFluidId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast('流体区域已删除');
+  },
+  onFluidProp(id, key, value) {
+    world.updateFluid(id, { [key]: value });
+    pushHistorySoon(); scheduleAutosave();
+  },
+  onShowScene() { selectedFluidId = null; refreshPanel(); },
 });
+
+/** Topmost fluid region containing a world point, or null. */
+function pickFluid(w) {
+  const list = world.fluids();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const f = list[i];
+    if (Math.abs(w.x - f.x) <= f.width / 2 && Math.abs(w.y - f.y) <= f.height / 2) return f;
+  }
+  return null;
+}
 
 function refreshPanel() {
   const b = selectedBody();
-  if (b) panel.showBody(world.serializeBody(b), liveOf(b));
-  else panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)));
+  if (b) { panel.showBody(world.serializeBody(b), liveOf(b)); return; }
+  if (selectedFluidId) {
+    const f = world.fluidById(selectedFluidId);
+    if (f) { panel.showFluid(f); return; }
+    selectedFluidId = null;
+  }
+  panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)), world.fluids());
 }
 
 function deleteSelected() {
@@ -288,7 +335,7 @@ function toWorld(e) {
 }
 function hintFor(t) {
   const hints = {
-    select: '点选物体查看参数 · 拖拽物体移动 · 双击空白添加圆形',
+    select: '点选物体查看参数 · 拖拽物体移动 · 点选蓝色流体区域编辑浮力',
     move: '拖拽物体移动 · 拖拽空白平移画布 · 滚轮 / 双指缩放',
     circle: '在画布上点按或拖拽画出圆形，松手创建',
     rectangle: '在画布上拖拽画出矩形，松手创建',
@@ -403,6 +450,14 @@ canvas.addEventListener('pointerdown', (e) => {
       if (selectedId === id) selectedId = null;
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
       toast('物体已删除');
+      return;
+    }
+    const f = pickFluid(w);
+    if (f) {
+      world.removeFluid(f.id);
+      if (selectedFluidId === f.id) selectedFluidId = null;
+      refreshPanel(); pushHistorySoon(); scheduleAutosave();
+      toast('流体区域已删除');
     }
     return;
   }
@@ -410,6 +465,7 @@ canvas.addEventListener('pointerdown', (e) => {
   const b = world.pick(w.x, w.y);
   if (b) {
     selectedId = world.dataIdOf(b);
+    selectedFluidId = null;
     refreshPanel();
     if (!b.isStatic) {
       if (running) { world.beginDrag(b, w.x, w.y); dragPoint = { x: w.x, y: w.y, bodyX: b.position.x, bodyY: b.position.y }; }
@@ -421,7 +477,11 @@ canvas.addEventListener('pointerdown', (e) => {
     if (tool === 'move') {
       gesture = { kind: 'pan', sx: e.clientX, sy: e.clientY, camX: camera.x, camY: camera.y };
     } else {
-      selectedId = null; refreshPanel();
+      // no body hit: a fluid region can still be selected for editing
+      const f = pickFluid(w);
+      selectedId = null;
+      selectedFluidId = f ? f.id : null;
+      refreshPanel();
       gesture = { kind: 'none' };
     }
   }
@@ -506,6 +566,7 @@ function finalizeCreate() {
   if (!d) return;
   const b = world.addBody(d);
   selectedId = world.dataIdOf(b);
+  selectedFluidId = null;
   setTool('select');
   refreshPanel(); pushHistorySoon(); scheduleAutosave();
 }
@@ -520,14 +581,8 @@ canvas.addEventListener('wheel', (e) => {
   updateZoomLabel();
 }, { passive: false });
 
-canvas.addEventListener('dblclick', (e) => {
-  if (tool !== 'select' && tool !== 'move') return;
-  const w = toWorld(e);
-  if (world.pick(w.x, w.y)) return;
-  const b = world.addBody(bodyData({ type: 'circle', x: w.x, y: w.y, radius: 28, restitution: 0.45, label: 'Ball' }));
-  selectedId = world.dataIdOf(b);
-  refreshPanel(); pushHistorySoon(); scheduleAutosave();
-});
+/* (Removed in 1.23 per Ryan's request: double-clicking empty canvas used to
+   add a circle. Creation now happens only through the shape tools.) */
 
 /* ---------------- zoom controls ---------------- */
 function updateZoomLabel() {
@@ -1203,7 +1258,7 @@ function initChrome() {
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); }
     else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); setRunning(!running); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { deleteSelected(); }
-    else if (e.key === 'Escape') { selectedId = null; springStart = null; springCur = null; refreshPanel(); }
+    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; springStart = null; springCur = null; refreshPanel(); }
     else if (selectedId && e.key.startsWith('Arrow')) {
       e.preventDefault();
       const b = selectedBody(); if (!b) return;
@@ -1228,8 +1283,10 @@ function initChrome() {
 /* ---------------- status + main loop ---------------- */
 function updateStatus() {
   $('stCount').textContent = `物体 ${world.count}`;
-  $('stGravity').textContent = settings.gravityEnabled
-    ? `Gravity (${settings.gravityX}, ${settings.gravityY})` : 'Gravity Off';
+  $('stGravity').textContent = (settings.gravityEnabled
+    ? `Gravity (${settings.gravityX}, ${settings.gravityY})` : 'Gravity Off')
+    + (Number(settings.gravitation) > 0 ? ` · 万有引力 G ${settings.gravitation}` : '')
+    + (world.fluidCount ? ` · 流体 ${world.fluidCount}` : '');
   $('stSpeed').textContent = `Speed ${settings.speed.toFixed(1)}×`;
 }
 setInterval(() => {
@@ -1253,6 +1310,7 @@ function loop(now) {
   const anchor = springAnchorWorld();
   renderer.draw(world, {
     selectedId,
+    selectedFluidId,
     showGrid: settings.showGrid,
     showVectors: settings.showVectors,
     showTrails: settings.showTrails,

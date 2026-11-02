@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>MotionLab — 2D Physics Sandbox</title>
 <meta name="description" content="MotionLab: a minimalist, interactive 2D physics sandbox in the browser, powered by Matter.js.">
-<link rel="stylesheet" href="css/style.css?v=1.22">
+<link rel="stylesheet" href="css/style.css?v=1.23">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -55,19 +55,19 @@
   <div id="main">
     <!-- ===== Left tool rail ===== -->
     <nav id="toolrail" aria-label="工具">
-      <button class="tool-btn" data-tool="select" title="选择"></button>
-      <button class="tool-btn" data-tool="move" title="移动 / 平移画布"></button>
+      <button class="tool-btn" data-tool="select" title="选择：点选物体查看参数，拖拽移动物体" data-tip="选择 — 点选物体看参数 · 拖拽移动物体 · 点蓝色流体区编辑浮力"></button>
+      <button class="tool-btn" data-tool="move" title="移动：拖拽物体或平移画布" data-tip="移动 — 拖拽物体移动 · 拖拽空白平移画布 · 滚轮 / 双指缩放"></button>
       <div class="rail-sep"></div>
-      <button class="tool-btn" data-tool="circle" title="圆形"></button>
-      <button class="tool-btn" data-tool="rectangle" title="矩形"></button>
-      <button class="tool-btn" data-tool="polygon" title="多边形"></button>
-      <button class="tool-btn" data-tool="triangle" title="三角形"></button>
-      <button class="tool-btn" data-tool="line" title="静态线段"></button>
+      <button class="tool-btn" data-tool="circle" title="圆形：在画布上拖拽画出圆形" data-tip="圆形 — 在画布上拖拽画圆，松手创建（点按直接放一个）"></button>
+      <button class="tool-btn" data-tool="rectangle" title="矩形：在画布上拖拽画出矩形" data-tip="矩形 — 拖拽画出矩形，松手创建"></button>
+      <button class="tool-btn" data-tool="polygon" title="多边形：拖拽确定半径，创建正六边形" data-tip="多边形 — 拖拽确定半径，创建正六边形"></button>
+      <button class="tool-btn" data-tool="triangle" title="三角形：拖拽确定大小，创建三角形" data-tip="三角形 — 拖拽确定大小，创建三角形"></button>
+      <button class="tool-btn" data-tool="line" title="静态线段：拖拽画出斜坡，始终为静态" data-tip="静态线段 — 拖拽画出斜坡（始终静态），松手创建"></button>
       <div class="rail-sep"></div>
-      <button class="tool-btn" data-tool="spring" title="弹簧 / 连杆"></button>
-      <button class="tool-btn" data-tool="blast" title="冲击波"></button>
+      <button class="tool-btn" data-tool="spring" title="弹簧 / 连杆：依次点两个物体连接，点空白为固定锚点" data-tip="弹簧 / 连杆 — 先点起点物体，再点第二个物体；点空白 = 固定锚点"></button>
+      <button class="tool-btn" data-tool="blast" title="冲击波：在画布上点按，推开附近物体" data-tip="冲击波 — 在画布上点按，产生冲击波推开附近物体"></button>
       <div class="rail-sep"></div>
-      <button class="tool-btn danger" data-tool="delete" title="删除"></button>
+      <button class="tool-btn danger" data-tool="delete" title="删除：点按物体、弹簧或流体区域将其删除" data-tip="删除 — 点按物体、弹簧线或流体区域将其删除"></button>
     </nav>
 
     <!-- ===== Canvas ===== -->
@@ -173,7 +173,7 @@
       <nav class="side-nav" aria-label="首页导航">
         <button class="side-item active" data-view="overview"><span class="side-ic" data-ic="grid"></span>概览</button>
         <button class="side-item" data-view="library"><span class="side-ic" data-ic="folder"></span>场景库<span class="side-count" id="countLibrary"></span></button>
-        <button class="side-item" data-view="presets"><span class="side-ic" data-ic="layers"></span>实验预设<span class="side-count" id="countPresets">10</span></button>
+        <button class="side-item" data-view="presets"><span class="side-ic" data-ic="layers"></span>实验预设<span class="side-count" id="countPresets">14</span></button>
         <button class="side-item" data-view="docs"><span class="side-ic" data-ic="code"></span>开发者文档</button>
       </nav>
       <button id="btnSidePF" class="side-item side-launch" title="打开 PFLab 平台格斗实验室"><span class="side-ic" data-ic="gamepad"></span>PFLab 平台格斗</button>
@@ -258,6 +258,7 @@
             <li><b>命名物体</b>（1.4.0）：描述符可带 <code>name</code>（可重名），用 <code>getBodyByName(name)</code> / <code>getBodiesByName(name)</code> 按名查找、<code>renameBody(bodyOrId, name)</code> 改名、<code>nameOf(body)</code> 读名；名字随快照保存。MotionLab 里物体的标签（label）即其引擎名</li>
             <li><b>万有引力</b>（1.4.0）：<code>setGravitation(G, { softening })</code> 打开全体两两引力（牛顿公式 + 软化防奇点，静态体以 面积×密度 计质量），适合行星/轨道模拟；<code>setGravitation(0)</code> 关闭</li>
             <li><b>流体浮力</b>（1.4.0）：<code>addFluid({ x, y, width, height, density, drag })</code> 定义流体区域（中心坐标，上沿为液面），物体按 密度比×浸没比例 受到浮力与水中阻尼——轻者浮、重者沉；<code>removeFluid(id)</code> 移除，快照携带流体</li>
+            <li><b>在实验室里直接用</b>（1.23）：点画布空白处，右侧「场景属性」面板的「世界效应 · 引力与浮力」一节可调万有引力 G、添加并编辑流体区域；点选任意物体后，属性面板顶部的「名称」框可直接重命名；另有「万有引力轨道」「浮力池」两个预设可直接载入体验</li>
             <li><b>公式库</b>（1.4.0）：<code>Formulas</code> 是纯函数集：动能、动量、冲量、万有引力、轨道/逃逸速度、胡克定律、单摆周期、浮力、阻力、摩擦、抛射程、向心加速度等；引擎实例还有现成的 <code>bodyKineticEnergy()</code> / <code>totalMomentum()</code> / <code>centerOfMass()</code> 量活世界</li>
             <li><b>稳定性</b>（1.4.0）：<code>PhysicsEngine.validateDescriptor(desc)</code> 静态校验描述符并列出问题；位置/速度等 setter 忽略 NaN 等非法输入，不让一个坏值毒化整个世界；构造选项 <code>maxSpeed</code> 给速度封顶，防单次失控冲量把场景炸穿</li>
             <li><b>交互</b>：<code>pick(x, y)</code> 拾取；<code>beginDrag(body, x, y)</code> / <code>moveDrag(x, y)</code> / <code>endDrag()</code> 物理拖拽（可甩掷）；<code>onCollision((a, b, pair) =&gt; …)</code> 碰撞回调</li>
@@ -357,6 +358,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.22"></script>
+<script type="module" src="js/app.js?v=1.23"></script>
 </body>
 </html>

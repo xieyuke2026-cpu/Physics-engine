@@ -140,7 +140,7 @@ check('scenes modal lists saved scene', doc.getElementById('sceneList').textCont
 
 /* --- v1.1/v1.6: presets (cards with overview thumbnails since 1.6) --- */
 const presetBtns = doc.querySelectorAll('#presetList .preset-card');
-check('v1.9: twelve preset cards rendered', presetBtns.length === 12, `got ${presetBtns.length}`);
+check('v1.9: fourteen preset cards rendered', presetBtns.length === 14, `got ${presetBtns.length}`);
 check('v1.6: preset cards carry overview thumbnails', !!presetBtns[0].querySelector('canvas.thumb'));
 click(presetBtns[0].querySelector('.mini-btn')); // Newton's cradle (auto-runs)
 await wait(500);
@@ -197,7 +197,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.22')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.23')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.4.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -225,6 +225,44 @@ check('v1.11: back to default scene (9 bodies, Untitled)',
 check('v1.11: home hub open with empty library + reset toast',
   !doc.getElementById('sceneNav').hidden && doc.getElementById('toast').textContent.includes('已重置'),
   doc.getElementById('toast').textContent);
+
+/* --- v1.23: lab entries for gravitation / fluids / rename, rail hover tips,
+       and double-click no longer adds a circle --- */
+{
+  const toolBtns = [...doc.querySelectorAll('#toolrail .tool-btn')];
+  check('v1.23: every tool-rail button carries a hover tip (data-tip)',
+    toolBtns.length === 10 && toolBtns.every((b) => (b.getAttribute('data-tip') || '').length > 10),
+    `buttons=${toolBtns.length}`);
+  check('v1.23: scene panel exposes the gravitation entry',
+    panelBody.textContent.includes('万有引力 Gravitation G') && !!panelBody.querySelector('input[data-key="gravitation"]'));
+  const addBtn = [...panelBody.querySelectorAll('.btn')].find((b) => b.textContent.includes('添加流体区域'));
+  check('v1.23: scene panel exposes the add-fluid entry', !!addBtn);
+  click(addBtn);
+  await wait(60);
+  check('v1.23: adding a fluid opens its editor (density / drag)',
+    panelBody.textContent.includes('流体区域 Fluid') && panelBody.textContent.includes('水中阻尼'),
+    panelBody.textContent.slice(0, 120));
+  const backBtn = [...panelBody.querySelectorAll('.btn')].find((b) => b.textContent.includes('返回场景属性'));
+  click(backBtn);
+  await wait(60);
+  check('v1.23: scene panel lists the fluid next to the bodies',
+    panelBody.textContent.includes('流体 1') && panelBody.querySelectorAll('.obj-row').length === 10,
+    `rows=${panelBody.querySelectorAll('.obj-row').length}`);
+  const groundRow = [...panelBody.querySelectorAll('.obj-row')].find((rw) => rw.textContent.includes('Ground'));
+  click(groundRow);
+  await wait(60);
+  const nameInput = panelBody.querySelector('input[data-name-input]');
+  check('v1.23: body panel has a rename box prefilled with the label',
+    !!nameInput && nameInput.value === 'Ground', nameInput && nameInput.value);
+  nameInput.value = '地面测试';
+  nameInput.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(60);
+  check('v1.23: renaming confirms via toast', doc.getElementById('toast').textContent.includes('地面测试'),
+    doc.getElementById('toast').textContent);
+  doc.getElementById('world').dispatchEvent(new window.MouseEvent('dblclick', { bubbles: true, clientX: 300, clientY: 200 }));
+  await wait(320);
+  check('v1.23: double-click on empty canvas adds nothing', stCount().includes('9'), stCount());
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

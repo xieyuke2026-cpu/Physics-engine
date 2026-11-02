@@ -13,6 +13,9 @@ export const DEFAULT_SETTINGS = {
   showGrid: true,
   showVectors: false,
   showTrails: false,
+  // Pairwise Newtonian gravitation (PhysicsEngine.setGravitation). 0 = off.
+  gravitation: 0,
+  gravitationSoftening: 100,
 };
 
 let _uid = 1;
@@ -70,6 +73,20 @@ function num(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** A plain-data fluid region (buoyancy). (x, y) is the region CENTRE and its
+ *  top edge is the surface, matching PhysicsEngine.addFluid. */
+export function fluidData(partial = {}) {
+  return {
+    id: typeof partial.id === 'string' && partial.id ? partial.id : nextId('fluid'),
+    x: num(partial.x, 640),
+    y: num(partial.y, 455),
+    width: Math.min(4000, Math.max(20, num(partial.width, 760))),
+    height: Math.min(2000, Math.max(10, num(partial.height, 170))),
+    density: Math.min(0.05, Math.max(0.00005, num(partial.density, 0.0012))),
+    drag: Math.min(1, Math.max(0, num(partial.drag, 0.02))),
+  };
+}
+
 export function sceneData(partial = {}) {
   return {
     format: SCENE_FORMAT,
@@ -78,6 +95,7 @@ export function sceneData(partial = {}) {
     settings: { ...DEFAULT_SETTINGS, ...(partial.settings || {}) },
     bodies: Array.isArray(partial.bodies) ? partial.bodies.map(bodyData) : [],
     constraints: Array.isArray(partial.constraints) ? partial.constraints.map(constraintData).filter((c) => c.bodyB) : [],
+    fluids: Array.isArray(partial.fluids) ? partial.fluids.map(fluidData) : [],
     updatedAt: typeof partial.updatedAt === 'number' ? partial.updatedAt : Date.now(),
   };
 }
@@ -130,14 +148,27 @@ export function validateScene(raw) {
       });
     }
   }
+  if (raw.fluids !== undefined) {
+    if (!Array.isArray(raw.fluids)) errors.push('fluids 必须是数组');
+    else {
+      if (raw.fluids.length > 20) errors.push('流体区域数量超过上限 20');
+      raw.fluids.forEach((f, i) => {
+        if (!f || typeof f !== 'object') { errors.push(`fluids[${i}] 不是对象`); return; }
+        for (const k of ['x', 'y', 'width', 'height', 'density', 'drag']) {
+          if (f[k] !== undefined && !Number.isFinite(Number(f[k]))) errors.push(`fluids[${i}].${k} 必须是有限数字`);
+        }
+      });
+    }
+  }
   const s = raw.settings;
   if (s !== undefined) {
     if (!s || typeof s !== 'object') errors.push('settings 必须是对象');
     else {
-      for (const k of ['gravityX', 'gravityY', 'speed']) {
+      for (const k of ['gravityX', 'gravityY', 'speed', 'gravitation', 'gravitationSoftening']) {
         if (s[k] !== undefined && !Number.isFinite(Number(s[k]))) errors.push(`settings.${k} 必须是有限数字`);
       }
       if (s.speed !== undefined && (Number(s.speed) <= 0 || Number(s.speed) > 4)) errors.push('settings.speed 超出范围 (0, 4]');
+      if (s.gravitation !== undefined && Number(s.gravitation) < 0) errors.push('settings.gravitation 不能为负');
     }
   }
   if (errors.length) return { ok: false, errors };
@@ -418,6 +449,46 @@ export function presetScenes() {
       }
     }
     out.push({ key: 'bowling', name: '保龄球', scene: sceneData({ name: '保龄球 Bowling', bodies }) });
+  }
+
+  // Orbital gravitation — pairwise Newtonian attraction (scene gravitation
+  // setting), ordinary gravity OFF. Launch speeds are PhysicsEngine's
+  // Formulas.orbitVelocity(G, M_sun, r) with M_sun = density × π r²
+  // = 0.004 × π × 26² ≈ 8.49: r=180 → ≈1.19 px/step, r=240 → ≈1.03 px/step.
+  // NOTE: no frame bodies here on purpose — under pairwise gravitation the
+  // ground/walls (huge area × density) would out-pull the sun and wreck the
+  // orbit. Space has no floor.
+  {
+    const bodies = [];
+    const sun = { x: 640, y: 290 };
+    bodies.push(bodyData({ type: 'circle', x: sun.x, y: sun.y, radius: 26, density: 0.004, isStatic: true, frictionAir: 0, label: 'Sun 恒星' }));
+    bodies.push(bodyData({ type: 'circle', x: sun.x + 180, y: sun.y, radius: 13, density: 0.002, frictionAir: 0, restitution: 0, vy: -1.19, label: 'Planet 行星' }));
+    bodies.push(bodyData({ type: 'circle', x: sun.x - 240, y: sun.y, radius: 10, density: 0.002, frictionAir: 0, restitution: 0, vy: 1.03, label: 'Planet 行星' }));
+    out.push({
+      key: 'orbit', name: '万有引力轨道',
+      scene: sceneData({
+        name: '万有引力轨道 Orbital Gravitation', bodies,
+        settings: { ...DEFAULT_SETTINGS, gravityEnabled: false, gravitation: 30, gravitationSoftening: 100, showTrails: true },
+      }),
+    });
+  }
+
+  // Buoyancy pool — one fluid region, three densities: cork floats high,
+  // wood sits at the surface, iron sinks to the tank floor.
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ type: 'rectangle', x: 254, y: 455, width: 12, height: 170, isStatic: true, friction: 0.4, label: 'Tank Wall' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 1026, y: 455, width: 12, height: 170, isStatic: true, friction: 0.4, label: 'Tank Wall' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 420, y: 300, width: 56, height: 56, density: 0.0003, friction: 0.4, label: 'Cork 软木' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 640, y: 250, width: 56, height: 56, density: 0.0008, friction: 0.4, label: 'Wood 木块' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 860, y: 300, width: 48, height: 48, density: 0.008, friction: 0.4, label: 'Iron 铁块' }));
+    out.push({
+      key: 'buoyancy', name: '浮力池',
+      scene: sceneData({
+        name: '浮力池 Buoyancy Pool', bodies,
+        fluids: [fluidData({ x: 640, y: 455, width: 760, height: 170, density: 0.0012, drag: 0.03 })],
+      }),
+    });
   }
 
   return out;
