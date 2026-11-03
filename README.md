@@ -5,6 +5,8 @@
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
 ![Tests](https://img.shields.io/badge/tests-328%20passing-brightgreen.svg)
 
+[![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
+
 一个运行在浏览器中的 2D 物理模拟与实验平台。基于 **Matter.js** 的真实刚体物理：
 重力、碰撞、摩擦、弹性、旋转与不同质量的物体，都可以在画布中创建、拖拽、调参并保存为实验场景。
 
