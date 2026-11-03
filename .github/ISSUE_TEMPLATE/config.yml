@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 提问与讨论
+    url: https://github.com/xieyuke2026-cpu/Physics-engine/discussions
+    about: 一般问题、想法交流和玩法分享，欢迎去讨论区发帖。
+  - name: Questions & Discussions
+    url: https://github.com/xieyuke2026-cpu/Physics-engine/discussions
+    about: General questions, ideas and gameplay sharing are welcome in Discussions.
