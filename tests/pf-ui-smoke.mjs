@@ -41,6 +41,7 @@ const $ = (id) => window.document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 window.localStorage.setItem('motionlab.visited.v1', '1');
+window.localStorage.setItem('motionlab.lang', 'zh'); // this suite asserts the Chinese UI
 try {
   await import('../js/app.js');
   await sleep(120);

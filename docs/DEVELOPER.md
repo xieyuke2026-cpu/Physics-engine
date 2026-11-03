@@ -1,5 +1,7 @@
 # MotionLab 开发者文档
 
+> English version: [DEVELOPER-EN.md](DEVELOPER-EN.md)
+
 面向二次开发者的完整调用文档：**PhysicsEngine**（通用 2D 物理核心）、
 **PF 引擎**（平台格斗模块集）、**PhysicsEngine3D**（3D 核心）与 vendored 的
 **Matter.js**。本文档在 GitHub 上可直接阅读；应用内「主界面 → 开发者文档」
@@ -12,11 +14,15 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.23 | `js/ui.js` 的 `APP_VERSION` |
+| MotionLab（应用） | 1.24 | `js/ui.js` 的 `APP_VERSION` |
 | PhysicsEngine（2D 核心） | 1.4.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
+
+**应用语言**：MotionLab 1.24 新增中文 / 英文界面切换。首次打开时界面以英文为主，
+欢迎页会引导选择语言；选择保存在 localStorage（`motionlab.lang`），之后可在
+「设置」里随时更改。文案词典在 `js/i18n.js`。
 
 ---
 

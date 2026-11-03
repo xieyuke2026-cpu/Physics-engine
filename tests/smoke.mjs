@@ -28,6 +28,7 @@ window.Element.prototype.getBoundingClientRect = function () {
 window.Matter = localRequire('../vendor/matter.min.js');
 window.confirm = () => true;
 window.prompt = () => null;
+window.localStorage.setItem('motionlab.lang', 'zh'); // this suite asserts the Chinese UI; v1.24 blocks exercise switching
 
 // --- expose browser globals to Node module scope ---
 for (const k of ['document', 'localStorage']) globalThis[k] = window[k];
@@ -197,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.23')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.24')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.4.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -225,6 +226,11 @@ check('v1.11: back to default scene (9 bodies, Untitled)',
 check('v1.11: home hub open with empty library + reset toast',
   !doc.getElementById('sceneNav').hidden && doc.getElementById('toast').textContent.includes('已重置'),
   doc.getElementById('toast').textContent);
+/* --- v1.24: the language choice is a preference, NOT scene data — a factory
+       reset keeps it (the reset copy promises data/settings back to initial;
+       the welcome page reappears via the visited flag, in the kept language) --- */
+check('v1.24: language choice survives a factory reset', window.localStorage.getItem('motionlab.lang') === 'zh',
+  window.localStorage.getItem('motionlab.lang'));
 
 /* --- v1.23: lab entries for gravitation / fluids / rename, rail hover tips,
        and double-click no longer adds a circle --- */
@@ -262,6 +268,36 @@ check('v1.11: home hub open with empty library + reset toast',
   doc.getElementById('world').dispatchEvent(new window.MouseEvent('dblclick', { bubbles: true, clientX: 300, clientY: 200 }));
   await wait(320);
   check('v1.23: double-click on empty canvas adds nothing', stCount().includes('9'), stCount());
+}
+
+/* --- v1.24: language switch (Settings) re-renders panel + chrome live --- */
+{
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); // back to scene panel
+  await wait(60);
+  click(doc.getElementById('btnSettings'));
+  await wait(80);
+  const langBtns = () => [...doc.querySelectorAll('#settingsBody .lang-switch .btn')];
+  check('v1.24: settings shows a language switch with the current language active',
+    langBtns().length === 2 && langBtns().find((b) => b.textContent === '中文').classList.contains('active'),
+    doc.getElementById('settingsBody').textContent.slice(0, 80));
+  click(langBtns().find((b) => b.textContent === 'English'));
+  await wait(80);
+  check('v1.24: switching persists the choice', window.localStorage.getItem('motionlab.lang') === 'en');
+  check('v1.24: scene panel re-renders in English',
+    doc.getElementById('panelBody').textContent.includes('Scene Properties')
+    && doc.getElementById('panelBody').textContent.includes('Gravitation G'),
+    doc.getElementById('panelBody').textContent.slice(0, 60));
+  check('v1.24: settings re-render in English too',
+    doc.getElementById('settingsBody').textContent.includes('Show Welcome Page')
+    && langBtns().find((b) => b.textContent === 'English').classList.contains('active'));
+  check('v1.24: status bar switches language', stState().includes('Paused'), stState());
+  click(langBtns().find((b) => b.textContent === '中文'));
+  await wait(80);
+  check('v1.24: switching back restores the Chinese panel',
+    window.localStorage.getItem('motionlab.lang') === 'zh'
+    && doc.getElementById('panelBody').textContent.includes('场景属性'));
+  click(doc.querySelector('#modalSettings [data-close]'));
+  await wait(60);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

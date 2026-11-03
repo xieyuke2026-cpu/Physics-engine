@@ -1,4 +1,12 @@
-# MotionLab — 测试报告（2026-11-02，v1.23 更新）
+# MotionLab — 测试报告（2026-11-03，v1.24 更新）
+
+## 0w. v1.24 中英双语界面 + 首访英文引导 + 开发者文档英文版
+
+- **i18n 核心**：新增 `js/i18n.js`——词典（约 130 条，中文值与 1.23 界面逐字一致，中文模式零回归）+ `t()` 模板插值 + `L(zh, en)` 字面量对 + `applyI18n()`（`data-i18n`/`data-i18n-text`/`data-i18n-title`/`data-i18n-tip`/`data-i18n-ph`/`data-lang` 六种标记）。语言存 `motionlab.lang`；无存储时默认英文（Ryan 要求：第一次进入以英文为主语言并引导选择）。切换经 `setLang()` → 静态标记重写 + `ml-lang` 事件 → app 重渲染面板/顶栏/状态/提示/主界面/落地页 chips；PFLab 有自己的 `ml-lang` 监听，对局中切换也会同步暂停键、状态与结算文案。画布上的流体标注经 `getLang()` 切换。预设名按 key 映射英文（数据不动）。
+- **文档**：`docs/DEVELOPER-EN.md` 为中文版全文翻译（含版本表与语言说明），两文件顶部互链；README 英文导读改为指向英文版、中文节补英文版链接；应用内文档视图改为中/英两块随语言显隐，版本行改类名批量盖戳（`.docsVersions`）。
+- **恢复出厂**：语言按「设备偏好」处理，`resetAllData` 不清 `motionlab.lang`（有断言锁定此行为）；欢迎页仍随 visited 标记清除而重现。
+- **测试坑（jsdom 跨 realm）**：首跑冒烟 3 失败——`i18n.setLang` 用裸全局 `CustomEvent` 构造事件，Node 的 CustomEvent 与 jsdom 的 Event 不是同一 realm，`window.dispatchEvent` 抛 TypeError 使 `ml-lang` 监听整体未执行（面板未重渲染；状态栏因 `data-i18n-text` 被 applyI18n 顺带改对，一度掩盖问题）。改为 `new window.CustomEvent(...)` 后全绿。真实浏览器无此问题，但按窗口自身构造器造事件更稳。
+- 测试：MotionLab 全量 **344 项全过**（逻辑 81、引擎 82、3D 引擎 22、PF 逻辑 27、PF UI 10、冒烟 57、导航 34、落地页 18、3D 冒烟 13）；引擎未改，独立包未复跑。新增断言：落地页首访（无语言存储）英文默认 + 选语言即时切换与持久化（落地页套件 +5 并给 boot 加 lang 参数）；设置内切换 → 面板/设置/状态栏英文 + 切回中文（冒烟 +6）；主界面标题/文档双块/预设英文名跟随（导航 +4）；恢复出厂保留语言（冒烟 +1）。其余套件统一预置 `motionlab.lang='zh'` 保持原中文断言口径。
 
 ## 0v. v1.23 引擎能力补上实验室入口（引力/流体/重命名）+ 工具悬停说明 + 删除双击加圆
 

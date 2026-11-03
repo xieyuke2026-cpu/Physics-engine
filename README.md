@@ -15,7 +15,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 
 - **Live demo**: https://xieyuke2026-cpu.github.io/Physics-engine/
 - **Examples**: [Orbital gravitation](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [Fluid buoyancy](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [Seeded Galton board](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html)
-- **Developer docs**: [docs/DEVELOPER.md](docs/DEVELOPER.md) — API reference and integration guide
+- **Developer docs**: [docs/DEVELOPER-EN.md](docs/DEVELOPER-EN.md) — API reference and integration guide (中文版：[docs/DEVELOPER.md](docs/DEVELOPER.md))
 - **License**: MIT
 
 中文完整文档在下方 ↓ Full documentation in Chinese below.
@@ -33,6 +33,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 - 无后端、无构建步骤、无 API Key；直接部署静态文件即可（GitHub Pages 兼容）。
 - **开发者文档**：[docs/DEVELOPER.md](docs/DEVELOPER.md) —— PhysicsEngine 与
   **PF 引擎**的完整调用方式（API 速览、无头对局与 UI 壳示例、AI 档位与调参）。
+  English version: [docs/DEVELOPER-EN.md](docs/DEVELOPER-EN.md).
 
 ## 开源与 PhysicsEngine
 

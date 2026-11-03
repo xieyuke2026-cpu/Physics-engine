@@ -27,6 +27,7 @@ window.Matter = localRequire('../vendor/matter.min.js');
 window.confirm = () => true;
 window.prompt = () => null;
 window.localStorage.setItem('motionlab.visited.v1', '1');
+window.localStorage.setItem('motionlab.lang', 'zh');
 // plant a 3D scene in storage first: hiding must not delete it
 window.localStorage.setItem('motionlab.scenes3d.v1', JSON.stringify({
   '保留的3D场景': {

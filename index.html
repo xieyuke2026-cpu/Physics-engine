@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.23">
+<link rel="stylesheet" href="css/style.css?v=1.24">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -26,53 +26,53 @@
       <span class="brand-name">MotionLab</span>
     </div>
     <div class="tb-group mode-switch" role="group" aria-label="实验室模式">
-      <button id="mode2d" class="mode-btn active">2D 实验室</button>
-      <button id="mode3d" class="mode-btn">3D 实验室</button>
+      <button id="mode2d" class="mode-btn active" data-i18n-text="tb.mode2d">2D 实验室</button>
+      <button id="mode3d" class="mode-btn" data-i18n-text="tb.mode3d">3D 实验室</button>
     </div>
     <div class="tb-group project">
       <input id="projectName" class="project-name" type="text" value="Untitled Scene" maxlength="60" aria-label="项目名称" spellcheck="false">
-      <button id="btnScenes" class="tb-btn wide" title="我的项目：储存与打开场景"></button>
+      <button id="btnScenes" class="tb-btn wide" data-i18n-title="tb.title.scenes" title="我的项目：储存与打开场景"></button>
     </div>
     <div class="tb-sep lab2d-only"></div>
     <div class="tb-group lab2d-only">
-      <button id="btnUndo" class="tb-btn icon" title="撤销 (Ctrl+Z)"></button>
-      <button id="btnRedo" class="tb-btn icon" title="重做 (Ctrl+Shift+Z)"></button>
+      <button id="btnUndo" class="tb-btn icon" data-i18n-title="tb.title.undo" title="撤销 (Ctrl+Z)"></button>
+      <button id="btnRedo" class="tb-btn icon" data-i18n-title="tb.title.redo" title="重做 (Ctrl+Shift+Z)"></button>
     </div>
     <div class="tb-sep lab2d-only"></div>
     <div class="tb-group transport lab2d-only">
-      <button id="btnPlay" class="tb-btn primary" title="运行"></button>
-      <button id="btnPause" class="tb-btn icon" title="暂停"></button>
-      <button id="btnStep" class="tb-btn icon" title="单步运行一帧"></button>
-      <button id="btnReset" class="tb-btn icon" title="重置场景"></button>
+      <button id="btnPlay" class="tb-btn primary" data-i18n-title="tb.title.play" title="运行"></button>
+      <button id="btnPause" class="tb-btn icon" data-i18n-title="tb.title.pause" title="暂停"></button>
+      <button id="btnStep" class="tb-btn icon" data-i18n-title="tb.title.step" title="单步运行一帧"></button>
+      <button id="btnReset" class="tb-btn icon" data-i18n-title="tb.title.reset" title="重置场景"></button>
     </div>
     <div class="tb-spacer"></div>
     <div class="tb-group lab2d-only">
-      <button id="btnSave" class="tb-btn wide" title="保存场景 (Ctrl+S)"></button>
-      <button id="btnShot" class="tb-btn icon" title="导出画布截图 PNG"></button>
-      <button id="btnExport" class="tb-btn icon" title="导出 JSON"></button>
-      <button id="btnImport" class="tb-btn icon" title="导入 JSON"></button>
+      <button id="btnSave" class="tb-btn wide" data-i18n-title="tb.title.save" title="保存场景 (Ctrl+S)"></button>
+      <button id="btnShot" class="tb-btn icon" data-i18n-title="tb.title.shot" title="导出画布截图 PNG"></button>
+      <button id="btnExport" class="tb-btn icon" data-i18n-title="tb.title.export" title="导出 JSON"></button>
+      <button id="btnImport" class="tb-btn icon" data-i18n-title="tb.title.import" title="导入 JSON"></button>
       <input id="fileImport" type="file" accept="application/json,.json" hidden>
-      <button id="btnSettings" class="tb-btn icon" title="设置"></button>
-      <button id="btnPanel" class="tb-btn icon" title="折叠 / 展开属性面板"></button>
+      <button id="btnSettings" class="tb-btn icon" data-i18n-title="tb.title.settings" title="设置"></button>
+      <button id="btnPanel" class="tb-btn icon" data-i18n-title="tb.title.panel" title="折叠 / 展开属性面板"></button>
     </div>
   </header>
 
   <div id="main">
     <!-- ===== Left tool rail ===== -->
     <nav id="toolrail" aria-label="工具">
-      <button class="tool-btn" data-tool="select" title="选择：点选物体查看参数，拖拽移动物体" data-tip="选择 — 点选物体看参数 · 拖拽移动物体 · 点蓝色流体区编辑浮力"></button>
-      <button class="tool-btn" data-tool="move" title="移动：拖拽物体或平移画布" data-tip="移动 — 拖拽物体移动 · 拖拽空白平移画布 · 滚轮 / 双指缩放"></button>
+      <button class="tool-btn" data-tool="select" data-i18n-title="toolT.select" data-i18n-tip="tool.select" title="选择：点选物体查看参数，拖拽移动物体" data-tip="选择 — 点选物体看参数 · 拖拽移动物体 · 点蓝色流体区编辑浮力"></button>
+      <button class="tool-btn" data-tool="move" data-i18n-title="toolT.move" data-i18n-tip="tool.move" title="移动：拖拽物体或平移画布" data-tip="移动 — 拖拽物体移动 · 拖拽空白平移画布 · 滚轮 / 双指缩放"></button>
       <div class="rail-sep"></div>
-      <button class="tool-btn" data-tool="circle" title="圆形：在画布上拖拽画出圆形" data-tip="圆形 — 在画布上拖拽画圆，松手创建（点按直接放一个）"></button>
-      <button class="tool-btn" data-tool="rectangle" title="矩形：在画布上拖拽画出矩形" data-tip="矩形 — 拖拽画出矩形，松手创建"></button>
-      <button class="tool-btn" data-tool="polygon" title="多边形：拖拽确定半径，创建正六边形" data-tip="多边形 — 拖拽确定半径，创建正六边形"></button>
-      <button class="tool-btn" data-tool="triangle" title="三角形：拖拽确定大小，创建三角形" data-tip="三角形 — 拖拽确定大小，创建三角形"></button>
-      <button class="tool-btn" data-tool="line" title="静态线段：拖拽画出斜坡，始终为静态" data-tip="静态线段 — 拖拽画出斜坡（始终静态），松手创建"></button>
+      <button class="tool-btn" data-tool="circle" data-i18n-title="toolT.circle" data-i18n-tip="tool.circle" title="圆形：在画布上拖拽画出圆形" data-tip="圆形 — 在画布上拖拽画圆，松手创建（点按直接放一个）"></button>
+      <button class="tool-btn" data-tool="rectangle" data-i18n-title="toolT.rectangle" data-i18n-tip="tool.rectangle" title="矩形：在画布上拖拽画出矩形" data-tip="矩形 — 拖拽画出矩形，松手创建"></button>
+      <button class="tool-btn" data-tool="polygon" data-i18n-title="toolT.polygon" data-i18n-tip="tool.polygon" title="多边形：拖拽确定半径，创建正六边形" data-tip="多边形 — 拖拽确定半径，创建正六边形"></button>
+      <button class="tool-btn" data-tool="triangle" data-i18n-title="toolT.triangle" data-i18n-tip="tool.triangle" title="三角形：拖拽确定大小，创建三角形" data-tip="三角形 — 拖拽确定大小，创建三角形"></button>
+      <button class="tool-btn" data-tool="line" data-i18n-title="toolT.line" data-i18n-tip="tool.line" title="静态线段：拖拽画出斜坡，始终为静态" data-tip="静态线段 — 拖拽画出斜坡（始终静态），松手创建"></button>
       <div class="rail-sep"></div>
-      <button class="tool-btn" data-tool="spring" title="弹簧 / 连杆：依次点两个物体连接，点空白为固定锚点" data-tip="弹簧 / 连杆 — 先点起点物体，再点第二个物体；点空白 = 固定锚点"></button>
-      <button class="tool-btn" data-tool="blast" title="冲击波：在画布上点按，推开附近物体" data-tip="冲击波 — 在画布上点按，产生冲击波推开附近物体"></button>
+      <button class="tool-btn" data-tool="spring" data-i18n-title="toolT.spring" data-i18n-tip="tool.spring" title="弹簧 / 连杆：依次点两个物体连接，点空白为固定锚点" data-tip="弹簧 / 连杆 — 先点起点物体，再点第二个物体；点空白 = 固定锚点"></button>
+      <button class="tool-btn" data-tool="blast" data-i18n-title="toolT.blast" data-i18n-tip="tool.blast" title="冲击波：在画布上点按，推开附近物体" data-tip="冲击波 — 在画布上点按，产生冲击波推开附近物体"></button>
       <div class="rail-sep"></div>
-      <button class="tool-btn danger" data-tool="delete" title="删除：点按物体、弹簧或流体区域将其删除" data-tip="删除 — 点按物体、弹簧线或流体区域将其删除"></button>
+      <button class="tool-btn danger" data-tool="delete" data-i18n-title="toolT.delete" data-i18n-tip="tool.delete" title="删除：点按物体、弹簧或流体区域将其删除" data-tip="删除 — 点按物体、弹簧线或流体区域将其删除"></button>
     </nav>
 
     <!-- ===== Canvas ===== -->
@@ -80,9 +80,9 @@
       <canvas id="world"></canvas>
       <div id="stageHint" class="stage-hint"></div>
       <div class="zoom-ctl">
-        <button id="btnZoomOut" class="z-btn" title="缩小"></button>
-        <button id="btnZoomFit" class="z-label" title="适应画布">100%</button>
-        <button id="btnZoomIn" class="z-btn" title="放大"></button>
+        <button id="btnZoomOut" class="z-btn" data-i18n-title="tb.title.zoomOut" title="缩小"></button>
+        <button id="btnZoomFit" class="z-label" data-i18n-title="tb.title.zoomFit" title="适应画布">100%</button>
+        <button id="btnZoomIn" class="z-btn" data-i18n-title="tb.title.zoomIn" title="放大"></button>
       </div>
     </section>
 
@@ -96,7 +96,7 @@
   <footer id="statusbar">
     <span class="st-item" id="stFps">FPS —</span>
     <span class="st-item" id="stCount">物体 0</span>
-    <span class="st-item" id="stState">已暂停</span>
+    <span class="st-item" id="stState" data-i18n-text="st.paused">已暂停</span>
     <span class="st-spacer"></span>
     <span class="st-item" id="stGravity">Gravity (0, 1)</span>
     <span class="st-item" id="stSpeed">Speed 1.0×</span>
@@ -146,23 +146,30 @@
   <div class="landing-inner">
     <div class="landing-copy">
       <div class="landing-brand"><span id="landingLogo"></span><span>MotionLab</span></div>
-      <h1>在浏览器里，<br>做真实的物理实验</h1>
-      <p class="landing-sub">重力、碰撞、摩擦、弹性、弹簧——全部由真实刚体物理引擎实时计算。创建物体、调整参数、搭一个牛顿摆，再把实验场景保存下来。</p>
+      <div class="lang-picker">
+        <span class="lang-picker-label" data-i18n-text="land.pickLang">选择语言 / Choose your language</span>
+        <div class="chip-row">
+          <button class="chip" id="btnLangEn">English</button>
+          <button class="chip" id="btnLangZh">中文</button>
+        </div>
+      </div>
+      <h1 data-i18n="land.h1">在浏览器里，<br>做真实的物理实验</h1>
+      <p class="landing-sub" data-i18n-text="land.sub">重力、碰撞、摩擦、弹性、弹簧——全部由真实刚体物理引擎实时计算。创建物体、调整参数、搭一个牛顿摆，再把实验场景保存下来。</p>
       <ul class="landing-feats">
-        <li><b>真实物理</b><span>密度、摩擦、弹性实时生效，拖拽物体还能扔出去</span></li>
-        <li><b>弹簧与连杆</b><span>两点连线就能做单摆、吊桥和牛顿摆</span></li>
-        <li><b>场景存档</b><span>自动保存、场景库、JSON 导入导出，刷新不丢失</span></li>
+        <li><b data-i18n-text="land.feat1t">真实物理</b><span data-i18n-text="land.feat1d">密度、摩擦、弹性实时生效，拖拽物体还能扔出去</span></li>
+        <li><b data-i18n-text="land.feat2t">弹簧与连杆</b><span data-i18n-text="land.feat2d">两点连线就能做单摆、吊桥和牛顿摆</span></li>
+        <li><b data-i18n-text="land.feat3t">场景存档</b><span data-i18n-text="land.feat3d">自动保存、场景库、JSON 导入导出，刷新不丢失</span></li>
       </ul>
       <div class="landing-presets">
-        <span class="landing-presets-label">直接试一个实验：</span>
+        <span class="landing-presets-label" data-i18n-text="land.try">直接试一个实验：</span>
         <div id="landingPresets" class="chip-row"></div>
       </div>
-      <button id="btnStartLab" class="btn accent landing-cta">开始使用</button>
-      <p class="landing-note">这一页只在第一次打开时出现；之后会直接进入实验室。想再看时，在「设置」里点「显示欢迎页」。</p>
+      <button id="btnStartLab" class="btn accent landing-cta" data-i18n-text="land.cta">开始使用</button>
+      <p class="landing-note" data-i18n-text="land.note">这一页只在第一次打开时出现；之后会直接进入实验室。想再看时，在「设置」里点「显示欢迎页」。</p>
     </div>
     <div class="landing-demo">
       <canvas id="landingCanvas"></canvas>
-      <p class="landing-demo-cap">实时演示 · 与实验室共用同一台物理引擎</p>
+      <p class="landing-demo-cap" data-i18n-text="land.demoCap">实时演示 · 与实验室共用同一台物理引擎</p>
     </div>
   </div>
 </div>
@@ -173,58 +180,58 @@
     <aside class="scenenav-side">
       <div class="side-brand">
         <span id="navLogo"></span>
-        <div class="side-brand-text"><b>MotionLab</b><span>我的项目 · 首页</span></div>
+        <div class="side-brand-text"><b>MotionLab</b><span data-i18n-text="hub.brandSub">我的项目 · 首页</span></div>
       </div>
       <nav class="side-nav" aria-label="首页导航">
-        <button class="side-item active" data-view="overview"><span class="side-ic" data-ic="grid"></span>概览</button>
-        <button class="side-item" data-view="library"><span class="side-ic" data-ic="folder"></span>场景库<span class="side-count" id="countLibrary"></span></button>
-        <button class="side-item" data-view="presets"><span class="side-ic" data-ic="layers"></span>实验预设<span class="side-count" id="countPresets">14</span></button>
-        <button class="side-item" data-view="docs"><span class="side-ic" data-ic="code"></span>开发者文档</button>
+        <button class="side-item active" data-view="overview"><span class="side-ic" data-ic="grid"></span><span data-i18n-text="hub.nav.overview">概览</span></button>
+        <button class="side-item" data-view="library"><span class="side-ic" data-ic="folder"></span><span data-i18n-text="hub.nav.library">场景库</span><span class="side-count" id="countLibrary"></span></button>
+        <button class="side-item" data-view="presets"><span class="side-ic" data-ic="layers"></span><span data-i18n-text="hub.nav.presets">实验预设</span><span class="side-count" id="countPresets">14</span></button>
+        <button class="side-item" data-view="docs"><span class="side-ic" data-ic="code"></span><span data-i18n-text="hub.nav.docs">开发者文档</span></button>
       </nav>
-      <button id="btnSidePF" class="side-item side-launch" title="打开 PFLab 平台格斗实验室"><span class="side-ic" data-ic="gamepad"></span>PFLab 平台格斗</button>
+      <button id="btnSidePF" class="side-item side-launch" data-i18n-title="hub.pfTitle" title="打开 PFLab 平台格斗实验室"><span class="side-ic" data-ic="gamepad"></span><span data-i18n-text="hub.pfLaunch">PFLab 平台格斗</span></button>
       <div class="side-foot">
         <p id="sideStorage">本地存储</p>
         <button id="btnNavSettings" class="btn block"></button>
-        <button id="btnCloseNav" class="btn accent block">进入实验室</button>
+        <button id="btnCloseNav" class="btn accent block" data-i18n-text="tb.enterLab">进入实验室</button>
       </div>
     </aside>
     <main class="scenenav-main">
       <div class="scenenav-head">
         <div class="scenenav-titles">
           <h2 id="navTitle">我的项目</h2>
-          <p>场景都保存在这台设备的浏览器里。点开任意卡片即可继续实验，也可以导出 JSON 备份或分享。</p>
+          <p data-i18n-text="hub.sub">场景都保存在这台设备的浏览器里。点开任意卡片即可继续实验，也可以导出 JSON 备份或分享。</p>
         </div>
       </div>
       <div class="scenenav-toolbar" id="navToolbar">
-        <input id="sceneSearch" type="search" placeholder="搜索已保存场景…" aria-label="搜索已保存场景">
+        <input id="sceneSearch" type="search" data-i18n-ph="hub.searchPh" placeholder="搜索已保存场景…" aria-label="搜索已保存场景">
         <button id="btnNewScene" class="btn"></button>
         <button id="btnDuplicateScene" class="btn"></button>
       </div>
       <section id="navSectionCurrent">
-        <div class="panel-title"><span class="dot"></span>当前与恢复</div>
+        <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.current">当前与恢复</span></div>
         <div id="navCurrent" class="scene-grid"></div>
       </section>
       <section id="navSectionPresets">
-        <div class="panel-title"><span class="dot"></span>2D 实验预设</div>
+        <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.presets">2D 实验预设</span></div>
         <div id="presetList" class="scene-grid"></div>
       </section>
       <section id="navSectionPresets3D">
-        <div class="panel-title"><span class="dot"></span>3D 实验预设</div>
+        <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.presets3d">3D 实验预设</span></div>
         <div id="presetList3d" class="scene-grid"></div>
       </section>
       <section id="navSectionSaved">
-        <div class="panel-title"><span class="dot"></span>已保存的 2D 场景</div>
+        <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.saved">已保存的 2D 场景</span></div>
         <div id="sceneList" class="scene-grid"></div>
       </section>
       <section id="navSectionSaved3D">
-        <div class="panel-title"><span class="dot"></span>已保存的 3D 场景</div>
+        <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.saved3d">已保存的 3D 场景</span></div>
         <div id="sceneList3d" class="scene-grid"></div>
       </section>
       <section id="navSectionDocs" hidden>
-        <div class="panel-title"><span class="dot"></span>开发者文档 · 通用物理引擎 PhysicsEngine</div>
-        <div class="docs">
+        <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.docs">开发者文档 · 通用物理引擎 PhysicsEngine</span></div>
+        <div class="docs" data-lang="zh">
           <p>MotionLab 的物理层是一个与项目无关的通用核心 <code>PhysicsEngine</code>（基于 Matter.js）：只吃纯数据描述符，不依赖 DOM、渲染或任何文件格式。你可以把它单独下载到自己的项目里，用同一套 API 搭建物理模拟。核心文件只有两个：<code>physics-engine.js</code>（引擎本体，ES 模块）和 <code>matter.min.js</code>（Matter.js 0.20 本体）。</p>
-          <p><b>当前版本</b>：<span id="docsVersions">MotionLab — · PhysicsEngine — · Matter.js —</span>。引擎版本在代码里可读 <code>PhysicsEngine.VERSION</code>（模块同时导出 <code>VERSION</code> 常量）；设置面板的「关于」一栏显示的也是同一组版本号。</p>
+          <p><b>当前版本</b>：<span class="docsVersions">MotionLab — · PhysicsEngine — · Matter.js —</span>。引擎版本在代码里可读 <code>PhysicsEngine.VERSION</code>（模块同时导出 <code>VERSION</code> 常量）；设置面板的「关于」一栏显示的也是同一组版本号。</p>
           <h4>一、如何下载</h4>
           <ul>
             <li><b>整站源码</b>：打开仓库 <a href="https://github.com/xieyuke2026-cpu/Physics-engine" target="_blank" rel="noopener">github.com/xieyuke2026-cpu/Physics-engine</a>，点 <b>Code → Download ZIP</b>；或用 git：<code>git clone https://github.com/xieyuke2026-cpu/Physics-engine.git</code></li>
@@ -294,6 +301,78 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
             <li>完整文档（含参数表与 PhysicsEngine 全部 API）见仓库 <code>docs/DEVELOPER.md</code>，在 GitHub 上可直接阅读。</li>
           </ul>
         </div>
+        <div class="docs" data-lang="en" hidden>
+          <p>MotionLab's physics layer is a general-purpose core, <code>PhysicsEngine</code> (built on Matter.js), with no ties to this project: it consumes plain data descriptors and knows nothing about the DOM, rendering, or any file format. You can download it into your own project and build physics simulations with the same API. The core is just two files: <code>physics-engine.js</code> (the engine, an ES module) and <code>matter.min.js</code> (Matter.js 0.20).</p>
+          <p><b>Current versions</b>: <span class="docsVersions">MotionLab — · PhysicsEngine — · Matter.js —</span>. The engine version is readable in code as <code>PhysicsEngine.VERSION</code> (the module also exports a <code>VERSION</code> constant); Settings → About shows the same set.</p>
+          <h4>1. Download</h4>
+          <ul>
+            <li><b>Full source</b>: open the repo <a href="https://github.com/xieyuke2026-cpu/Physics-engine" target="_blank" rel="noopener">github.com/xieyuke2026-cpu/Physics-engine</a> and choose <b>Code → Download ZIP</b>, or use git: <code>git clone https://github.com/xieyuke2026-cpu/Physics-engine.git</code></li>
+            <li><b>Engine only (two files)</b>: <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/js/engine/physics-engine.js" target="_blank" rel="noopener">physics-engine.js</a> · <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/vendor/matter.min.js" target="_blank" rel="noopener">matter.min.js</a> (open and save)</li>
+          </ul>
+          <h4>2. Minimal example</h4>
+          <p>Matter must load first as a global via a classic script; the engine is an ES module imported with <code>type="module"</code>. Alternatively inject it with <code>PhysicsEngine.setMatter(Matter)</code> or the <code>{ matter }</code> constructor option.</p>
+          <pre>&lt;script src="matter.min.js"&gt;&lt;/script&gt;
+&lt;script type="module"&gt;
+  import { PhysicsEngine } from './physics-engine.js';
+
+  const pe = new PhysicsEngine({ enableSleeping: true, substeps: 2 });
+  // static ground
+  pe.addBody({ kind: 'rect', x: 400, y: 560, width: 800, height: 40, isStatic: true });
+  // a bouncy ball
+  pe.addBody({ kind: 'circle', x: 400, y: 120, radius: 18, restitution: 0.6 });
+
+  let last = performance.now();
+  function frame(now) {
+    pe.advance(now - last);   // fixed-timestep advance
+    last = now;
+    // draw each body from pe.allBodies() using position / angle
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+&lt;/script&gt;</pre>
+          <h4>3. API at a glance</h4>
+          <ul>
+            <li><b>Construction</b>: <code>new PhysicsEngine({ gravity: { x: 0, y: 1 }, enableSleeping, fixedDt, maxSteps, substeps, seed, maxSpeed, gravitation })</code>; <code>setGravity(x, y, enabled)</code> changes gravity.</li>
+            <li><b>Bodies</b>: <code>addBody(desc)</code> / <code>removeBody(id)</code> / <code>clear()</code> / <code>allBodies()</code> / <code>count</code>. Descriptor fields: <code>kind</code> (<code>'circle' | 'rect' | 'polygon'</code>), <code>x, y</code>, <code>radius</code>, <code>width, height</code>, <code>sides</code>, <code>density, friction, frictionAir, restitution, isStatic, lockRotation, vx, vy, angle</code> (radians), <code>userData</code> (passed through untouched).</li>
+            <li><b>Constraints (springs / rods)</b>: <code>addConstraint({ bodyA, bodyB, pointA, pointB, stiffness, damping, length })</code>. <code>bodyA: null</code> anchors to the world point <code>pointA</code>; <code>stiffness</code> near 1 behaves as a rigid rod; <code>removeConstraint(id)</code> removes one, and removing a body cleans up its constraints automatically.</li>
+            <li><b>Stepping</b>: <code>advance(elapsedMs, speed)</code> fixed-step accumulator (stable at any refresh rate); <code>stepOnce()</code> single step; <code>setSubsteps(1–8)</code> anti-tunnelling substeps (except while dragging).</li>
+            <li><b>Snapshots</b>: <code>snapshot()</code> exports plain JSON <code>{ bodies, constraints, rng }</code>; <code>load(data)</code> restores it, including the random stream position.</li>
+            <li><b>Queries & impulses</b> (1.2.0): <code>queryRegion(x, y, w, h)</code>; <code>raycast(x1, y1, x2, y2)</code> (nearest first, with hit points); <code>addVelocity(body, dvx, dvy)</code>; <code>applyRadialImpulse(cx, cy, { radius, base, power, filter })</code> (magnitude = base + power×(1 − distance/radius), returns how many bodies were pushed).</li>
+            <li><b>Seeded RNG</b> (1.3.0): pass <code>{ seed }</code> and <code>random()</code> / <code>randomRange(min, max)</code> / <code>randomInt(min, max)</code> / <code>choice(arr)</code> / <code>shuffle(arr)</code> draw from the engine's own reproducible stream — same seed, same sequence. Without a seed one is chosen for you; read it back via <code>pe.seed</code>; <code>setSeed(n)</code> resets the stream and syncs Matter's internal seed.</li>
+            <li><b>Named bodies</b> (1.4.0): descriptors may carry <code>name</code> (duplicates allowed); find with <code>getBodyByName(name)</code> / <code>getBodiesByName(name)</code>, rename with <code>renameBody(bodyOrId, name)</code>, read with <code>nameOf(body)</code>. Names persist in snapshots. In MotionLab, a body's label is its engine name.</li>
+            <li><b>Pairwise gravitation</b> (1.4.0): <code>setGravitation(G, { softening })</code> turns on Newtonian attraction between every pair of bodies (softening avoids singularities; static bodies weigh area × density) — ideal for planets and orbits. <code>setGravitation(0)</code> turns it off.</li>
+            <li><b>Fluid buoyancy</b> (1.4.0): <code>addFluid({ x, y, width, height, density, drag })</code> defines a fluid region (center coordinates; the top edge is the surface). Bodies feel buoyancy ∝ density ratio × submerged fraction, plus in-fluid drag — light bodies float, heavy ones sink. <code>removeFluid(id)</code> removes a region; fluids persist in snapshots.</li>
+            <li><b>Use it right in the lab</b> (1.23): with nothing selected, the Scene panel's "World Effects · Gravitation & Fluids" section sets gravitation G and adds/edits fluid regions; select any body and rename it in the Name field at the top of its panel. The "Orbital Gravitation" and "Buoyancy Pool" presets load ready-made demos.</li>
+            <li><b>Formulas</b> (1.4.0): <code>Formulas</code> is a set of pure functions — kinetic energy, momentum, impulse, gravitational force, orbital/escape velocity, Hooke's law, pendulum period, buoyancy, drag, friction, projectile range, centripetal acceleration — plus live measurements on the instance: <code>bodyKineticEnergy()</code> / <code>totalMomentum()</code> / <code>centerOfMass()</code>.</li>
+            <li><b>Stability</b> (1.4.0): <code>PhysicsEngine.validateDescriptor(desc)</code> checks a descriptor and lists problems; position/velocity setters ignore NaN and other non-finite input so one bad value can't poison the world; the <code>maxSpeed</code> option caps velocity so a single wild impulse can't blow the scene apart.</li>
+            <li><b>Interaction</b>: <code>pick(x, y)</code>; <code>beginDrag(body, x, y)</code> / <code>moveDrag(x, y)</code> / <code>endDrag()</code> physics dragging (bodies can be thrown); <code>onCollision((a, b, pair) =&gt; …)</code> collision callbacks.</li>
+            <li><b>Mutators</b>: <code>setVelocity / setPosition / setAngleDeg / setDensity / setFriction / setRestitution / setStatic / setLockRotation / stopMotion</code> — all per body, and all wake sleeping bodies.</li>
+          </ul>
+          <h4>4. Conventions</h4>
+          <ul>
+            <li>Units are pixels, y grows downward; angles are radians (except <code>setAngleDeg</code>, which takes degrees).</li>
+            <li>The core does no rendering: read <code>body.position</code> and <code>body.angle</code> each frame and draw yourself. MotionLab itself is built on this core — its <code>js/physics.js</code> is only a scene-format adapter.</li>
+            <li>The same core ships as a standalone package (with docs and tests) that is kept in sync with the in-app copy.</li>
+          </ul>
+          <h4>5. PF engine (platform fighter)</h4>
+          <p>Behind PFLab, the <b>PF engine</b> (<code>js/pf/</code>, version <code>PFEngine.VERSION</code>) is layered on PhysicsEngine: the character controller, combat resolution and the deterministic AI state machine only ever call the engine's public API through an adapter. Prefer the <code>PFEngine</code> facade:</p>
+          <pre>import { PFEngine } from './js/pf/pf-lab.js';
+
+// Headless match (no DOM — run it in tools/tests)
+const match = PFEngine.createMatch({ ai: 'normal' }); // 'calm' | 'normal' | 'sharp' or an overrides object
+match.step({ move: 1, jump: false, attack: false, dash: false }); // feed one intent per step
+match.state;        // 'fight' | 'over'; match.winner tells who won
+match.debugInfo();  // both fighters' state/damage/velocity, AI state, step count, last hit
+
+// Tuning (applies to the shared tables)
+PFEngine.tune({ attack: { damage: 9 } });</pre>
+          <ul>
+            <li><b>Intent interface</b>: player and AI are symmetric — <code>{ move: -1|0|1, jump, attack, dash, face }</code>; the last three trigger on the step they are pressed.</li>
+            <li><b>AI profiles</b>: <code>calm</code> (decides every 16 steps / attack cooldown 48), <code>normal</code> (10/30), <code>sharp</code> (6/18); or pass an overrides object that affects only that AI instance.</li>
+            <li><b>UI shell</b>: <code>PFEngine.createLab(onExit)</code> returns the same full-screen UI MotionLab uses (the page needs a <code>#pfLab</code> element); <code>enter()</code> opens it, <code>exit()</code> leaves and releases all resources.</li>
+            <li>Full documentation (parameter tables and the complete PhysicsEngine API) lives in the repo at <code>docs/DEVELOPER-EN.md</code>, readable directly on GitHub.</li>
+          </ul>
+        </div>
       </section>
     </main>
   </div>
@@ -302,7 +381,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 <!-- ===== Settings modal ===== -->
 <div id="modalSettings" class="modal-backdrop" hidden>
   <div class="modal" role="dialog" aria-label="设置">
-    <div class="modal-head"><span>设置</span><button class="tb-btn icon modal-close" data-close="modalSettings"></button></div>
+    <div class="modal-head"><span data-i18n-text="set.title">设置</span><button class="tb-btn icon modal-close" data-close="modalSettings"></button></div>
     <div id="settingsBody"></div>
   </div>
 </div>
@@ -310,12 +389,12 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 <!-- ===== PFLab overlay ===== -->
 <div id="pfLab" hidden>
   <header class="pf-topbar">
-    <div class="pf-title">PFLab <span>平台格斗实验室</span></div>
-    <div id="pfStatus" class="pf-status">对战中</div>
+    <div class="pf-title">PFLab <span data-i18n-text="pf.sub">平台格斗实验室</span></div>
+    <div id="pfStatus" class="pf-status" data-i18n-text="pf.fighting">对战中</div>
     <div class="pf-actions">
-      <button id="btnPFPause" class="tb-btn wide">暂停</button>
-      <button id="btnPFRestart" class="tb-btn wide">重新开始</button>
-      <button id="btnPFBack" class="tb-btn wide">返回 MotionLab</button>
+      <button id="btnPFPause" class="tb-btn wide" data-i18n-text="pf.pause">暂停</button>
+      <button id="btnPFRestart" class="tb-btn wide" data-i18n-text="pf.restart">重新开始</button>
+      <button id="btnPFBack" class="tb-btn wide" data-i18n-text="pf.back">返回 MotionLab</button>
     </div>
   </header>
   <div class="pf-main">
@@ -323,7 +402,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
       <canvas id="pfCanvas" width="960" height="540"></canvas>
       <div id="pfResult" hidden>
         <div id="pfResultText">玩家获胜</div>
-        <button id="btnPFRematch" class="primary-btn">再来一局</button>
+        <button id="btnPFRematch" class="primary-btn" data-i18n-text="pf.rematch">再来一局</button>
       </div>
       <div class="pf-touch" aria-hidden="false">
         <div class="pf-touch-group">
@@ -331,31 +410,31 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <button id="pfTRight" class="pf-tbtn" aria-label="右移">→</button>
         </div>
         <div class="pf-touch-group">
-          <button id="pfTJump" class="pf-tbtn" aria-label="跳跃">跳</button>
-          <button id="pfTAttack" class="pf-tbtn" aria-label="攻击">攻</button>
-          <button id="pfTDash" class="pf-tbtn" aria-label="冲刺">闪</button>
+          <button id="pfTJump" class="pf-tbtn" aria-label="跳跃" data-i18n-text="pf.tJump">跳</button>
+          <button id="pfTAttack" class="pf-tbtn" aria-label="攻击" data-i18n-text="pf.tAttack">攻</button>
+          <button id="pfTDash" class="pf-tbtn" aria-label="冲刺" data-i18n-text="pf.tDash">闪</button>
         </div>
       </div>
     </div>
     <aside class="pf-debug">
-      <div class="panel-title">调试面板</div>
-      <div class="pf-dbg-row"><span>玩家状态</span><strong id="pfDbgPState">—</strong></div>
-      <div class="pf-dbg-row"><span>玩家伤害</span><strong id="pfDbgPDmg">0%</strong></div>
-      <div class="pf-dbg-row"><span>玩家速度</span><strong id="pfDbgPVel">0, 0</strong></div>
-      <div class="pf-dbg-row"><span>AI 状态</span><strong id="pfDbgAState">—</strong></div>
-      <div class="pf-dbg-row"><span>AI 决策</span><strong id="pfDbgAIState">idle</strong></div>
-      <div class="pf-dbg-row"><span>AI 伤害</span><strong id="pfDbgADmg">0%</strong></div>
-      <div class="pf-dbg-row"><span>AI 速度</span><strong id="pfDbgAVel">0, 0</strong></div>
-      <div class="pf-dbg-row"><span>FPS / 步数</span><strong id="pfDbgFps">—</strong></div>
-      <div class="pf-dbg-row col"><span>最近命中</span><strong id="pfDbgHit">—</strong></div>
+      <div class="panel-title"><span data-i18n-text="pf.debug">调试面板</span></div>
+      <div class="pf-dbg-row"><span data-i18n-text="pf.pState">玩家状态</span><strong id="pfDbgPState">—</strong></div>
+      <div class="pf-dbg-row"><span data-i18n-text="pf.pDmg">玩家伤害</span><strong id="pfDbgPDmg">0%</strong></div>
+      <div class="pf-dbg-row"><span data-i18n-text="pf.pVel">玩家速度</span><strong id="pfDbgPVel">0, 0</strong></div>
+      <div class="pf-dbg-row"><span data-i18n-text="pf.aState">AI 状态</span><strong id="pfDbgAState">—</strong></div>
+      <div class="pf-dbg-row"><span data-i18n-text="pf.aDecision">AI 决策</span><strong id="pfDbgAIState">idle</strong></div>
+      <div class="pf-dbg-row"><span data-i18n-text="pf.aDmg">AI 伤害</span><strong id="pfDbgADmg">0%</strong></div>
+      <div class="pf-dbg-row"><span data-i18n-text="pf.aVel">AI 速度</span><strong id="pfDbgAVel">0, 0</strong></div>
+      <div class="pf-dbg-row"><span data-i18n-text="pf.fpsSteps">FPS / 步数</span><strong id="pfDbgFps">—</strong></div>
+      <div class="pf-dbg-row col"><span data-i18n-text="pf.lastHit">最近命中</span><strong id="pfDbgHit">—</strong></div>
     </aside>
   </div>
-  <footer class="pf-footer">键盘：A / D 移动 · W 跳跃（可二段跳）· J 攻击 · K 冲刺 ｜ 触屏：左侧方向，右侧跳 / 攻 / 闪 ｜ 将对手打出场地边缘即获胜，伤害越高被击飞越远</footer>
+  <footer class="pf-footer" data-i18n-text="pf.footer">键盘：A / D 移动 · W 跳跃（可二段跳）· J 攻击 · K 冲刺 ｜ 触屏：左侧方向，右侧跳 / 攻 / 闪 ｜ 将对手打出场地边缘即获胜，伤害越高被击飞越远</footer>
 </div>
 
 <div id="updateBar" hidden>
-  <span id="updateText">发现新版本</span>
-  <button id="btnUpdateReload" class="tb-btn wide">立即刷新</button>
+  <span id="updateText" data-i18n-text="update.text">发现新版本</span>
+  <button id="btnUpdateReload" class="tb-btn wide" data-i18n-text="update.reload">立即刷新</button>
   <button id="btnUpdateDismiss" class="tb-btn icon" aria-label="关闭提示">✕</button>
 </div>
 
@@ -363,6 +442,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.23"></script>
+<script type="module" src="js/app.js?v=1.24"></script>
 </body>
 </html>

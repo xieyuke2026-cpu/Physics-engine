@@ -14,6 +14,7 @@ import { PFRenderer } from './pf-renderer.js';
 import { PFInput } from './pf-input.js';
 import { PLATFORMS, SPAWNS, isBlasted } from './pf-stage.js';
 import { STEP_MS, MAX_FRAME_MS, MAX_STEPS_PER_FRAME, DEBUG, PF_VERSION, WORLD, FIGHTER, ATTACK, AI, BLAST } from './pf-config.js';
+import { t } from '../i18n.js';
 
 export class PFMatch {
   /** @param {object} [opts] opts.ai: AI profile name or overrides for the dummy. */
@@ -98,6 +99,23 @@ export class PFLab {
     $('btnPFPause').addEventListener('click', () => this.togglePause());
     $('btnPFRestart').addEventListener('click', () => this.restart());
     $('btnPFRematch').addEventListener('click', () => this.restart());
+    // Language switched mid-match: re-apply the dynamic labels applyI18n
+    // cannot know about (pause state, match status, result banner).
+    window.addEventListener('ml-lang', () => this._syncLang());
+  }
+
+  _syncLang() {
+    if (!this.match) return;
+    $('btnPFPause').textContent = this.match.paused ? t('pf.resume') : t('pf.pause');
+    if (this.match.state === 'over') {
+      this._setStatus(t('pf.over'));
+      if (!$('pfResult').hidden) {
+        const w = this.match.winner;
+        $('pfResultText').textContent = w === 'draw' ? t('pf.draw') : w === 'player' ? t('pf.winPlayer') : t('pf.winAI');
+      }
+    } else {
+      this._setStatus(this.match.paused ? t('pf.paused') : t('pf.fighting'));
+    }
   }
 
   enter() {
@@ -111,8 +129,8 @@ export class PFLab {
     this.input.bindButton($('pfTAttack'), 'attack');
     this.input.bindButton($('pfTDash'), 'dash');
     $('pfResult').hidden = true;
-    $('btnPFPause').textContent = '暂停';
-    this._setStatus('对战中');
+    $('btnPFPause').textContent = t('pf.pause');
+    this._setStatus(t('pf.fighting'));
     $('pfLab').hidden = false;
     this._active = true;
     this._acc = 0;
@@ -140,19 +158,19 @@ export class PFLab {
   togglePause() {
     if (!this.match || this.match.state !== 'fight') return;
     this.match.paused = !this.match.paused;
-    $('btnPFPause').textContent = this.match.paused ? '继续' : '暂停';
-    this._setStatus(this.match.paused ? '已暂停' : '对战中');
+    $('btnPFPause').textContent = this.match.paused ? t('pf.resume') : t('pf.pause');
+    this._setStatus(this.match.paused ? t('pf.paused') : t('pf.fighting'));
   }
 
   restart() {
     if (!this.match) return;
     this.match.reset();
     $('pfResult').hidden = true;
-    $('btnPFPause').textContent = '暂停';
-    this._setStatus('对战中');
+    $('btnPFPause').textContent = t('pf.pause');
+    this._setStatus(t('pf.fighting'));
   }
 
-  _setStatus(t) { $('pfStatus').textContent = t; }
+  _setStatus(text) { $('pfStatus').textContent = text; }
 
   _loop = (ts) => {
     if (!this._active) return;
@@ -176,9 +194,9 @@ export class PFLab {
 
   _showResult() {
     const w = this.match.winner;
-    $('pfResultText').textContent = w === 'draw' ? '同归于尽 · 平局' : w === 'player' ? '玩家获胜' : 'AI 获胜';
+    $('pfResultText').textContent = w === 'draw' ? t('pf.draw') : w === 'player' ? t('pf.winPlayer') : t('pf.winAI');
     $('pfResult').hidden = false;
-    this._setStatus('对局结束');
+    this._setStatus(t('pf.over'));
   }
 
   _updateDebug() {
@@ -194,7 +212,7 @@ export class PFLab {
     $('pfDbgAVel').textContent = vel(d.dummy);
     $('pfDbgFps').textContent = `${Math.round(this._fps)} · step ${d.step}`;
     $('pfDbgHit').textContent = d.lastHit
-      ? `step ${d.lastHit.step}：${d.lastHit.attacker === 'player' ? '玩家' : 'AI'} 命中，伤害 ${Math.round(d.lastHit.damage)}%，击退 ${d.lastHit.speed.toFixed(1)}`
+      ? t('pf.hitLine', { step: d.lastHit.step, who: t(d.lastHit.attacker === 'player' ? 'pf.whoPlayer' : 'pf.whoAI'), dmg: Math.round(d.lastHit.damage), kb: d.lastHit.speed.toFixed(1) })
       : '—';
     if (this._frames % (4 * DEBUG.panelEverySteps) === 0) { /* panel cadence marker (writes above are cheap) */ }
   }

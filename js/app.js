@@ -13,6 +13,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import * as store from './storage.js';
 import { presetScenes3D, defaultScene3D } from './scene3d.js';
 import { initLab3D, setLab3DActive, lab3DLoadScene, lab3DCurrentName, lab3DRename } from './lab3d.js';
+import { t, getLang, setLang, applyI18n, presetDisplayName, syncLangFromStorage } from './i18n.js';
 
 /* Feature flags.
  * FEATURE_3D: Ryan asked on 2026-11-01 to HIDE all 3D content without deleting
@@ -187,7 +188,7 @@ const panel = new Panel($('panelBody'), {
     world.removeBody(id);
     if (selectedId === id) selectedId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
-    toast('物体已删除');
+    toast(t('msg.bodyDeleted'));
   },
   onGravityPreset(key) {
     if (key === 'moon') { settings.gravityX = 0; settings.gravityY = 0.17; settings.gravityEnabled = true; }
@@ -223,13 +224,13 @@ const panel = new Panel($('panelBody'), {
     const b = selectedBody(); if (!b) return;
     world.renameBody(b, name);
     pushHistorySoon(); scheduleAutosave();
-    toast(name ? `已重命名为「${name}」` : '已清除物体名称');
+    toast(name ? t('msg.renamed', { name }) : t('msg.nameCleared'));
   },
   onAddFluid() {
     const f = world.addFluid(fluidData({}));
     selectedFluidId = f.id; selectedId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
-    toast('已添加流体区域：点选蓝色区域可调密度与范围，往里面丢不同密度的物体试试浮力');
+    toast(t('msg.fluidAdded'));
   },
   onSelectFluid(id) {
     if (!world.fluidById(id)) return;
@@ -240,7 +241,7 @@ const panel = new Panel($('panelBody'), {
     world.removeFluid(id);
     if (selectedFluidId === id) selectedFluidId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
-    toast('流体区域已删除');
+    toast(t('msg.fluidDeleted'));
   },
   onFluidProp(id, key, value) {
     world.updateFluid(id, { [key]: value });
@@ -275,7 +276,7 @@ function deleteSelected() {
   world.removeBody(selectedId);
   selectedId = null;
   refreshPanel(); pushHistorySoon(); scheduleAutosave();
-  toast('物体已删除');
+  toast(t('msg.bodyDeleted'));
 }
 function duplicateSelected() {
   const b = selectedBody(); if (!b) return;
@@ -290,11 +291,11 @@ function duplicateSelected() {
 /* ---------------- transport ---------------- */
 function updateTransport() {
   const play = $('btnPlay');
-  play.innerHTML = running ? `${icon('pause', 17)} 暂停` : `${icon('play', 17)} 运行`;
+  play.innerHTML = running ? `${icon('pause', 17)} ${t('transport.pause')}` : `${icon('play', 17)} ${t('transport.run')}`;
   play.classList.toggle('is-running', running);
   $('btnPause').disabled = !running;
   const st = $('stState');
-  st.textContent = running ? '运行中 Running' : '已暂停 Paused';
+  st.textContent = running ? t('st.running') : t('st.paused');
   st.classList.toggle('running', running);
 }
 function setRunning(v) { running = v; if (!v) world.endDrag(); updateTransport(); }
@@ -305,15 +306,15 @@ function saveCurrent() {
   const s = currentScene();
   if (store.saveSceneToLibrary(s)) {
     initialSnapshot = JSON.stringify(s);
-    toast(`已保存场景「${sceneName}」`);
-  } else toast('保存失败：localStorage 不可用或已满', 3200);
+    toast(t('msg.saved', { name: sceneName }));
+  } else toast(t('msg.saveFailed'), 3200);
 }
 function newScene() {
-  if (!confirm('新建场景？当前未保存的修改将保留在自动保存中，但不会写入场景库。')) return;
+  if (!confirm(t('msg.newSceneConfirm'))) return;
   setRunning(false);
   loadScene(defaultScene());
   resetHistory();
-  toast('已新建场景');
+  toast(t('msg.newScene'));
 }
 function resetScene() {
   if (!initialSnapshot) return;
@@ -322,7 +323,7 @@ function resetScene() {
   loadScene(JSON.parse(initialSnapshot), { markInitial: false });
   history.applying = false;
   pushHistory();
-  toast('场景已重置');
+  toast(t('msg.sceneReset'));
 }
 
 /* ---------------- pointer interaction ---------------- */
@@ -333,20 +334,9 @@ function toWorld(e) {
   const r = canvas.getBoundingClientRect();
   return camera.screenToWorld(e.clientX - r.left, e.clientY - r.top, renderer.view);
 }
-function hintFor(t) {
-  const hints = {
-    select: '点选物体查看参数 · 拖拽物体移动 · 点选蓝色流体区域编辑浮力',
-    move: '拖拽物体移动 · 拖拽空白平移画布 · 滚轮 / 双指缩放',
-    circle: '在画布上点按或拖拽画出圆形，松手创建',
-    rectangle: '在画布上拖拽画出矩形，松手创建',
-    polygon: '点按或拖拽确定半径，创建正六边形',
-    triangle: '点按或拖拽确定大小，创建三角形',
-    line: '拖拽画出静态线段（斜坡），松手创建',
-    spring: springStart ? '再点第二个物体（或空白处作为固定锚点）完成弹簧' : '先点一个物体作为弹簧起点（点空白 = 固定锚点）',
-    blast: '在画布上点按，产生一圈冲击波，把附近的物体推开',
-    delete: '点按物体删除 · 点按弹簧线可删除弹簧',
-  };
-  $('stageHint').textContent = hints[t] || '';
+function hintFor(toolName) {
+  const key = toolName === 'spring' ? (springStart ? 'hint.springNext' : 'hint.springStart') : `hint.${toolName}`;
+  $('stageHint').textContent = t(key);
 }
 function setTool(t) {
   tool = t;
@@ -366,7 +356,7 @@ function applyBlast(w) {
   // original hand-tuned curve: magnitude 2 + 13 * (1 - distance / radius).
   const hit = world.applyRadialImpulse(w.x, w.y, { radius: BLAST_RADIUS, base: 2, power: 13 });
   blastFx = { x: w.x, y: w.y, radius: BLAST_RADIUS, startedAt: performance.now() };
-  if (hit) toast(`冲击波推开了 ${hit} 个物体`);
+  if (hit) toast(t('msg.blast', { n: hit }));
   scheduleAutosave();
 }
 
@@ -379,14 +369,14 @@ function handleSpringTap(w) {
       : { bodyId: null, offset: { x: 0, y: 0 }, point: { ...w } };
     springCur = { ...w };
     hintFor('spring');
-    toast(b ? '已选起点，再点第二个物体或空白锚点' : '已放置固定锚点，再点一个物体');
+    toast(b ? t('msg.springStartBody') : t('msg.springStartAnchor'));
     return;
   }
   const start = springStart;
   springStart = null; springCur = null;
   hintFor('spring');
-  if (b && start.bodyId && world.dataIdOf(b) === start.bodyId) { toast('弹簧两端不能是同一个物体'); return; }
-  if (!b && !start.bodyId) { toast('弹簧至少一端要连接物体'); return; }
+  if (b && start.bodyId && world.dataIdOf(b) === start.bodyId) { toast(t('msg.springSameBody')); return; }
+  if (!b && !start.bodyId) { toast(t('msg.springNeedBody')); return; }
   // Only bodyA may be null (a fixed world anchor), so a world endpoint always goes to A.
   let data;
   if (start.bodyId && b) {
@@ -398,8 +388,8 @@ function handleSpringTap(w) {
   }
   if (world.addConstraint(data)) {
     pushHistorySoon(); scheduleAutosave();
-    toast('弹簧已创建');
-  } else toast('弹簧创建失败');
+    toast(t('msg.springCreated'));
+  } else toast(t('msg.springFailed'));
 }
 
 /** Nearest spring segment within tap tolerance of a world point, or null. */
@@ -440,7 +430,7 @@ canvas.addEventListener('pointerdown', (e) => {
     if (seg) {
       world.removeConstraint(seg.id);
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
-      toast('弹簧已删除');
+      toast(t('msg.springDeleted'));
       return;
     }
     const b = world.pick(w.x, w.y);
@@ -449,7 +439,7 @@ canvas.addEventListener('pointerdown', (e) => {
       world.removeBody(id);
       if (selectedId === id) selectedId = null;
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
-      toast('物体已删除');
+      toast(t('msg.bodyDeleted'));
       return;
     }
     const f = pickFluid(w);
@@ -457,7 +447,7 @@ canvas.addEventListener('pointerdown', (e) => {
       world.removeFluid(f.id);
       if (selectedFluidId === f.id) selectedFluidId = null;
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
-      toast('流体区域已删除');
+      toast(t('msg.fluidDeleted'));
     }
     return;
   }
@@ -612,10 +602,11 @@ function closeSceneNav() { $('sceneNav').hidden = true; }
 /* The developer-docs page shows the same version trio as Settings → About,
    stamped from the single sources of truth so the prose can never go stale. */
 function stampDocsVersions() {
-  const el = $('docsVersions');
-  if (!el) return;
+  const els = document.querySelectorAll('.docsVersions');
+  if (!els.length) return;
   const matter = (typeof window !== 'undefined' && window.Matter && window.Matter.version) || '—';
-  el.textContent = `MotionLab ${APP_VERSION} · PhysicsEngine ${PhysicsEngine.VERSION} · Matter.js ${matter} · PFLab ${PF_VERSION}`;
+  const text = `MotionLab ${APP_VERSION} · PhysicsEngine ${PhysicsEngine.VERSION} · Matter.js ${matter} · PFLab ${PF_VERSION}`;
+  els.forEach((el) => { el.textContent = text; });
 }
 
 /* ---------------- PFLab (platform fighter module) ----------------
@@ -631,7 +622,7 @@ function enterPFLab() {
     closeSceneNav();
   } catch (err) {
     console.error('PFLab failed to open:', err);
-    toast(`PFLab 打开失败：${err && err.message ? err.message : err}`);
+    toast(t('msg.pfFailed', { err: err && err.message ? err.message : err }));
   }
 }
 
@@ -652,13 +643,12 @@ async function checkForUpdate() {
       updateAvailable = v.app;
       const bar = $('updateBar');
       if (!bar) return;
-      $('updateText').textContent = `发现新版本 MotionLab ${v.app}（当前 ${APP_VERSION}）`;
+      $('updateText').textContent = t('update.msg', { v: v.app, cur: APP_VERSION });
       bar.hidden = false;
     }
   } catch { /* offline or local preview: stay silent */ }
 }
 
-const NAV_TITLES = { overview: '我的项目', library: '场景库', presets: '实验预设', docs: '开发者文档' };
 function setNavView(view) {
   navView = view;
   document.querySelectorAll('.side-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
@@ -669,7 +659,7 @@ function setNavView(view) {
   $('navSectionPresets3D').hidden = view === 'library' || view === 'docs';
   $('navSectionDocs').hidden = view !== 'docs';
   $('navToolbar').style.display = view === 'presets' || view === 'docs' ? 'none' : '';
-  $('navTitle').textContent = NAV_TITLES[view] || '我的项目';
+  $('navTitle').textContent = t(`hub.title.${view}`);
 }
 
 /* ---------------- 2D / 3D mode switching ---------------- */
@@ -769,7 +759,7 @@ function sceneCard(scene, opts = {}) {
   const sub = document.createElement('div');
   sub.className = 'scene-sub';
   const nCon = (scene.constraints || []).length;
-  sub.textContent = `${scene.bodies.length} 个物体${nCon ? ` · ${nCon} 个弹簧` : ''} · ${new Date(scene.updatedAt || Date.now()).toLocaleString()}`;
+  sub.textContent = t('card.sub', { n: scene.bodies.length, c: nCon ? t('card.subSprings', { n: nCon }) : '', date: new Date(scene.updatedAt || Date.now()).toLocaleString() });
   body.appendChild(nameEl); body.appendChild(sub);
   const actions = document.createElement('div');
   actions.className = 'scene-card-actions';
@@ -789,7 +779,7 @@ function sceneCard(scene, opts = {}) {
 function openStoredScene(s) {
   setRunning(false);
   loadScene(s); resetHistory(); closeSceneNav();
-  toast(`已打开场景「${s.name}」`);
+  toast(t('msg.opened', { name: s.name }));
 }
 
 function exportSceneData(s) {
@@ -811,7 +801,7 @@ function renderSceneCards(filter = '') {
   if (!names.length) {
     list.appendChild(Object.assign(document.createElement('p'), {
       className: 'empty-note',
-      textContent: filter ? '没有匹配的场景。' : '暂无已保存场景。在实验室里点顶部「保存」，或用上方「复制当前场景」，就会出现在这里。',
+      textContent: filter ? t('hub.emptyNoMatch') : t('hub.emptySaved'),
     }));
     return;
   }
@@ -819,27 +809,27 @@ function renderSceneCards(filter = '') {
     const s = scenes[name];
     list.appendChild(sceneCard(s, {
       current: name === sceneName,
-      badge: name === sceneName ? '2D · 当前' : '2D',
+      badge: name === sceneName ? t('card.badgeCurrent') : '2D',
       actions: [
-        ['打开', 'primary', () => openStoredScene(s)],
-        ['重命名', '', () => {
-          const nn = prompt('新的场景名称：', name);
+        [t('card.open'), 'primary', () => openStoredScene(s)],
+        [t('card.rename'), '', () => {
+          const nn = prompt(t('msg.renamePrompt'), name);
           if (!nn || !nn.trim() || nn.trim() === name) return;
           if (store.renameSceneInLibrary(name, nn.trim())) {
             if (sceneName === name) { sceneName = nn.trim(); $('projectName').value = sceneName; }
-            renderSceneNav(); toast('已重命名');
-          } else toast('重命名失败：名称已存在或保存失败', 3000);
+            renderSceneNav(); toast(t('msg.renamedOk'));
+          } else toast(t('msg.renameFailed'), 3000);
         }],
-        ['复制', '', () => {
-          let nn = `${name} 副本`; let i = 2;
+        [t('card.duplicate'), '', () => {
+          let nn = `${name} ${t('msg.copySuffix')}`; let i = 2;
           const all = store.loadScenes();
-          while (all[nn]) nn = `${name} 副本 ${i++}`;
-          if (store.saveSceneToLibrary({ ...s, name: nn })) { renderSceneNav(); toast(`已复制为「${nn}」`); }
+          while (all[nn]) nn = `${name} ${t('msg.copySuffix')} ${i++}`;
+          if (store.saveSceneToLibrary({ ...s, name: nn })) { renderSceneNav(); toast(t('msg.duplicated', { name: nn })); }
         }],
-        ['导出', '', () => exportSceneData(s)],
-        ['删除', 'danger', () => {
-          if (!confirm(`删除场景「${name}」？此操作不可恢复。`)) return;
-          store.deleteSceneFromLibrary(name); renderSceneNav(); toast('场景已删除');
+        [t('card.export'), '', () => exportSceneData(s)],
+        [t('card.delete'), 'danger', () => {
+          if (!confirm(t('msg.deleteSceneConfirm', { name }))) return;
+          store.deleteSceneFromLibrary(name); renderSceneNav(); toast(t('msg.sceneDeleted'));
         }],
       ],
     }));
@@ -855,8 +845,8 @@ function renderSceneNav() {
   $('countLibrary').textContent = String(savedCount + saved3Count);
   $('countPresets').textContent = String(presetCount);
   $('sideStorage').textContent = FEATURE_3D
-    ? `保存在本机浏览器 · 2D 场景 ${savedCount} · 3D 场景 ${saved3Count} · 预设 ${presetCount}`
-    : `保存在本机浏览器 · ${savedCount} 个场景 · ${presetCount} 个预设`;
+    ? t('hub.storage3d', { s2: savedCount, s3: saved3Count, presets: presetCount })
+    : t('hub.storage', { scenes: savedCount, presets: presetCount });
   $('navSectionPresets3D').style.display = FEATURE_3D ? '' : 'none';
   $('navSectionSaved3D').style.display = FEATURE_3D ? '' : 'none';
   // current + autosave cards
@@ -864,17 +854,17 @@ function renderSceneNav() {
   cur.innerHTML = '';
   const now = currentScene();
   cur.appendChild(sceneCard(now, {
-    current: true, badge: '2D · 正在编辑',
+    current: true, badge: t('card.badgeEditing'),
     actions: [
-      ['保存到场景库', 'primary', () => { saveCurrent(); renderSceneNav(); }],
-      ['继续编辑', '', () => closeSceneNav()],
+      [t('card.saveToLib'), 'primary', () => { saveCurrent(); renderSceneNav(); }],
+      [t('card.keepEditing'), '', () => closeSceneNav()],
     ],
   }));
   const auto = store.loadAutosave();
   if (auto && JSON.stringify(auto.bodies) !== JSON.stringify(now.bodies)) {
-    cur.appendChild(sceneCard({ ...auto, name: '上次自动保存', updatedAt: auto.updatedAt }, {
-      badge: '2D · 自动保存',
-      actions: [['恢复这个进度', 'primary', () => openStoredScene(auto)]],
+    cur.appendChild(sceneCard({ ...auto, name: t('card.autosaveName'), updatedAt: auto.updatedAt }, {
+      badge: t('card.badgeAuto'),
+      actions: [[t('card.restore'), 'primary', () => openStoredScene(auto)]],
     }));
   }
   if (FEATURE_3D) {
@@ -901,18 +891,18 @@ function loadPreset(p) {
   resetHistory();
   closeSceneNav();
   setRunning(true);
-  toast(`已载入预设「${p.name}」，模拟运行中`);
+  toast(t('msg.presetLoaded', { name: presetDisplayName(p) }));
 }
 function renderPresetList() {
   const wrap = $('presetList');
   wrap.innerHTML = '';
   for (const p of presetScenes()) {
-    const card = sceneCard({ ...p.scene, name: p.name }, {
+    const card = sceneCard({ ...p.scene, name: presetDisplayName(p) }, {
       badge: '2D',
-      actions: [['载入并运行', 'primary', () => loadPreset(p)]],
+      actions: [[t('card.loadRun'), 'primary', () => loadPreset(p)]],
     });
     card.classList.add('preset-card');
-    card.title = '点击卡片也可直接载入并运行';
+    card.title = t('card.presetTitle');
     card.addEventListener('click', () => loadPreset(p));
     wrap.appendChild(card);
   }
@@ -1100,10 +1090,10 @@ $('sceneSearch').addEventListener('input', () => {
 });
 $('btnNewScene').addEventListener('click', () => { closeSceneNav(); newScene(); });
 $('btnDuplicateScene').addEventListener('click', () => {
-  let nn = `${sceneName} 副本`; let i = 2;
+  let nn = `${sceneName} ${t('msg.copySuffix')}`; let i = 2;
   const all = store.loadScenes();
-  while (all[nn]) nn = `${sceneName} 副本 ${i++}`;
-  if (store.saveSceneToLibrary({ ...currentScene(), name: nn })) { renderSceneNav(); toast(`当前场景已复制为「${nn}」`); }
+  while (all[nn]) nn = `${sceneName} ${t('msg.copySuffix')} ${i++}`;
+  if (store.saveSceneToLibrary({ ...currentScene(), name: nn })) { renderSceneNav(); toast(t('msg.currentDuplicated', { name: nn })); }
 });
 
 /* ---------------- settings modal ---------------- */
@@ -1113,19 +1103,20 @@ function openSettings() {
       settings[key] = value;
       scheduleAutosave();
     },
+    onLanguage(code) { setLang(code); }, // ml-lang handler re-renders everything, settings included
     onShowLanding() { closeModal('modalSettings'); showLanding(); },
     onClearAll() {
-      if (!confirm('重置 MotionLab 的全部数据？\n将删除场景库（含 3D）、自动保存、设置与偏好，恢复到第一次打开的状态。此操作不可撤销。')) return;
+      if (!confirm(t('msg.resetConfirm'))) return;
       // Reset the (hidden) 3D lab's in-memory scene FIRST, so nothing it
       // persists afterwards can resurrect pre-reset 3D data.
       lab3DLoadScene(defaultScene3D());
-      store.resetAllData();
+      store.resetAllData(); // scenes/settings only — the language choice is a device preference and stays
       closeModal('modalSettings');
       setRunning(false);
       loadScene(defaultScene()); // also restores default settings from the scene
       resetHistory();
       openSceneNav(); // home hub now shows the empty, first-run library
-      toast('已重置：全部数据恢复初始');
+      toast(t('msg.resetDone'));
     },
   });
   openModal('modalSettings');
@@ -1146,7 +1137,41 @@ $('btnNavSettings').addEventListener('click', openSettings);
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
 
+/* ---------------- language switching ----------------
+   setLang() (i18n.js) persists the choice, re-applies all static markup and
+   fires 'ml-lang'; here we re-render every dynamic surface in the new
+   language. (A factory reset does not touch the language choice — it is a
+   device preference, not scene data.) */
+function refreshAfterLangChange() {
+  applyI18n();
+  applyChromeLabels();
+  panel.mode = null; panel.selectedId = null; panel.selectedFluidId = null; panel._sceneSig = null;
+  refreshPanel();
+  hintFor(tool);
+  updateTransport();
+  updateStatus();
+  syncLangPicker();
+  document.querySelectorAll('#landingPresets .chip').forEach((chip) => {
+    const p = presetScenes().find((x) => x.key === chip.dataset.presetKey);
+    if (p) chip.textContent = presetDisplayName(p);
+  });
+  if (!$('sceneNav').hidden) { renderSceneNav(); setNavView(navView); }
+  if (!$('modalSettings').hidden) openSettings();
+}
+window.addEventListener('ml-lang', refreshAfterLangChange);
+
 /* ---------------- toolbar wiring ---------------- */
+/** Icon+text labels that depend on the language; re-run on language change. */
+function applyChromeLabels() {
+  const logo = $('logo');
+  if (logo) logo.title = t('tb.logoTitle');
+  const nav = $('btnNavSettings'); if (nav) nav.innerHTML = `${icon('settings', 16)} ${t('tb.settings')}`;
+  const save = $('btnSave'); if (save) save.innerHTML = `${icon('save', 17)} ${t('tb.save')}`;
+  const scenes = $('btnScenes'); if (scenes) scenes.innerHTML = `${icon('folder', 17)} ${t('tb.projects')}`;
+  const nw = $('btnNewScene'); if (nw) nw.innerHTML = `${icon('plus', 16)} ${t('tb.newScene')}`;
+  const dup = $('btnDuplicateScene'); if (dup) dup.innerHTML = `${icon('copy', 16)} ${t('tb.dupScene')}`;
+}
+
 function initChrome() {
   if (!FEATURE_3D) {
     const ms = document.querySelector('.mode-switch');
@@ -1154,19 +1179,14 @@ function initChrome() {
   }
   $('logo').innerHTML = icon('logo', 26);
   $('logo').style.cursor = 'pointer';
-  $('logo').title = '回到首页（我的项目）';
   $('logo').addEventListener('click', openSceneNav);
   $('btnUndo').innerHTML = icon('undo'); $('btnRedo').innerHTML = icon('redo');
   $('btnPause').innerHTML = icon('pause'); $('btnReset').innerHTML = icon('reset');
   $('btnStep').innerHTML = icon('step'); $('btnShot').innerHTML = icon('camera');
   $('btnSettings').innerHTML = icon('settings'); $('btnPanel').innerHTML = icon('panel');
-  $('btnNavSettings').innerHTML = `${icon('settings', 16)} 设置`;
-  $('btnSave').innerHTML = `${icon('save', 17)} 保存`;
   $('btnExport').innerHTML = icon('export'); $('btnImport').innerHTML = icon('import');
-  $('btnScenes').innerHTML = `${icon('folder', 17)} 我的项目`;
   $('btnZoomIn').innerHTML = icon('plus', 17); $('btnZoomOut').innerHTML = icon('minus', 17);
-  $('btnNewScene').innerHTML = `${icon('plus', 16)} 新建场景`;
-  $('btnDuplicateScene').innerHTML = `${icon('copy', 16)} 复制当前场景`;
+  applyChromeLabels();
   document.querySelectorAll('.modal-close').forEach((b) => { b.innerHTML = icon('close', 18); });
   document.querySelectorAll('.tool-btn').forEach((b) => {
     b.innerHTML = icon(TOOL_ICONS[b.dataset.tool], 21);
@@ -1186,13 +1206,13 @@ function initChrome() {
       showTrails: settings.showTrails, preview: null, dragPoint: null, springPreview: null,
     });
     canvas.toBlob((blob) => {
-      if (!blob) { toast('截图失败'); return; }
+      if (!blob) { toast(t('msg.shotFailed')); return; }
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `${(sceneName || 'motionlab').replace(/[\\/:*?"<>|]/g, '_')}.png`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      toast('画布截图 PNG 已导出');
+      toast(t('msg.shotOk'));
     }, 'image/png');
   });
   $('btnReset').addEventListener('click', resetScene);
@@ -1213,7 +1233,7 @@ function initChrome() {
     a.download = `${sceneName.replace(/[\\/:*?"<>|]/g, '_')}.motionlab.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast('场景 JSON 已导出');
+    toast(t('msg.exportOk'));
   });
   $('btnImport').addEventListener('click', () => $('fileImport').click());
   $('fileImport').addEventListener('change', async (e) => {
@@ -1223,11 +1243,11 @@ function initChrome() {
       const text = await f.text();
       const raw = JSON.parse(text);
       const v = validateScene(raw);
-      if (!v.ok) { toast(`导入失败：${v.errors.slice(0, 2).join('；')}`, 4200); return; }
+      if (!v.ok) { toast(t('msg.importFailed', { err: v.errors.slice(0, 2).join(getLang() === 'en' ? '; ' : '；') }), 4200); return; }
       setRunning(false);
       loadScene(v.scene); resetHistory();
-      toast(`已导入场景「${v.scene.name}」`);
-    } catch { toast('导入失败：文件不是有效的 JSON', 3600); }
+      toast(t('msg.imported', { name: v.scene.name }));
+    } catch { toast(t('msg.importNotJson'), 3600); }
   });
   $('projectName').addEventListener('change', () => {
     const nn = $('projectName').value.trim();
@@ -1282,11 +1302,11 @@ function initChrome() {
 
 /* ---------------- status + main loop ---------------- */
 function updateStatus() {
-  $('stCount').textContent = `物体 ${world.count}`;
+  $('stCount').textContent = t('st.objects', { n: world.count });
   $('stGravity').textContent = (settings.gravityEnabled
     ? `Gravity (${settings.gravityX}, ${settings.gravityY})` : 'Gravity Off')
-    + (Number(settings.gravitation) > 0 ? ` · 万有引力 G ${settings.gravitation}` : '')
-    + (world.fluidCount ? ` · 流体 ${world.fluidCount}` : '');
+    + (Number(settings.gravitation) > 0 ? ` · ${t('st.gravitation', { g: settings.gravitation })}` : '')
+    + (world.fluidCount ? ` · ${t('st.fluids', { n: world.fluidCount })}` : '');
   $('stSpeed').textContent = `Speed ${settings.speed.toFixed(1)}×`;
 }
 setInterval(() => {
@@ -1391,22 +1411,37 @@ function startLandingDemo() {
   })(performance.now());
 }
 
+/** Mark the landing language-picker chip matching the current language. */
+function syncLangPicker() {
+  const en = $('btnLangEn'), zh = $('btnLangZh');
+  if (en) en.classList.toggle('active', getLang() === 'en');
+  if (zh) zh.classList.toggle('active', getLang() === 'zh');
+}
+
 function initLanding() {
   $('landingLogo').innerHTML = icon('logo', 30);
   const wrap = $('landingPresets');
   for (const p of presetScenes()) {
     const c = document.createElement('button');
     c.className = 'chip';
-    c.textContent = p.name;
+    c.dataset.presetKey = p.key;
+    c.textContent = presetDisplayName(p);
     c.addEventListener('click', () => { hideLanding(); loadPreset(p); });
     wrap.appendChild(c);
   }
   $('btnStartLab').addEventListener('click', () => { hideLanding(); openSceneNav(); });
+  // First visit defaults to English (i18n.js); the picker is the guide.
+  const en = $('btnLangEn'), zh = $('btnLangZh');
+  if (en) en.addEventListener('click', () => setLang('en'));
+  if (zh) zh.addEventListener('click', () => setLang('zh'));
+  syncLangPicker();
   if (!store.loadVisited()) showLanding();
 }
 
 /* ---------------- boot ---------------- */
 function boot() {
+  syncLangFromStorage(); // stored choice, else first-run default: English
+  applyI18n(); // static markup in the resolved language
   initChrome();
   initLab3D({
     toast,
@@ -1426,7 +1461,7 @@ function boot() {
   requestAnimationFrame(loop);
   // The hub is the home page: returning users land here first, then step into the lab.
   if (store.loadVisited()) openSceneNav();
-  else if (auto) toast('已恢复上次自动保存的场景');
+  else if (auto) toast(t('msg.autosaveRestored'));
   checkForUpdate();
 }
 boot();

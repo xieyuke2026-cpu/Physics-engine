@@ -5,9 +5,10 @@
 import { icon } from './icons.js';
 import { VERSION as ENGINE_VERSION } from './engine/physics-engine.js';
 import { PF_VERSION } from './pf/pf-config.js';
+import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.23';
+export const APP_VERSION = '1.24';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -42,7 +43,13 @@ function switchRow(label, key, checked) {
 }
 function title(text) { return el(`<div class="panel-title"><span class="dot"></span>${text}</div>`); }
 
-const TYPE_LABELS = { circle: 'Circle · 圆形', rectangle: 'Rectangle · 矩形', polygon: 'Polygon · 多边形', line: 'Static Line · 静态线段' };
+function typeLabel(type) {
+  const m = {
+    circle: ['Circle · 圆形', 'Circle'], rectangle: ['Rectangle · 矩形', 'Rectangle'],
+    polygon: ['Polygon · 多边形', 'Polygon'], line: ['Static Line · 静态线段', 'Static Line'],
+  }[type];
+  return m ? L(m[0], m[1]) : type;
+}
 
 export class Panel {
   /** cb: { onBodyProp(key,value), onBodySize(key,value), onSceneProp(key,value),
@@ -92,14 +99,14 @@ export class Panel {
     this._sceneSig = sig;
     this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null;
     const r = this.root; r.innerHTML = '';
-    r.appendChild(title('场景属性 Scene'));
-    const ro = el(`<div class="readonly-grid"><span>物体数量</span><b data-ro="count">${list.length}</b>
-      <span>引擎</span><b>Matter.js</b><span>格式</span><b>motionlab-scene v2</b></div>`);
+    r.appendChild(title(L('场景属性 Scene', 'Scene Properties')));
+    const ro = el(`<div class="readonly-grid"><span>${L('物体数量', 'Bodies')}</span><b data-ro="count">${list.length}</b>
+      <span>${L('引擎', 'Engine')}</span><b>Matter.js</b><span>${L('格式', 'Format')}</span><b>motionlab-scene v2</b></div>`);
     r.appendChild(ro);
-    r.appendChild(title('重力与模拟'));
+    r.appendChild(title(L('重力与模拟', 'Gravity & Simulation')));
     const chips = el('<div class="chip-row"></div>');
     const chipDefs = [
-      ['moon', '月球 0.17g'], ['earth', '地球 1g'], ['jupiter', '木星 2.5g'], ['zero', '零重力'], ['side', '侧向重力'],
+      ['moon', L('月球 0.17g', 'Moon 0.17g')], ['earth', L('地球 1g', 'Earth 1g')], ['jupiter', L('木星 2.5g', 'Jupiter 2.5g')], ['zero', L('零重力', 'Zero gravity')], ['side', L('侧向重力', 'Sideways gravity')],
     ];
     for (const [key, label] of chipDefs) {
       const c = el(`<button class="chip">${label}</button>`);
@@ -111,22 +118,22 @@ export class Panel {
     const gy = numField('Gravity Y', 'gravityY', settings.gravityY, { step: 0.1, min: -3, max: 3 });
     r.appendChild(row(gx, gy));
     r.appendChild(sliderField('Simulation Speed', 'speed', settings.speed, 0.1, 2, 0.1));
-    r.appendChild(switchRow('启用重力 Enable Gravity', 'gravityEnabled', settings.gravityEnabled));
-    r.appendChild(title('世界效应 · 引力与浮力'));
-    r.appendChild(el('<p class="empty-note">万有引力让所有物体两两相吸（牛顿公式，连地面和墙壁也会参与），适合行星轨道类实验；建议同时关掉上面的普通重力，或直接载入「万有引力轨道」预设。G = 0 即关闭。</p>'));
-    r.appendChild(sliderField('万有引力 Gravitation G', 'gravitation', settings.gravitation || 0, 0, 60, 1));
+    r.appendChild(switchRow(L('启用重力 Enable Gravity', 'Enable Gravity'), 'gravityEnabled', settings.gravityEnabled));
+    r.appendChild(title(L('世界效应 · 引力与浮力', 'World Effects · Gravitation & Fluids')));
+    r.appendChild(el(`<p class="empty-note">${L('万有引力让所有物体两两相吸（牛顿公式，连地面和墙壁也会参与），适合行星轨道类实验；建议同时关掉上面的普通重力，或直接载入「万有引力轨道」预设。G = 0 即关闭。', 'Pairwise gravitation pulls every body toward every other (Newton\'s law — floors and walls join in), ideal for planetary orbits. Turn regular gravity off above, or load the "Orbital Gravitation" preset. G = 0 disables it.')}</p>`));
+    r.appendChild(sliderField(L('万有引力 Gravitation G', 'Gravitation G'), 'gravitation', settings.gravitation || 0, 0, 60, 1));
     r.appendChild(row(
-      numField('引力强度 G', 'gravitation', settings.gravitation || 0, { step: 1, min: 0, max: 500 }),
-      numField('软化 Softening', 'gravitationSoftening', settings.gravitationSoftening ?? 100, { step: 10, min: 0, max: 2000 }),
+      numField(L('引力强度 G', 'Gravitation G'), 'gravitation', settings.gravitation || 0, { step: 1, min: 0, max: 500 }),
+      numField(L('软化 Softening', 'Softening'), 'gravitationSoftening', settings.gravitationSoftening ?? 100, { step: 10, min: 0, max: 2000 }),
     ));
-    r.appendChild(el('<p class="empty-note">流体区域提供浮力：密度比流体小的物体浮起、大的沉底。点「添加」放一个默认水池，再点选蓝色区域编辑它的密度与范围。</p>'));
-    const addFluid = el(`<button class="btn block">${icon('plus', 16)} 添加流体区域（浮力）</button>`);
+    r.appendChild(el(`<p class="empty-note">${L('流体区域提供浮力：密度比流体小的物体浮起、大的沉底。点「添加」放一个默认水池，再点选蓝色区域编辑它的密度与范围。', 'Fluid regions provide buoyancy: bodies less dense than the fluid float, denser ones sink. Add a default pool, then click the blue region to edit its density and size.')}</p>`));
+    const addFluid = el(`<button class="btn block">${icon('plus', 16)}${L(' 添加流体区域（浮力）', ' Add Fluid Region (Buoyancy)')}</button>`);
     addFluid.addEventListener('click', () => this.cb.onAddFluid());
     r.appendChild(addFluid);
     if (flist.length) {
       const fwrap = el('<div class="obj-list"></div>');
       flist.forEach((f, i) => {
-        const rowEl = el(`<button class="obj-row"><span class="o-name">流体 ${i + 1}</span><span class="o-type">密度 ${f.density} · ${Math.round(f.width)}×${Math.round(f.height)}</span></button>`);
+        const rowEl = el(`<button class="obj-row"><span class="o-name">${L(`流体 ${i + 1}`, `Fluid ${i + 1}`)}</span><span class="o-type">${L(`密度 ${f.density}`, `density ${f.density}`)} · ${Math.round(f.width)}×${Math.round(f.height)}</span></button>`);
         rowEl.addEventListener('click', () => this.cb.onSelectFluid(f.id));
         const del = el(`<span class="tb-btn icon o-del">${icon('trash', 16)}</span>`);
         del.addEventListener('click', (e) => { e.stopPropagation(); this.cb.onDeleteFluid(f.id); });
@@ -135,22 +142,22 @@ export class Panel {
       });
       r.appendChild(fwrap);
     }
-    r.appendChild(title('显示'));
-    r.appendChild(switchRow('显示网格 Grid', 'showGrid', settings.showGrid));
-    r.appendChild(switchRow('速度向量 Vectors', 'showVectors', settings.showVectors));
-    r.appendChild(switchRow('运动轨迹 Trails', 'showTrails', settings.showTrails));
-    const save = el(`<button class="btn accent block">${icon('save', 16)} 保存场景</button>`);
+    r.appendChild(title(L('显示', 'Display')));
+    r.appendChild(switchRow(L('显示网格 Grid', 'Show Grid'), 'showGrid', settings.showGrid));
+    r.appendChild(switchRow(L('速度向量 Vectors', 'Show Vectors'), 'showVectors', settings.showVectors));
+    r.appendChild(switchRow(L('运动轨迹 Trails', 'Show Trails'), 'showTrails', settings.showTrails));
+    const save = el(`<button class="btn accent block">${icon('save', 16)}${L(' 保存场景', ' Save Scene')}</button>`);
     save.addEventListener('click', () => this.cb.onSaveScene());
-    const nw = el(`<button class="btn block">${icon('plus', 16)} 新建场景</button>`);
+    const nw = el(`<button class="btn block">${icon('plus', 16)}${L(' 新建场景', ' New Scene')}</button>`);
     nw.addEventListener('click', () => this.cb.onNewScene());
     r.appendChild(save); r.appendChild(nw);
     if (list.length) {
-      r.appendChild(title('物体列表 Objects'));
+      r.appendChild(title(L('物体列表 Objects', 'Objects')));
       const wrap = el('<div class="obj-list"></div>');
       for (const b of list) {
         const rowEl = el(`<button class="obj-row"><span class="o-name"></span><span class="o-type"></span></button>`);
         rowEl.querySelector('.o-name').textContent = b.label || b.type;
-        rowEl.querySelector('.o-type').textContent = b.type + (b.isStatic ? ' · 静态' : '');
+        rowEl.querySelector('.o-type').textContent = b.type + (b.isStatic ? L(' · 静态', ' · static') : '');
         rowEl.addEventListener('click', () => this.cb.onSelectBody(b.id));
         const del = el(`<span class="tb-btn icon o-del">${icon('trash', 16)}</span>`);
         del.addEventListener('click', (e) => { e.stopPropagation(); this.cb.onDeleteBody(b.id); });
@@ -159,7 +166,7 @@ export class Panel {
       }
       r.appendChild(wrap);
     }
-    r.appendChild(el('<p class="empty-note">在画布上点选一个物体，这里会显示它的物理参数；点选蓝色流体区域可编辑浮力参数，在上方「名称」框里还能给物体改名。</p>'));
+    r.appendChild(el(`<p class="empty-note">${L('在画布上点选一个物体，这里会显示它的物理参数；点选蓝色流体区域可编辑浮力参数，在上方「名称」框里还能给物体改名。', 'Click a body on the canvas to see its physics parameters here; click a blue fluid region to edit buoyancy, and rename bodies in the Name field of their panel.')}</p>`));
     this._wireNumbers(r, (k, v) => this.cb.onSceneProp(k, v));
     this._collectInputs();
   }
@@ -176,53 +183,53 @@ export class Panel {
     if (sameTarget) { this.refreshBody(live); return; }
     this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null;
     const r = this.root; r.innerHTML = '';
-    r.appendChild(title('物体属性 Object'));
-    const head = el(`<div class="readonly-grid"><span>类型 Type</span><b>${TYPE_LABELS[data.type] || data.type}</b>
+    r.appendChild(title(L('物体属性 Object', 'Object Properties')));
+    const head = el(`<div class="readonly-grid"><span>${L('类型 Type', 'Type')}</span><b>${typeLabel(data.type)}</b>
       <span>ID</span><b>${data.id.split('-').slice(0, 2).join('-')}</b></div>`);
     r.appendChild(head);
-    const nameField = el('<div class="field"><label>名称 Name（可重命名，改完按回车）</label><input type="text" data-name-input maxlength="60" spellcheck="false"></div>');
+    const nameField = el(`<div class="field"><label>${L('名称 Name（可重命名，改完按回车）', 'Name (rename — press Enter to apply)')}</label><input type="text" data-name-input maxlength="60" spellcheck="false"></div>`);
     const nameInput = nameField.querySelector('input');
     nameInput.value = data.label || '';
     nameInput.addEventListener('change', () => this.cb.onBodyRename(nameInput.value.trim()));
     nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') nameInput.blur(); e.stopPropagation(); });
     r.appendChild(nameField);
-    r.appendChild(title('位置与尺寸'));
+    r.appendChild(title(L('位置与尺寸', 'Position & Size')));
     r.appendChild(row(
       numField('Position X', 'x', live.x, { step: 1 }),
       numField('Position Y', 'y', live.y, { step: 1 }),
     ));
     if (data.type === 'circle') {
-      r.appendChild(numField('Radius 半径', 'radius', data.radius, { step: 1, min: 4, max: 600 }));
+      r.appendChild(numField(L('Radius 半径', 'Radius'), 'radius', data.radius, { step: 1, min: 4, max: 600 }));
     } else if (data.type === 'polygon') {
       r.appendChild(row(
-        numField('Radius 半径', 'radius', data.radius, { step: 1, min: 6, max: 600 }),
-        numField('Sides 边数', 'sides', data.sides, { step: 1, min: 3, max: 12 }),
+        numField(L('Radius 半径', 'Radius'), 'radius', data.radius, { step: 1, min: 6, max: 600 }),
+        numField(L('Sides 边数', 'Sides'), 'sides', data.sides, { step: 1, min: 3, max: 12 }),
       ));
     } else if (data.type === 'line') {
       r.appendChild(row(
-        numField('Length 长度', 'width', data.width, { step: 1, min: 10, max: 2400 }),
-        numField('Thickness 粗细', 'height', data.height, { step: 1, min: 4, max: 10 }),
+        numField(L('Length 长度', 'Length'), 'width', data.width, { step: 1, min: 10, max: 2400 }),
+        numField(L('Thickness 粗细', 'Thickness'), 'height', data.height, { step: 1, min: 4, max: 10 }),
       ));
     } else {
       r.appendChild(row(
-        numField('Width 宽度', 'width', data.width, { step: 1, min: 4, max: 2400 }),
-        numField('Height 高度', 'height', data.height, { step: 1, min: 4, max: 2400 }),
+        numField(L('Width 宽度', 'Width'), 'width', data.width, { step: 1, min: 4, max: 2400 }),
+        numField(L('Height 高度', 'Height'), 'height', data.height, { step: 1, min: 4, max: 2400 }),
       ));
     }
     r.appendChild(row(
-      numField('Angle 角度 (°)', 'angleDeg', live.angleDeg, { step: 1 }),
+      numField(L('Angle 角度 (°)', 'Angle (°)'), 'angleDeg', live.angleDeg, { step: 1 }),
       numField('Velocity X', 'vx', live.vx, { step: 0.5 }),
     ));
     r.appendChild(row(
-      numField('Mass 质量', 'mass', live.mass, { step: 0.1, min: 0.01 }),
+      numField(L('Mass 质量', 'Mass'), 'mass', live.mass, { step: 0.1, min: 0.01 }),
       numField('Velocity Y', 'vy', live.vy, { step: 0.5 }),
     ));
-    r.appendChild(title('实时数据 Live'));
+    r.appendChild(title(L('实时数据 Live', 'Live Data')));
     const liveRo = el(`<div class="readonly-grid">
-      <span>速率 |v| (px/s)</span><b data-ro="speed">0</b>
-      <span>动能 KE</span><b data-ro="ke">0</b>
-      <span>角速度 (°/s)</span><b data-ro="angvel">0</b>
-      <span>动量 |p|</span><b data-ro="momentum">0</b></div>`);
+      <span>${L('速率 |v| (px/s)', 'Speed |v| (px/s)')}</span><b data-ro="speed">0</b>
+      <span>${L('动能 KE', 'Kinetic Energy KE')}</span><b data-ro="ke">0</b>
+      <span>${L('角速度 (°/s)', 'Angular Vel. (°/s)')}</span><b data-ro="angvel">0</b>
+      <span>${L('动量 |p|', 'Momentum |p|')}</span><b data-ro="momentum">0</b></div>`);
     r.appendChild(liveRo);
     this.ro = {
       speed: liveRo.querySelector('[data-ro="speed"]'),
@@ -230,15 +237,15 @@ export class Panel {
       angvel: liveRo.querySelector('[data-ro="angvel"]'),
       momentum: liveRo.querySelector('[data-ro="momentum"]'),
     };
-    r.appendChild(title('材质 Material'));
-    r.appendChild(numField('Density 密度', 'density', data.density, { step: 0.0005, min: 0.0001, max: 0.05 }));
-    r.appendChild(sliderField('Friction 摩擦力', 'friction', data.friction, 0, 1, 0.01));
-    r.appendChild(sliderField('Restitution 弹性', 'restitution', data.restitution, 0, 1, 0.01));
-    r.appendChild(sliderField('Air Friction 空气阻力', 'frictionAir', data.frictionAir, 0, 0.1, 0.001));
+    r.appendChild(title(L('材质 Material', 'Material')));
+    r.appendChild(numField(L('Density 密度', 'Density'), 'density', data.density, { step: 0.0005, min: 0.0001, max: 0.05 }));
+    r.appendChild(sliderField(L('Friction 摩擦力', 'Friction'), 'friction', data.friction, 0, 1, 0.01));
+    r.appendChild(sliderField(L('Restitution 弹性', 'Restitution'), 'restitution', data.restitution, 0, 1, 0.01));
+    r.appendChild(sliderField(L('Air Friction 空气阻力', 'Air Friction'), 'frictionAir', data.frictionAir, 0, 0.1, 0.001));
     if (data.type !== 'line') {
-      r.appendChild(switchRow('Static 静态物体', 'isStatic', data.isStatic));
-      r.appendChild(switchRow('锁定旋转 Lock Rotation', 'lockRotation', data.lockRotation === true));
-    } else r.appendChild(el('<p class="empty-note">线段始终为静态物体。</p>'));
+      r.appendChild(switchRow(L('Static 静态物体', 'Static'), 'isStatic', data.isStatic));
+      r.appendChild(switchRow(L('锁定旋转 Lock Rotation', 'Lock Rotation'), 'lockRotation', data.lockRotation === true));
+    } else r.appendChild(el(`<p class="empty-note">${L('线段始终为静态物体。', 'Lines are always static.')}</p>`));
     if (!data.isStatic) {
       const ops = el('<div class="btn-row"></div>');
       const mkOp = (ic, label, action) => {
@@ -246,14 +253,14 @@ export class Panel {
         b.addEventListener('click', () => this.cb.onBodyAction(action));
         return b;
       };
-      ops.appendChild(mkOp('stop', '停止', 'stop'));
-      ops.appendChild(mkOp('flip', '翻转X', 'flipX'));
-      ops.appendChild(mkOp('flip', '翻转Y', 'flipY'));
+      ops.appendChild(mkOp('stop', L('停止', 'Stop'), 'stop'));
+      ops.appendChild(mkOp('flip', L('翻转X', 'Flip X'), 'flipX'));
+      ops.appendChild(mkOp('flip', L('翻转Y', 'Flip Y'), 'flipY'));
       r.appendChild(ops);
     }
-    const dup = el(`<button class="btn block">${icon('copy', 16)} 复制物体</button>`);
+    const dup = el(`<button class="btn block">${icon('copy', 16)}${L(' 复制物体', ' Duplicate Body')}</button>`);
     dup.addEventListener('click', () => this.cb.onDuplicateSelected());
-    const del = el(`<button class="btn danger block">${icon('trash', 16)} 删除物体</button>`);
+    const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除物体', ' Delete Body')}</button>`);
     del.addEventListener('click', () => this.cb.onDeleteSelected());
     r.appendChild(dup); r.appendChild(del);
 
@@ -271,21 +278,21 @@ export class Panel {
     if (this.mode === 'fluid' && this.selectedFluidId === fluid.id && this.root.childElementCount) return;
     this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id;
     const r = this.root; r.innerHTML = '';
-    r.appendChild(title('流体区域 Fluid · 浮力'));
-    r.appendChild(el('<p class="empty-note">区域上沿是液面。浮力按「流体密度 ÷ 物体密度 × 浸没比例」计算：物体密度小于流体就浮起，大于就沉底。默认水的密度约 0.0012。</p>'));
+    r.appendChild(title(L('流体区域 Fluid · 浮力', 'Fluid Region · Buoyancy')));
+    r.appendChild(el(`<p class="empty-note">${L('区域上沿是液面。浮力按「流体密度 ÷ 物体密度 × 浸没比例」计算：物体密度小于流体就浮起，大于就沉底。默认水的密度约 0.0012。', 'The top edge of the region is the surface. Buoyancy = fluid density ÷ body density × submerged fraction: bodies less dense than the fluid float, denser ones sink. Default water density ≈ 0.0012.')}</p>`));
     r.appendChild(row(
-      numField('中心 X', 'fx', fluid.x, { step: 5 }),
-      numField('中心 Y', 'fy', fluid.y, { step: 5 }),
+      numField(L('中心 X', 'Center X'), 'fx', fluid.x, { step: 5 }),
+      numField(L('中心 Y', 'Center Y'), 'fy', fluid.y, { step: 5 }),
     ));
     r.appendChild(row(
-      numField('Width 宽度', 'fwidth', fluid.width, { step: 10, min: 20, max: 4000 }),
-      numField('Height 高度', 'fheight', fluid.height, { step: 10, min: 10, max: 2000 }),
+      numField(L('Width 宽度', 'Width'), 'fwidth', fluid.width, { step: 10, min: 20, max: 4000 }),
+      numField(L('Height 高度', 'Height'), 'fheight', fluid.height, { step: 10, min: 10, max: 2000 }),
     ));
-    r.appendChild(numField('Density 流体密度', 'fdensity', fluid.density, { step: 0.0002, min: 0.00005, max: 0.05 }));
-    r.appendChild(sliderField('Drag 水中阻尼', 'fdrag', fluid.drag, 0, 0.2, 0.005));
-    const back = el(`<button class="btn block">返回场景属性</button>`);
+    r.appendChild(numField(L('Density 流体密度', 'Fluid Density'), 'fdensity', fluid.density, { step: 0.0002, min: 0.00005, max: 0.05 }));
+    r.appendChild(sliderField(L('Drag 水中阻尼', 'In-fluid Drag'), 'fdrag', fluid.drag, 0, 0.2, 0.005));
+    const back = el(`<button class="btn block">${L('返回场景属性', 'Back to Scene Properties')}</button>`);
     back.addEventListener('click', () => this.cb.onShowScene());
-    const del = el(`<button class="btn danger block">${icon('trash', 16)} 删除流体区域</button>`);
+    const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除流体区域', ' Delete Fluid Region')}</button>`);
     del.addEventListener('click', () => this.cb.onDeleteFluid(fluid.id));
     r.appendChild(back); r.appendChild(del);
     this._wireNumbers(r, (k, v) => {
@@ -316,22 +323,30 @@ export class Panel {
 export function renderSettings(root, ui, cb) {
   root.innerHTML = '';
   const wrap = document.createElement('div');
-  wrap.appendChild(title('显示'));
-  wrap.appendChild(switchRow('显示网格 Grid', 'showGrid', ui.showGrid !== false));
-  wrap.appendChild(switchRow('速度向量 Vectors', 'showVectors', ui.showVectors === true));
-  wrap.appendChild(switchRow('运动轨迹 Trails', 'showTrails', ui.showTrails === true));
-  wrap.appendChild(title('数据'));
-  const note = el('<p class="empty-note">场景与设置保存在浏览器 localStorage 中，仅在本机有效。导出 JSON 可备份或分享实验场景。</p>');
+  wrap.appendChild(title(L('语言 Language', 'Language')));
+  const langRow = el('<div class="lang-switch"></div>');
+  for (const [code, label] of [['zh', '中文'], ['en', 'English']]) {
+    const b = el(`<button class="btn${getLang() === code ? ' active' : ''}">${label}</button>`);
+    b.addEventListener('click', () => { if (cb.onLanguage) cb.onLanguage(code); });
+    langRow.appendChild(b);
+  }
+  wrap.appendChild(langRow);
+  wrap.appendChild(title(L('显示', 'Display')));
+  wrap.appendChild(switchRow(L('显示网格 Grid', 'Show Grid'), 'showGrid', ui.showGrid !== false));
+  wrap.appendChild(switchRow(L('速度向量 Vectors', 'Show Vectors'), 'showVectors', ui.showVectors === true));
+  wrap.appendChild(switchRow(L('运动轨迹 Trails', 'Show Trails'), 'showTrails', ui.showTrails === true));
+  wrap.appendChild(title(L('数据', 'Data')));
+  const note = el(`<p class="empty-note">${L('场景与设置保存在浏览器 localStorage 中，仅在本机有效。导出 JSON 可备份或分享实验场景。', 'Scenes and settings are stored in this browser\'s localStorage, on this device only. Export JSON to back up or share an experiment.')}</p>`);
   wrap.appendChild(note);
-  const landing = el(`<button class="btn block">${icon('logo', 16)} 显示欢迎页</button>`);
+  const landing = el(`<button class="btn block">${icon('logo', 16)}${L(' 显示欢迎页', ' Show Welcome Page')}</button>`);
   landing.addEventListener('click', () => cb.onShowLanding());
   wrap.appendChild(landing);
-  const clear = el(`<button class="btn danger block">${icon('trash', 16)} 重置数据（恢复初始）</button>`);
+  const clear = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 重置数据（恢复初始）', ' Reset Data (Factory Reset)')}</button>`);
   clear.addEventListener('click', () => cb.onClearAll());
   wrap.appendChild(clear);
-  wrap.appendChild(title('关于'));
+  wrap.appendChild(title(L('关于', 'About')));
   const matterVersion = (typeof window !== 'undefined' && window.Matter && window.Matter.version) || '0.20.0';
-  wrap.appendChild(el(`<p class="empty-note">MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。</p>`));
+  wrap.appendChild(el(`<p class="empty-note">${L(`MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。`, `MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · Fully static (GitHub Pages) · no backend, no API key. Shortcuts: Space run/pause · Ctrl+Z/Y undo/redo · Ctrl+S save · Ctrl+D duplicate body · Arrow keys nudge · R rotate 15° · Delete remove.`)}</p>`));
   root.appendChild(wrap);
   root.querySelectorAll('input[type=checkbox][data-key]').forEach((inp) => {
     inp.addEventListener('change', () => cb.onUISetting(inp.dataset.key, inp.checked));

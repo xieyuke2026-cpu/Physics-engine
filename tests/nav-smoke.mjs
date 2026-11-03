@@ -26,6 +26,7 @@ window.Matter = localRequire('../vendor/matter.min.js');
 window.confirm = () => true;
 window.prompt = () => null;
 window.localStorage.setItem('motionlab.visited.v1', '1'); // skip landing
+window.localStorage.setItem('motionlab.lang', 'zh'); // this suite asserts the Chinese UI
 
 for (const k of ['document', 'localStorage']) globalThis[k] = window[k];
 globalThis.window = window;
@@ -150,6 +151,39 @@ check('nav: opening a card closes the hub', doc.getElementById('sceneNav').hidde
 check('nav: opened scene is loaded in the lab', doc.getElementById('stCount').textContent.includes('9'),
   doc.getElementById('stCount').textContent);
 check('nav: project name follows the scene', doc.getElementById('projectName').value === '我的实验一号');
+
+/* --- v1.24: hub follows the language switch (titles, docs view, preset names) --- */
+click(doc.getElementById('btnScenes'));
+await wait(120);
+click(viewBtn('docs'));
+await wait(60);
+click(doc.getElementById('btnNavSettings'));
+await wait(60);
+const langBtn = (label) => [...doc.querySelectorAll('#settingsBody .lang-switch .btn')].find((b) => b.textContent === label);
+click(langBtn('English'));
+await wait(80);
+check('v1.24: hub title switches to English', doc.getElementById('navTitle').textContent === 'Developer Docs',
+  doc.getElementById('navTitle').textContent);
+check('v1.24: docs view shows the English docs and hides the Chinese ones',
+  !doc.querySelector('.docs[data-lang="en"]').hidden && doc.querySelector('.docs[data-lang="zh"]').hidden);
+click(doc.querySelector('#modalSettings [data-close]'));
+await wait(60);
+click(viewBtn('presets'));
+await wait(60);
+check('v1.24: preset cards show English names',
+  doc.querySelector('#presetList .scene-card-name').textContent.includes("Newton's Cradle"),
+  doc.querySelector('#presetList .scene-card-name').textContent);
+click(viewBtn('docs'));
+await wait(60);
+click(doc.getElementById('btnNavSettings'));
+await wait(60);
+click(langBtn('中文'));
+await wait(80);
+check('v1.24: switching back restores the Chinese hub',
+  doc.getElementById('navTitle').textContent === '开发者文档'
+  && !doc.querySelector('.docs[data-lang="zh"]').hidden);
+click(doc.querySelector('#modalSettings [data-close]'));
+await wait(60);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -2,6 +2,8 @@
    Draws the fine grid, bodies (flat scientific style), selection highlight and
    optional velocity vectors. No DOM rebuilding: one canvas, redrawn per frame. */
 
+import { getLang } from './i18n.js';
+
 export class Camera {
   constructor() { this.x = 0; this.y = 0; this.zoom = 1; }
   worldToScreen(wx, wy, view) { return { x: (wx - this.x) * this.zoom + view.w / 2, y: (wy - this.y) * this.zoom + view.h / 2 }; }
@@ -119,7 +121,7 @@ export class Renderer {
     ctx.setLineDash([]);
     ctx.fillStyle = 'rgba(47,109,179,0.75)';
     ctx.font = `${12 / camera.zoom}px sans-serif`;
-    ctx.fillText('流体 Fluid · 浮力', x + 8 / camera.zoom, y + 16 / camera.zoom);
+    ctx.fillText(getLang() === 'en' ? 'Fluid · Buoyancy' : '流体 Fluid · 浮力', x + 8 / camera.zoom, y + 16 / camera.zoom);
   }
 
   _grid() {
