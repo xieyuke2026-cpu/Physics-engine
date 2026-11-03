@@ -7,6 +7,19 @@
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
+## English
+
+**MotionLab** is a browser-based 2D physics sandbox powered by **Matter.js**: create rigid bodies, tune gravity, friction and elasticity, connect springs and rods, add pairwise gravitation and fluid buoyancy, then save experiments as portable JSON scenes. No build step, no backend — open the page and play, on desktop or tablet.
+
+Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse — copy `js/engine/physics-engine.js` plus `vendor/matter.min.js` into your own project. Features: fixed-timestep simulation with sub-stepping, seeded RNG, named bodies, pairwise gravitation, fluid regions (buoyancy), a formulas library, and spatial queries (region / raycast). A platform-fighter prototype, **PFLab**, is built on the same core.
+
+- **Live demo**: https://xieyuke2026-cpu.github.io/Physics-engine/
+- **Examples**: [Orbital gravitation](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [Fluid buoyancy](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [Seeded Galton board](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html)
+- **Developer docs**: [docs/DEVELOPER.md](docs/DEVELOPER.md) — API reference and integration guide
+- **License**: MIT
+
+中文完整文档在下方 ↓ Full documentation in Chinese below.
+
 一个运行在浏览器中的 2D 物理模拟与实验平台。基于 **Matter.js** 的真实刚体物理：
 重力、碰撞、摩擦、弹性、旋转与不同质量的物体，都可以在画布中创建、拖拽、调参并保存为实验场景。
 
