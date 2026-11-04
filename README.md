@@ -1,9 +1,9 @@
 # MotionLab — 2D Physics Sandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.5.1-blue.svg)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.6.0-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-399%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-402%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -78,6 +78,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 - **v1.23 新增**：万有引力轨道（两两引力下的双行星轨道）、浮力池（软木/木块/铁块按密度浮沉）
 - **v1.25 新增**：磁铁阵列（固定磁铁把磁球按极性分拣、铁球被吸附）、风洞实验（泡沫球被吹进收集区、铁块原地不动）
 - **v1.26 新增**：材质实验室（泡沫/木头/橡胶/冰/铁五种材质的球同坡竞速）、磁铁秋千（S 极摆球被固定 N 极磁铁吸偏，不再直上直下）
+- **v1.27 / 引擎 1.6.0**：性能优化（行为不变）——引擎两两力通道零分配、引力循环按动态/静态分区（静态多的世界配对通道约快 40%）、渲染逐帧零拷贝
 - **v1.10 修复**：过山车回环重做——v1.9 的圆环是封闭的且小球从环下穿过，根本进不去；
   新版改为导杆回环：小球由一根刚性导杆牵引，沿 24 段轨道圆环内侧完整绕行约 1.7 圈后
   逐渐摆动停稳（自由滚动在分段轨道上会因段角卡滞与能量不足无法完成整圈，实测对比后选导杆方案）

@@ -35,6 +35,7 @@ export class Renderer {
     this.trails = new Map();   // dataId -> [{x,y}...] recent centre positions
     this._segs = [];           // reusable constraint-segment buffer (no per-frame alloc)
     this._alive = new Set();   // reusable set for trail bookkeeping
+    this._frameBodies = [];    // reusable per-frame body list (no copy-out per frame)
   }
 
   clearTrails() { this.trails.clear(); }
@@ -60,15 +61,23 @@ export class Renderer {
     ctx.lineJoin = 'round';
 
     // fluid regions sit behind everything else (drawn first, under bodies)
-    if (typeof world.fluids === 'function') {
+    if (typeof world.forEachFluid === 'function') {
+      world.forEachFluid((f) => this._fluid(f, f.id === selectedFluidId));
+    } else if (typeof world.fluids === 'function') {
       for (const f of world.fluids()) this._fluid(f, f.id === selectedFluidId);
     }
     // wind regions share the back layer (above fluids, still under bodies)
-    if (typeof world.winds === 'function') {
+    if (typeof world.forEachWind === 'function') {
+      world.forEachWind((w) => this._wind(w, w.id === selectedWindId));
+    } else if (typeof world.winds === 'function') {
       for (const w of world.winds()) this._wind(w, w.id === selectedWindId);
     }
-    // fetch the body list ONCE per frame (allBodies() copies; trails/vectors reuse it)
-    const bodies = world.allBodies();
+    // fetch the body list ONCE per frame into a reused array (allBodies()
+    // copies; this allocates nothing and trails/vectors reuse the list)
+    const bodies = this._frameBodies;
+    bodies.length = 0;
+    if (typeof world.forEachBody === 'function') world.forEachBody((b) => bodies.push(b));
+    else for (const b of world.allBodies()) bodies.push(b);
     if (showTrails) this._trails(world, bodies);
     else if (this.trails.size) this.trails.clear();
     for (const seg of world.constraintSegments(this._segs)) this._spring(seg);

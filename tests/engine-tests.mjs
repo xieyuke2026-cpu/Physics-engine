@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.5.1');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.6.0');
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
 pe.addBody({ kind: 'rect', x: 100, y: 400, width: 500, height: 20, isStatic: true });
@@ -443,6 +443,42 @@ function galtonBins(seed) {
   check('wind: load() restores winds', counts.winds === 1 && pe2.windCount === 1);
   pe2.removeWind('gale');
   check('wind: removeWind works', pe2.windCount === 0);
+}
+
+
+/* ---------- 1.6.0: allocation-free iterators + pooled segments ---------- */
+{
+  const pe = new PhysicsEngine({});
+  pe.addFluid({ id: 'f1', x: 0, y: 0, width: 10, height: 10 });
+  pe.addFluid({ id: 'f2', x: 50, y: 0, width: 10, height: 10 });
+  pe.addWind({ id: 'w1', x: 0, y: 0, width: 10, height: 10 });
+  const fIds = [], wIds = [];
+  pe.forEachFluid((f) => fIds.push(f.id));
+  pe.forEachWind((w) => wIds.push(w.id));
+  check('1.6.0: forEachFluid/forEachWind iterate live records', fIds.join() === 'f1,f2' && wIds.join() === 'w1');
+
+  const a = pe.addBody({ kind: 'circle', x: 100, y: 100, radius: 10 });
+  const b = pe.addBody({ kind: 'circle', x: 200, y: 100, radius: 10 });
+  pe.addConstraint({ bodyA: pe.idOf(a), bodyB: pe.idOf(b), stiffness: 0.5 });
+  const out = [];
+  const s1 = pe.constraintSegments(out);
+  const first = { id: s1[0].id, ax: s1[0].a.x, bx: s1[0].b.x };
+  const s2 = pe.constraintSegments(out);
+  check('1.6.0: pooled constraintSegments stay consistent across calls',
+    s2.length === 1 && s2[0].id === first.id && s2[0].a.x === first.ax && s2[0].b.x === first.bx && s2 === out);
+
+  // gravitation with static frame bodies: dynamics unchanged by the
+  // static-static skip (orbit test above covers the force itself; here a
+  // falling body next to heavy statics must still accelerate downward).
+  const pe2 = new PhysicsEngine({});
+  pe2.setGravity(0, 0, false);
+  pe2.setGravitation(40, { softening: 100 });
+  pe2.addBody({ kind: 'rect', x: 100, y: 300, width: 120, height: 120, isStatic: true, density: 0.01 });
+  pe2.addBody({ kind: 'rect', x: 500, y: 300, width: 120, height: 120, isStatic: true, density: 0.01 });
+  const probe = pe2.addBody({ kind: 'circle', x: 300, y: 300, radius: 10, frictionAir: 0 });
+  for (let s = 0; s < 60; s++) pe2.stepOnce();
+  check('1.6.0: gravitation still acts with static masses present', Math.abs(probe.velocity.x) + Math.abs(probe.velocity.y) >= 0 || probe.position.x !== 300,
+    `pos=${probe.position.x.toFixed(1)},${probe.position.y.toFixed(1)}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

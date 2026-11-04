@@ -73,6 +73,10 @@ export class PhysicsWorld {
   removeFluid(id) { return this.core.removeFluid(id); }
   fluidById(id) { return this.core.fluidById(id); }
   fluids() { return this.core.fluids(); }
+  /** Allocation-free live iteration for the renderer (1.6.0 core). */
+  forEachBody(fn) { this.core.forEachBody(fn); }
+  forEachFluid(fn) { this.core.forEachFluid(fn); }
+  forEachWind(fn) { this.core.forEachWind(fn); }
   get fluidCount() { return this.core.fluidCount; }
   /** Replace a fluid's fields (the engine has no in-place update). */
   updateFluid(id, patch) {

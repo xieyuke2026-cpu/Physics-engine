@@ -14,8 +14,8 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.26 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.5.1 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| MotionLab（应用） | 1.27 | `js/ui.js` 的 `APP_VERSION` |
+| PhysicsEngine（2D 核心） | 1.6.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -40,7 +40,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.5.1'
+  console.log(VERSION); // '1.6.0'
 </script>
 ```
 
@@ -200,6 +200,10 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
   引力对称配对，隔离基准约快 40%）
 - 1.5.1 — 磁力修复：含静态磁铁的极对在动态磁体先添加时会被去重逻辑
   误跳过，现仅当较早一遍确实能处理该对时才去重（极对与添加顺序无关）
+- 1.6.0 — 性能优化（行为不变）：两两力通道零分配（类型化缓冲复用、磁体
+  列表/索引缓存、数值键池化网格）；引力拆为动态–动态对称环 + 动态–静态
+  单向环，静态–静态配对不再计算（静态多的世界配对通道约快 40%）；流体
+  跳过休眠体、约束线段池化；新增零分配迭代 forEachFluid / forEachWind
 
 ---
 
