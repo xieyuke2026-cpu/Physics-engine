@@ -60,7 +60,7 @@ check('boot: state is paused', stState().includes('已暂停'), stState());
 check('boot: scene panel visible', doc.getElementById('panelBody').textContent.includes('场景属性'));
 check('boot: toolbar icons rendered (svg)', doc.querySelectorAll('#topbar svg').length >= 8,
   `svgs=${doc.querySelectorAll('#topbar svg').length}`);
-check('boot: 10 tool buttons with svg icons', doc.querySelectorAll('#toolrail .tool-btn svg').length === 10,
+check('boot: 11 tool buttons with svg icons', doc.querySelectorAll('#toolrail .tool-btn svg').length === 11,
   `svgs=${doc.querySelectorAll('.tool-btn svg').length}`);
 check('renderer is drawing frames', drawCalls > 50, `drawCalls=${drawCalls}`);
 
@@ -141,7 +141,7 @@ check('scenes modal lists saved scene', doc.getElementById('sceneList').textCont
 
 /* --- v1.1/v1.6: presets (cards with overview thumbnails since 1.6) --- */
 const presetBtns = doc.querySelectorAll('#presetList .preset-card');
-check('v1.9: sixteen preset cards rendered', presetBtns.length === 16, `got ${presetBtns.length}`);
+check('v1.9: eighteen preset cards rendered', presetBtns.length === 18, `got ${presetBtns.length}`);
 check('v1.6: preset cards carry overview thumbnails', !!presetBtns[0].querySelector('canvas.thumb'));
 click(presetBtns[0].querySelector('.mini-btn')); // Newton's cradle (auto-runs)
 await wait(500);
@@ -198,8 +198,8 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.25')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.5.0')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.26')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.5.1')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
@@ -237,7 +237,7 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
 {
   const toolBtns = [...doc.querySelectorAll('#toolrail .tool-btn')];
   check('v1.23: every tool-rail button carries a hover tip (data-tip)',
-    toolBtns.length === 10 && toolBtns.every((b) => (b.getAttribute('data-tip') || '').length > 10),
+    toolBtns.length === 11 && toolBtns.every((b) => (b.getAttribute('data-tip') || '').length > 10),
     `buttons=${toolBtns.length}`);
   check('v1.23: scene panel exposes the gravitation entry',
     panelBody.textContent.includes('万有引力 Gravitation G') && !!panelBody.querySelector('input[data-key="gravitation"]'));
@@ -309,6 +309,51 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   check('v1.25: scene panel offers adding a wind region',
     doc.getElementById('panelBody').textContent.includes('添加风场区域'),
     doc.getElementById('panelBody').textContent.slice(0, 80));
+}
+
+/* --- v1.26: magnet entry points, material presets, draggable regions --- */
+{
+  const panelBody = doc.getElementById('panelBody');
+  const countNum = () => Number(stCount().match(/\d+/)[0]);
+  // scene-panel button adds a fixed N magnet and selects it
+  check('v1.26: scene panel offers adding a magnet',
+    panelBody.textContent.includes('添加磁铁'), panelBody.textContent.slice(0, 80));
+  const before = countNum();
+  click([...panelBody.querySelectorAll('.btn')].find((b) => b.textContent.includes('添加磁铁')));
+  await wait(350); // status bar refreshes on a 250ms interval
+  check('v1.26: add-magnet button creates a body', countNum() === before + 1, `${before} -> ${countNum()}`);
+  const magInput = panelBody.querySelector('[data-key="magnet"]');
+  check('v1.26: new magnet is selected with pole +100', !!magInput && magInput.value === '100',
+    magInput ? magInput.value : 'no magnet input');
+  // one-tap material preset writes the whole parameter set
+  click(panelBody.querySelector('[data-mat="iron"]'));
+  await wait(60);
+  const dens = panelBody.querySelector('[data-key="density"]');
+  check('v1.26: iron material preset sets density 0.008', !!dens && dens.value === '0.008',
+    dens ? dens.value : 'no density input');
+  // magnet tool places a magnet where tapped (world 640,90 <- screen 600,162)
+  click(doc.querySelector('[data-tool="magnet"]'));
+  const before2 = countNum();
+  pointer(canvas, 'pointerdown', 600, 162); pointer(canvas, 'pointerup', 600, 162);
+  await wait(350);
+  check('v1.26: magnet tool creates a magnet on tap', countNum() === before2 + 1, `${before2} -> ${countNum()}`);
+  check('v1.26: tool-placed magnet is selected with pole +100',
+    panelBody.querySelector('[data-key="magnet"]')?.value === '100');
+  // wind regions can be dragged on the canvas (select tool)
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  await wait(60);
+  click([...panelBody.querySelectorAll('.btn')].find((b) => b.textContent.includes('添加风场区域')));
+  await wait(60);
+  const wx0 = Number(panelBody.querySelector('[data-key="wx"]')?.value);
+  // default wind centre (640,300) -> screen (600,350); drag by (+45,+27) px
+  pointer(canvas, 'pointerdown', 480, 300);
+  pointer(canvas, 'pointermove', 525, 327);
+  pointer(canvas, 'pointerup', 525, 327);
+  await wait(60);
+  const wx1 = Number(panelBody.querySelector('[data-key="wx"]')?.value);
+  const wy1 = Number(panelBody.querySelector('[data-key="wy"]')?.value);
+  check('v1.26: dragging a wind region moves its centre',
+    wx1 > wx0 + 35 && wy1 > 315, `wx ${wx0} -> ${wx1}, wy -> ${wy1}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

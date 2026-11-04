@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.25';
+export const APP_VERSION = '1.26';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -57,7 +57,7 @@ export class Panel {
    *        onBodyAction(action), onSelectBody(id), onDeleteBody(id), onGravityPreset(key),
    *        onBodyRename(name), onAddFluid(), onSelectFluid(id), onDeleteFluid(id),
    *        onFluidProp(id,key,value), onAddWind(), onSelectWind(id), onDeleteWind(id),
-   *        onWindProp(id,key,value), onShowScene() } */
+   *        onWindProp(id,key,value), onShowScene(), onAddMagnet(), onMaterialPreset(key) } */
   constructor(root, cb) {
     this.root = root;
     this.cb = cb;
@@ -128,7 +128,7 @@ export class Panel {
       numField(L('引力强度 G', 'Gravitation G'), 'gravitation', settings.gravitation || 0, { step: 1, min: 0, max: 500 }),
       numField(L('软化 Softening', 'Softening'), 'gravitationSoftening', settings.gravitationSoftening ?? 100, { step: 10, min: 0, max: 2000 }),
     ));
-    r.appendChild(el(`<p class="empty-note">${L('流体区域提供浮力：密度比流体小的物体浮起、大的沉底。点「添加」放一个默认水池，再点选蓝色区域编辑它的密度与范围。', 'Fluid regions provide buoyancy: bodies less dense than the fluid float, denser ones sink. Add a default pool, then click the blue region to edit its density and size.')}</p>`));
+    r.appendChild(el(`<p class="empty-note">${L('流体区域提供浮力：密度比流体小的物体浮起、大的沉底。点「添加」放一个默认水池，再点选蓝色区域编辑它的密度与范围；区域在画布上可以直接拖动改位置。', 'Fluid regions provide buoyancy: bodies less dense than the fluid float, denser ones sink. Add a default pool, then click the blue region to edit its density and size — and drag regions on the canvas to move them.')}</p>`));
     const addFluid = el(`<button class="btn block">${icon('plus', 16)}${L(' 添加流体区域（浮力）', ' Add Fluid Region (Buoyancy)')}</button>`);
     addFluid.addEventListener('click', () => this.cb.onAddFluid());
     r.appendChild(addFluid);
@@ -144,7 +144,7 @@ export class Panel {
       });
       r.appendChild(fwrap);
     }
-    r.appendChild(el(`<p class="empty-note">${L('风场区域是一块带方向的空气：区域内的物体被吹向风速的方向，越轻吹得越快，密实铁块几乎不动。点「添加」放一块默认向右吹的风场，再点选区域编辑风向与范围。物体的磁性在各自的属性里设置（材质一节）。', 'A wind region is a block of moving air: bodies inside are blown toward the wind velocity — lighter bodies go faster, dense iron barely stirs. Add a default rightward field, then click the region to edit its direction and size. Magnetism is set per body (Material section).')}</p>`));
+    r.appendChild(el(`<p class="empty-note">${L('风场区域是一块带方向的空气：区域内的物体被吹向风速的方向，越轻吹得越快，密实铁块几乎不动。点「添加」放一块默认向右吹的风场，再点选区域编辑风向与范围；区域在画布上可以直接拖动改位置。', 'A wind region is a block of moving air: bodies inside are blown toward the wind velocity — lighter bodies go faster, dense iron barely stirs. Add a default rightward field, then click the region to edit its direction and size — regions can be dragged on the canvas to move them.')}</p>`));
     const addWind = el(`<button class="btn block">${icon('plus', 16)}${L(' 添加风场区域（风）', ' Add Wind Region')}</button>`);
     addWind.addEventListener('click', () => this.cb.onAddWind());
     r.appendChild(addWind);
@@ -160,6 +160,10 @@ export class Panel {
       });
       r.appendChild(wwrap);
     }
+    r.appendChild(el(`<p class="empty-note">${L('磁铁是一个固定不动的圆：自带磁极，会吸住或推开附近的磁性物体与铁质物体。点「添加」在画布中心放一个 N 极磁铁（+100），选中后在它的「材质」一节改磁性数值就能换成 S 极；左侧工具栏的磁铁工具也可以直接在画布上放。', 'A magnet is a fixed circle with a pole: it attracts or repels nearby magnetic and iron bodies. Add one at the canvas centre (N pole, +100), then select it and change the Magnetism value in its Material section to flip it to S — or place magnets directly with the Magnet tool in the left rail.')}</p>`));
+    const addMagnet = el(`<button class="btn block">${icon('magnet', 16)}${L(' 添加磁铁（N 极）', ' Add Magnet (N pole)')}</button>`);
+    addMagnet.addEventListener('click', () => this.cb.onAddMagnet());
+    r.appendChild(addMagnet);
     r.appendChild(title(L('显示', 'Display')));
     r.appendChild(switchRow(L('显示网格 Grid', 'Show Grid'), 'showGrid', settings.showGrid));
     r.appendChild(switchRow(L('速度向量 Vectors', 'Show Vectors'), 'showVectors', settings.showVectors));
@@ -256,6 +260,17 @@ export class Panel {
       momentum: liveRo.querySelector('[data-ro="momentum"]'),
     };
     r.appendChild(title(L('材质 Material', 'Material')));
+    const matRow = el('<div class="chip-row"></div>');
+    const matDefs = [
+      ['foam', L('泡沫', 'Foam')], ['wood', L('木头', 'Wood')], ['rubber', L('橡胶', 'Rubber')], ['ice', L('冰', 'Ice')], ['iron', L('铁', 'Iron')],
+    ];
+    for (const [key, label] of matDefs) {
+      const c = el(`<button class="chip" data-mat="${key}">${label}</button>`);
+      c.addEventListener('click', () => this.cb.onMaterialPreset(key));
+      matRow.appendChild(c);
+    }
+    r.appendChild(matRow);
+    r.appendChild(el(`<p class="empty-note">${L('一键套用材质预设（密度 / 摩擦 / 弹性 / 空气阻力一组写入），或在下面逐项手调。', 'One-tap material presets (density / friction / restitution / air friction written as a set), or fine-tune each value below.')}</p>`));
     r.appendChild(numField(L('Density 密度', 'Density'), 'density', data.density, { step: 0.0005, min: 0.0001, max: 0.05 }));
     r.appendChild(sliderField(L('Friction 摩擦力', 'Friction'), 'friction', data.friction, 0, 1, 0.01));
     r.appendChild(sliderField(L('Restitution 弹性', 'Restitution'), 'restitution', data.restitution, 0, 1, 0.01));
@@ -299,7 +314,7 @@ export class Panel {
     this.mode = 'wind'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = wind.id;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('风场区域 Wind · 风', 'Wind Region')));
-    r.appendChild(el(`<p class="empty-note">${L('区域内的物体被吹向风速 (vx, vy) 的方向：密度越小吹得越快（按 0.0012 ÷ 物体密度 放大），密实重物几乎不动。负数表示向左/向上吹。强度 Power 整体放大或减弱这个效果。', 'Bodies inside are blended toward the wind velocity (vx, vy): the lower a body\'s density, the faster it goes (scaled by 0.0012 ÷ body density); dense blocks barely stir. Negative values blow left/up. Power scales the whole effect.')}</p>`));
+    r.appendChild(el(`<p class="empty-note">${L('区域内的物体被吹向风速 (vx, vy) 的方向：密度越小吹得越快（按 0.0012 ÷ 物体密度 放大），密实重物几乎不动。负数表示向左/向上吹。强度 Power 整体放大或减弱这个效果。也可以直接在画布上拖动这块区域来移动它。', 'Bodies inside are blended toward the wind velocity (vx, vy): the lower a body\'s density, the faster it goes (scaled by 0.0012 ÷ body density); dense blocks barely stir. Negative values blow left/up. Power scales the whole effect. You can also drag this region on the canvas to move it.')}</p>`));
     r.appendChild(row(
       numField(L('中心 X', 'Center X'), 'wx', wind.x, { step: 5 }),
       numField(L('中心 Y', 'Center Y'), 'wy', wind.y, { step: 5 }),
@@ -329,7 +344,7 @@ export class Panel {
     this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id; this.selectedWindId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('流体区域 Fluid · 浮力', 'Fluid Region · Buoyancy')));
-    r.appendChild(el(`<p class="empty-note">${L('区域上沿是液面。浮力按「流体密度 ÷ 物体密度 × 浸没比例」计算：物体密度小于流体就浮起，大于就沉底。默认水的密度约 0.0012。', 'The top edge of the region is the surface. Buoyancy = fluid density ÷ body density × submerged fraction: bodies less dense than the fluid float, denser ones sink. Default water density ≈ 0.0012.')}</p>`));
+    r.appendChild(el(`<p class="empty-note">${L('区域上沿是液面。浮力按「流体密度 ÷ 物体密度 × 浸没比例」计算：物体密度小于流体就浮起，大于就沉底。默认水的密度约 0.0012。也可以直接在画布上拖动这块区域来移动它。', 'The top edge of the region is the surface. Buoyancy = fluid density ÷ body density × submerged fraction: bodies less dense than the fluid float, denser ones sink. Default water density ≈ 0.0012. You can also drag this region on the canvas to move it.')}</p>`));
     r.appendChild(row(
       numField(L('中心 X', 'Center X'), 'fx', fluid.x, { step: 5 }),
       numField(L('中心 Y', 'Center Y'), 'fy', fluid.y, { step: 5 }),

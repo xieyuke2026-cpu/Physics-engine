@@ -154,6 +154,31 @@ function scheduleAutosave() {
 }
 
 /* ---------------- panel ---------------- */
+/** One-tap material presets for the body panel (1.26): each writes a full
+ *  density / friction / restitution / air-friction set in one go. Values
+ *  match the materials used across the built-in presets. */
+const MATERIAL_PRESETS = {
+  foam: { label: '泡沫 Foam', density: 0.0003, friction: 0.3, restitution: 0.4, frictionAir: 0.002 },
+  wood: { label: '木头 Wood', density: 0.001, friction: 0.45, restitution: 0.2, frictionAir: 0.001 },
+  rubber: { label: '橡胶 Rubber', density: 0.0011, friction: 0.9, restitution: 0.85, frictionAir: 0.001 },
+  ice: { label: '冰 Ice', density: 0.0009, friction: 0.03, restitution: 0.05, frictionAir: 0.0005 },
+  iron: { label: '铁 Iron', density: 0.008, friction: 0.5, restitution: 0.1, frictionAir: 0.001 },
+};
+
+/** Place a fixed N-pole magnet and select it (shared by the scene-panel
+ *  button; the tool rail places magnets at the tap point instead). */
+function addMagnetAt(x, y, radius = 26) {
+  const b = world.addBody(bodyData({
+    type: 'circle', x, y, radius, isStatic: true, friction: 0.4,
+    density: 0.008, magnet: 100, label: 'Magnet N 磁铁',
+  }));
+  selectedId = world.dataIdOf(b);
+  selectedFluidId = null; selectedWindId = null;
+  refreshPanel(); pushHistorySoon(); scheduleAutosave();
+  toast(t('msg.magnetAdded'));
+  return b;
+}
+
 const panel = new Panel($('panelBody'), {
   onBodyProp(key, value) {
     const b = selectedBody(); if (!b) return;
@@ -275,6 +300,23 @@ const panel = new Panel($('panelBody'), {
     pushHistorySoon(); scheduleAutosave();
   },
   onShowScene() { selectedFluidId = null; selectedWindId = null; refreshPanel(); },
+  onAddMagnet() {
+    // Centre of the world stage (the camera frames 0..1280 × 0..600).
+    setTool('select');
+    addMagnetAt(640, 280);
+  },
+  onMaterialPreset(key) {
+    const b = selectedBody(); if (!b) return;
+    const m = MATERIAL_PRESETS[key]; if (!m) return;
+    world.setDensity(b, m.density);
+    world.setFriction(b, m.friction);
+    world.setRestitution(b, m.restitution);
+    world.setFrictionAir(b, m.frictionAir);
+    panel.selectedId = null; panel.mode = null; // force form rebuild with new values
+    refreshPanel();
+    pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.materialSet', { name: m.label }));
+  },
 });
 
 /** Topmost fluid region containing a world point, or null. */
@@ -459,7 +501,7 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   const w = toWorld(e);
-  if (tool === 'circle' || tool === 'rectangle' || tool === 'polygon' || tool === 'triangle' || tool === 'line') {
+  if (tool === 'circle' || tool === 'rectangle' || tool === 'polygon' || tool === 'triangle' || tool === 'line' || tool === 'magnet') {
     gesture = { kind: 'create', start: w, cur: w };
     updatePreview();
     return;
@@ -519,14 +561,18 @@ canvas.addEventListener('pointerdown', (e) => {
       gesture = { kind: 'pan', sx: e.clientX, sy: e.clientY, camX: camera.x, camY: camera.y };
     } else {
       // no body hit: a wind or fluid region can still be selected for
-      // editing (winds are drawn above fluids, so they win the pick)
+      // editing (winds are drawn above fluids, so they win the pick) —
+      // and since 1.26 it can be dragged on the canvas to move it.
       const wn = pickWind(w);
       const f = wn ? null : pickFluid(w);
       selectedId = null;
       selectedWindId = wn ? wn.id : null;
       selectedFluidId = f ? f.id : null;
       refreshPanel();
-      gesture = { kind: 'none' };
+      const rec = wn || f;
+      gesture = rec
+        ? { kind: 'drag-region', regionType: wn ? 'wind' : 'fluid', rec, offX: w.x - rec.x, offY: w.y - rec.y, moved: false }
+        : { kind: 'none' };
     }
   }
 });
@@ -546,7 +592,13 @@ canvas.addEventListener('pointermove', (e) => {
   }
   const w = toWorld(e);
   if (gesture.kind === 'create') { gesture.cur = w; updatePreview(); }
-  else if (gesture.kind === 'drag-body') {
+  else if (gesture.kind === 'drag-region') {
+    gesture.moved = true;
+    const nx = Math.round(w.x - gesture.offX), ny = Math.round(w.y - gesture.offY);
+    if (gesture.regionType === 'wind') world.updateWind(gesture.rec.id, { x: nx, y: ny });
+    else world.updateFluid(gesture.rec.id, { x: nx, y: ny });
+    gesture.rec.x = nx; gesture.rec.y = ny; // local copy: keep the grab offset stable
+  } else if (gesture.kind === 'drag-body') {
     gesture.moved = true;
     if (running && world.dragging) { world.moveDrag(w.x, w.y); dragPoint = { x: w.x, y: w.y, bodyX: gesture.body.position.x, bodyY: gesture.body.position.y }; }
     else if (!running) world.setPosition(gesture.body, w.x - gesture.offX, w.y - gesture.offY);
@@ -562,6 +614,10 @@ function endPointer(e) {
   if (!gesture) return;
   if (gesture.kind === 'pinch') { if (pointers.size < 2) gesture = null; return; }
   if (gesture.kind === 'create') finalizeCreate();
+  if (gesture.kind === 'drag-region' && gesture.moved) {
+    panel.mode = null; // force the region editor to rebuild with the new centre
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+  }
   if (gesture.kind === 'drag-body') {
     world.endDrag(); dragPoint = null;
     if (gesture.moved) { pushHistorySoon(); scheduleAutosave(); }
@@ -584,7 +640,7 @@ function updatePreview() {
   if (!gesture || gesture.kind !== 'create') { preview = null; return; }
   const { start: s, cur: c } = gesture;
   const dx = c.x - s.x, dy = c.y - s.y;
-  if (tool === 'circle' || tool === 'polygon' || tool === 'triangle') preview = { kind: 'circle', x: s.x, y: s.y, r: Math.max(6, Math.hypot(dx, dy)) };
+  if (tool === 'circle' || tool === 'polygon' || tool === 'triangle' || tool === 'magnet') preview = { kind: 'circle', x: s.x, y: s.y, r: Math.max(6, Math.hypot(dx, dy)) };
   else if (tool === 'line') preview = { kind: 'line', x1: s.x, y1: s.y, x2: c.x, y2: c.y };
   else preview = { kind: 'rectangle', x: (s.x + c.x) / 2, y: (s.y + c.y) / 2, w: Math.max(6, Math.abs(dx)), h: Math.max(6, Math.abs(dy)) };
 }
@@ -595,6 +651,7 @@ function finalizeCreate() {
   const dist = Math.hypot(dx, dy);
   let d = null;
   if (tool === 'circle') d = bodyData({ type: 'circle', x: s.x, y: s.y, radius: dist > 6 ? dist : 30, restitution: 0.4, label: 'Ball' });
+  else if (tool === 'magnet') d = bodyData({ type: 'circle', x: s.x, y: s.y, radius: dist > 6 ? dist : 26, isStatic: true, friction: 0.4, density: 0.008, magnet: 100, label: 'Magnet N 磁铁' });
   else if (tool === 'polygon') d = bodyData({ type: 'polygon', x: s.x, y: s.y, radius: dist > 6 ? dist : 34, sides: 6, label: 'Polygon' });
   else if (tool === 'triangle') d = bodyData({ type: 'polygon', x: s.x, y: s.y, radius: dist > 6 ? dist : 36, sides: 3, label: 'Triangle' });
   else if (tool === 'rectangle') {
@@ -613,6 +670,7 @@ function finalizeCreate() {
   selectedFluidId = null;
   setTool('select');
   refreshPanel(); pushHistorySoon(); scheduleAutosave();
+  if (d.magnet) toast(t('msg.magnetAdded'));
 }
 
 canvas.addEventListener('wheel', (e) => {

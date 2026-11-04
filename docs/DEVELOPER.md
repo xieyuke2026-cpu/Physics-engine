@@ -14,8 +14,8 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.25 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.5.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| MotionLab（应用） | 1.26 | `js/ui.js` 的 `APP_VERSION` |
+| PhysicsEngine（2D 核心） | 1.5.1 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -40,7 +40,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.5.0'
+  console.log(VERSION); // '1.5.1'
 </script>
 ```
 
@@ -198,6 +198,8 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 - 1.5.0 — 磁力（`magnet` 描述符字段、极性互斥/相吸、吸铁、范围裁剪）、
   风场区域（`addWind`）、两两力通道优化（统一遍历 + 类型化数组 +
   引力对称配对，隔离基准约快 40%）
+- 1.5.1 — 磁力修复：含静态磁铁的极对在动态磁体先添加时会被去重逻辑
+  误跳过，现仅当较早一遍确实能处理该对时才去重（极对与添加顺序无关）
 
 ---
 

@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.5.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.5.1 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -47,6 +47,9 @@
              a faster pairwise-force pass (positions/masses hoisted into
              typed arrays once per step, one unified pass for gravitation
              + magnetism, uniform-grid range culling for magnet pairs)
+     1.5.1 — magnetism fix: a pole pair involving a static magnet is no
+             longer skipped when the dynamic pole was added first (the
+             pair-dedup now only applies when the earlier pass can run)
    ========================================================================== */
 
 let _M = null;
@@ -67,7 +70,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.5.0';
+export const VERSION = '1.5.1';
 
 /* ============================================================================
    Formulas — pure physics helpers (no engine state).
@@ -709,8 +712,12 @@ export class PhysicsEngine {
             const tgt = arr[ti];
             if (tgt.isStatic) continue; // statics exert (as sources) but never move
             const tm = tgt.plugin.pe.desc.magnet;
-            // magnet–magnet pairs are handled once, from the earlier source
-            if (tm !== 0 && ordinal.get(tgt) < ordinal.get(src)) continue;
+            // Magnet–magnet pairs are handled once, from the earlier source —
+            // but only when that earlier pass can actually process the pair:
+            // a static target is skipped above, so when the source is static
+            // the pair must be handled HERE even if the target was added
+            // earlier (1.5.1 fix: pole pairs no longer depend on add order).
+            if (tm !== 0 && !src.isStatic && ordinal.get(tgt) < ordinal.get(src)) continue;
             const dx = px[ti] - px[si], dy = py[ti] - py[si];
             const dSq = dx * dx + dy * dy;
             if (dSq > rangeSq || dSq < 1e-9 || ms[ti] <= 0) continue;

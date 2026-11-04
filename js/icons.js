@@ -42,6 +42,7 @@ const PATHS = {
   flip: '<path d="M4 8.5h13M13.5 4.8 17.2 8.5l-3.7 3.7M20 15.5H7M10.5 11.8 6.8 15.5l3.7 3.7"/>',
   lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="1.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
   layers: '<path d="m12 3.8 8.5 4.7L12 13.2 3.5 8.5Z"/><path d="m4.8 12.8 7.2 4 7.2-4M4.8 16.8l7.2 4 7.2-4"/>',
+  magnet: '<path d="M6.5 4v6.5a5.5 5.5 0 0 0 11 0V4"/><path d="M6.5 4h3.6M13.9 4h3.6M6.5 7.8h3.6M13.9 7.8h3.6"/>',
 };
 
 export function icon(name, size = 20) {
@@ -52,9 +53,9 @@ export function icon(name, size = 20) {
 
 export const TOOL_ICONS = {
   select: 'select', move: 'move', circle: 'circle', rectangle: 'rectangle',
-  polygon: 'polygon', triangle: 'triangle', line: 'line', spring: 'spring', blast: 'burst', delete: 'trash',
+  polygon: 'polygon', triangle: 'triangle', line: 'line', magnet: 'magnet', spring: 'spring', blast: 'burst', delete: 'trash',
 };
 export const TOOL_LABELS = {
   select: '选择', move: '移动', circle: '圆形', rectangle: '矩形',
-  polygon: '多边形', triangle: '三角形', line: '线段', spring: '弹簧', blast: '冲击波', delete: '删除',
+  polygon: '多边形', triangle: '三角形', line: '线段', magnet: '磁铁', spring: '弹簧', blast: '冲击波', delete: '删除',
 };

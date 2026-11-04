@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- MotionLab 1.25 -->
+<!-- MotionLab 1.26 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.25">
+<link rel="stylesheet" href="css/style.css?v=1.26">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -61,7 +61,7 @@
   <div id="main">
     <!-- ===== Left tool rail ===== -->
     <nav id="toolrail" aria-label="工具">
-      <button class="tool-btn" data-tool="select" data-i18n-title="toolT.select" data-i18n-tip="tool.select" title="选择：点选物体查看参数，拖拽移动物体" data-tip="选择 — 点选物体看参数 · 拖拽移动物体 · 点蓝色流体区编辑浮力"></button>
+      <button class="tool-btn" data-tool="select" data-i18n-title="toolT.select" data-i18n-tip="tool.select" title="选择：点选物体查看参数，拖拽移动物体" data-tip="选择 — 点选物体看参数 · 拖拽移动物体 · 拖拽流体/风场区域移动位置"></button>
       <button class="tool-btn" data-tool="move" data-i18n-title="toolT.move" data-i18n-tip="tool.move" title="移动：拖拽物体或平移画布" data-tip="移动 — 拖拽物体移动 · 拖拽空白平移画布 · 滚轮 / 双指缩放"></button>
       <div class="rail-sep"></div>
       <button class="tool-btn" data-tool="circle" data-i18n-title="toolT.circle" data-i18n-tip="tool.circle" title="圆形：在画布上拖拽画出圆形" data-tip="圆形 — 在画布上拖拽画圆，松手创建（点按直接放一个）"></button>
@@ -69,6 +69,7 @@
       <button class="tool-btn" data-tool="polygon" data-i18n-title="toolT.polygon" data-i18n-tip="tool.polygon" title="多边形：拖拽确定半径，创建正六边形" data-tip="多边形 — 拖拽确定半径，创建正六边形"></button>
       <button class="tool-btn" data-tool="triangle" data-i18n-title="toolT.triangle" data-i18n-tip="tool.triangle" title="三角形：拖拽确定大小，创建三角形" data-tip="三角形 — 拖拽确定大小，创建三角形"></button>
       <button class="tool-btn" data-tool="line" data-i18n-title="toolT.line" data-i18n-tip="tool.line" title="静态线段：拖拽画出斜坡，始终为静态" data-tip="静态线段 — 拖拽画出斜坡（始终静态），松手创建"></button>
+      <button class="tool-btn" data-tool="magnet" data-i18n-title="toolT.magnet" data-i18n-tip="tool.magnet" title="磁铁：在画布上点按或拖拽，放一个固定的 N 极磁铁" data-tip="磁铁 — 点按放一个固定磁铁（N 极），拖拽定大小；选中后在材质里改极性"></button>
       <div class="rail-sep"></div>
       <button class="tool-btn" data-tool="spring" data-i18n-title="toolT.spring" data-i18n-tip="tool.spring" title="弹簧 / 连杆：依次点两个物体连接，点空白为固定锚点" data-tip="弹簧 / 连杆 — 先点起点物体，再点第二个物体；点空白 = 固定锚点"></button>
       <button class="tool-btn" data-tool="blast" data-i18n-title="toolT.blast" data-i18n-tip="tool.blast" title="冲击波：在画布上点按，推开附近物体" data-tip="冲击波 — 在画布上点按，产生冲击波推开附近物体"></button>
@@ -274,7 +275,7 @@
             <li><b>流体浮力</b>（1.4.0）：<code>addFluid({ x, y, width, height, density, drag })</code> 定义流体区域（中心坐标，上沿为液面），物体按 密度比×浸没比例 受到浮力与水中阻尼——轻者浮、重者沉；<code>removeFluid(id)</code> 移除，快照携带流体</li>
             <li><b>磁力</b>（1.5.0）：描述符字段 <code>magnet</code>（−100..100，正为 N 极、负为 S 极）——同极相斥、异极相吸，磁铁还会吸引无磁性的铁质物体；作用范围 320，动量守恒。<code>setMagnetism(K, { range, softening })</code> 全局调参/关闭，<code>setMagnet(body, v)</code> 改单个物体，公式版为 <code>Formulas.magneticForce</code></li>
             <li><b>风场</b>（1.5.0）：<code>addWind({ x, y, width, height, vx, vy, power })</code> 定义风场区域（中心坐标），区域内物体被吹向风速方向，越轻吹得越快、铁块几乎不动；<code>removeWind(id)</code> 移除，快照携带风场。1.5.0 同时优化了两两力通道（引力+磁力统一遍历，隔离基准约快 40%）</li>
-            <li><b>在实验室里直接用</b>（1.23 起，1.25 扩充）：点画布空白处，右侧「场景属性」面板的「世界效应」一节可调万有引力 G、添加并编辑流体与风场区域；点选任意物体后，属性面板顶部的「名称」框可改名，「材质」一节可设磁性；顶部「分享」按钮把整个场景压进一条链接，对方打开即进入该场景；「我的项目」主页工具栏有「导入场景」入口；另有「万有引力轨道」「浮力池」「磁铁阵列」「风洞实验」等预设可直接载入体验</li>
+            <li><b>在实验室里直接用</b>（1.23 起，1.25/1.26 扩充）：点画布空白处，右侧「场景属性」面板的「世界效应」一节可调万有引力 G、添加并编辑流体与风场区域；流体/风场区域在画布上可以直接拖动改位置。左侧工具栏的「磁铁」工具（或世界效应一节的按钮）能直接放固定磁铁，点选任意物体后还可改名、在「材质」一节设磁性，或一键套用泡沫/木头/橡胶/冰/铁材质预设；顶部「分享」按钮把整个场景压进一条链接，对方打开即进入该场景；「我的项目」主页工具栏有「导入场景」入口；另有「万有引力轨道」「浮力池」「磁铁阵列」「风洞实验」「材质实验室」「磁铁秋千」等预设可直接载入体验</li>
             <li><b>公式库</b>（1.4.0）：<code>Formulas</code> 是纯函数集：动能、动量、冲量、万有引力、轨道/逃逸速度、胡克定律、单摆周期、浮力、阻力、摩擦、抛射程、向心加速度等；引擎实例还有现成的 <code>bodyKineticEnergy()</code> / <code>totalMomentum()</code> / <code>centerOfMass()</code> 量活世界</li>
             <li><b>稳定性</b>（1.4.0）：<code>PhysicsEngine.validateDescriptor(desc)</code> 静态校验描述符并列出问题；位置/速度等 setter 忽略 NaN 等非法输入，不让一个坏值毒化整个世界；构造选项 <code>maxSpeed</code> 给速度封顶，防单次失控冲量把场景炸穿</li>
             <li><b>交互</b>：<code>pick(x, y)</code> 拾取；<code>beginDrag(body, x, y)</code> / <code>moveDrag(x, y)</code> / <code>endDrag()</code> 物理拖拽（可甩掷）；<code>onCollision((a, b, pair) =&gt; …)</code> 碰撞回调</li>
@@ -348,7 +349,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
             <li><b>Fluid buoyancy</b> (1.4.0): <code>addFluid({ x, y, width, height, density, drag })</code> defines a fluid region (center coordinates; the top edge is the surface). Bodies feel buoyancy ∝ density ratio × submerged fraction, plus in-fluid drag — light bodies float, heavy ones sink. <code>removeFluid(id)</code> removes a region; fluids persist in snapshots.</li>
             <li><b>Magnetism</b> (1.5.0): the descriptor field <code>magnet</code> (−100..100; positive = N pole, negative = S pole) — like poles repel, opposite poles attract, and magnets pull unmagnetised iron bodies; range 320, momentum-conserving. Tune or disable globally with <code>setMagnetism(K, { range, softening })</code>, change one body with <code>setMagnet(body, v)</code>; the pure form is <code>Formulas.magneticForce</code>.</li>
             <li><b>Wind fields</b> (1.5.0): <code>addWind({ x, y, width, height, vx, vy, power })</code> defines a wind region (center coordinates); bodies inside are blown toward the wind velocity — lighter bodies go faster, iron barely stirs. <code>removeWind(id)</code> removes a region; winds persist in snapshots. 1.5.0 also speeds up the pairwise-force pass (one unified traversal for gravitation + magnetism, ≈40% faster on an isolated benchmark).</li>
-            <li><b>Use it right in the lab</b> (1.23, expanded in 1.25): with nothing selected, the Scene panel's "World Effects" section sets gravitation G and adds/edits fluid and wind regions; select any body to rename it in the Name field or set its magnetism in the Material section. The top-bar Share button packs a whole scene into a link that opens right into that scene, and the My Projects home has its own Import Scene entry. The "Orbital Gravitation", "Buoyancy Pool", "Magnet Array" and "Wind Tunnel" presets load ready-made demos.</li>
+            <li><b>Use it right in the lab</b> (1.23, expanded in 1.25/1.26): with nothing selected, the Scene panel's "World Effects" section sets gravitation G and adds/edits fluid and wind regions; fluid and wind regions can be dragged on the canvas to move them. The Magnet tool in the left rail (or the button in World Effects) places a fixed magnet directly; select any body to rename it, set its magnetism in the Material section, or apply a one-tap material preset (foam / wood / rubber / ice / iron). The top-bar Share button packs a whole scene into a link that opens right into that scene, and the My Projects home has its own Import Scene entry. The "Orbital Gravitation", "Buoyancy Pool", "Magnet Array", "Wind Tunnel", "Materials Lab" and "Magnet Swing" presets load ready-made demos.</li>
             <li><b>Formulas</b> (1.4.0): <code>Formulas</code> is a set of pure functions — kinetic energy, momentum, impulse, gravitational force, orbital/escape velocity, Hooke's law, pendulum period, buoyancy, drag, friction, projectile range, centripetal acceleration — plus live measurements on the instance: <code>bodyKineticEnergy()</code> / <code>totalMomentum()</code> / <code>centerOfMass()</code>.</li>
             <li><b>Stability</b> (1.4.0): <code>PhysicsEngine.validateDescriptor(desc)</code> checks a descriptor and lists problems; position/velocity setters ignore NaN and other non-finite input so one bad value can't poison the world; the <code>maxSpeed</code> option caps velocity so a single wild impulse can't blow the scene apart.</li>
             <li><b>Interaction</b>: <code>pick(x, y)</code>; <code>beginDrag(body, x, y)</code> / <code>moveDrag(x, y)</code> / <code>endDrag()</code> physics dragging (bodies can be thrown); <code>onCollision((a, b, pair) =&gt; …)</code> collision callbacks.</li>
@@ -448,6 +449,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.25"></script>
+<script type="module" src="js/app.js?v=1.26"></script>
 </body>
 </html>

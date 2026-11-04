@@ -561,5 +561,40 @@ export function presetScenes() {
     });
   }
 
+  // Materials lab — five balls of different materials race down one ramp:
+  // ice slides, rubber grips and bounces, iron ploughs through the crates.
+  // The same five materials are one tap away in the body panel (1.26).
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ type: 'rectangle', x: 640, y: 360, width: 900, height: 16, angle: 0.14, isStatic: true, friction: 0.15, label: 'Ramp 斜坡' }));
+    const mats = [
+      ['Foam 泡沫球', { density: 0.0003, friction: 0.3, restitution: 0.4 }],
+      ['Wood 木球', { density: 0.001, friction: 0.45, restitution: 0.2 }],
+      ['Rubber 橡胶球', { density: 0.0011, friction: 0.9, restitution: 0.85 }],
+      ['Ice 冰球', { density: 0.0009, friction: 0.03, restitution: 0.05 }],
+      ['Iron 铁球', { density: 0.008, friction: 0.5, restitution: 0.1 }],
+    ];
+    mats.forEach(([label, m], i) => {
+      const x = 250 + i * 46;
+      const y = 360 + Math.tan(0.14) * (x - 640) - 26;
+      bodies.push(bodyData({ type: 'circle', x, y, radius: 16, frictionAir: 0.001, label, ...m }));
+    });
+    for (let i = 0; i < 3; i++) {
+      bodies.push(bodyData({ type: 'rectangle', x: 1060, y: GROUND_TOP - 22 - i * 45, width: 44, height: 44, density: 0.001, friction: 0.5, label: 'Crate 木箱' }));
+    }
+    out.push({ key: 'materials', name: '材质实验室', scene: sceneData({ name: '材质实验室 Materials Lab', bodies }) });
+  }
+
+  // Magnet swing — an S-pole pendulum ball swings past a fixed N magnet
+  // and ends up hanging pulled toward it instead of straight down.
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ type: 'rectangle', x: 640, y: 92, width: 300, height: 14, isStatic: true, label: 'Beam 横梁' }));
+    bodies.push(bodyData({ id: 'swing-ball', type: 'circle', x: 640, y: 332, radius: 16, density: 0.0015, friction: 0.2, frictionAir: 0.0005, restitution: 0.2, magnet: -80, vx: 3, label: 'S Ball 磁球' }));
+    bodies.push(bodyData({ type: 'circle', x: 800, y: 372, radius: 26, isStatic: true, friction: 0.4, magnet: 100, label: 'Magnet N 磁铁' }));
+    const constraints = [constraintData({ bodyA: null, bodyB: 'swing-ball', pointA: { x: 640, y: 100 }, pointB: { x: 0, y: 0 }, stiffness: 1, damping: 0.02, length: 232 })];
+    out.push({ key: 'magnetswing', name: '磁铁秋千', scene: sceneData({ name: '磁铁秋千 Magnet Swing', bodies, constraints }) });
+  }
+
   return out;
 }

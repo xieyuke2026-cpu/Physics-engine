@@ -49,7 +49,7 @@ const w1 = await boot(false, 'first', 'zh');
 const d1 = w1.document;
 check('first visit: landing is shown', !d1.getElementById('landing').hidden);
 check('landing: demo canvas + start button present', !!d1.getElementById('landingCanvas') && !!d1.getElementById('btnStartLab'));
-check('landing: sixteen preset shortcuts', d1.querySelectorAll('#landingPresets .chip').length === 16,
+check('landing: eighteen preset shortcuts', d1.querySelectorAll('#landingPresets .chip').length === 18,
   `got ${d1.querySelectorAll('#landingPresets .chip').length}`);
 click(w1, d1.querySelectorAll('#landingPresets .chip')[0]); // Newton's cradle
 await wait(500);

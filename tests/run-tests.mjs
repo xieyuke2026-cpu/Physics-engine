@@ -187,7 +187,7 @@ check('stop motion zeroes velocity', lk.velocity.x === 0 && lk.velocity.y === 0 
 
 /* --- v1.1/v1.6: presets --- */
 const presets = presetScenes();
-check('sixteen presets exist', presets.length === 16, `got ${presets.length}`);
+check('eighteen presets exist', presets.length === 18, `got ${presets.length}`);
 for (const p of presets) {
   check(`preset ${p.key} validates`, validateScene(JSON.parse(JSON.stringify(p.scene))).ok);
 }
@@ -331,6 +331,30 @@ check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b)
   const ironBody = ww.allBodies().find((b) => ww.serializeBody(b).label.startsWith('Iron'));
   check('v1.25: foam balls are blown downwind into the bin', foamMaxX > 850, `maxX=${Math.round(foamMaxX)}`);
   check('v1.25: iron block barely moves in the wind', ironBody.position.x < 560, `x=${Math.round(ironBody.position.x)}`);
+}
+
+/* --- v1.26: materials + magnet swing presets --- */
+{
+  const presets = presetScenes();
+  const mat = presets.find((p) => p.key === 'materials');
+  check('v1.26: materials preset exists', !!mat);
+  const wm = new PhysicsWorld();
+  wm.loadScene(mat.scene);
+  for (let i = 0; i < 1200; i++) wm.stepOnce();
+  const balls = wm.allBodies().filter((b) => wm.serializeBody(b).label.includes('球'));
+  check('v1.26: all five material balls roll down and settle on the floor',
+    balls.length === 5 && balls.every((b) => b.position.x > 1000 && b.position.y > 500 && b.position.y < 545),
+    balls.map((b) => `${Math.round(b.position.x)},${Math.round(b.position.y)}`).join(' '));
+
+  const sw = presets.find((p) => p.key === 'magnetswing');
+  check('v1.26: magnet swing preset exists', !!sw);
+  const ws = new PhysicsWorld();
+  ws.loadScene(sw.scene);
+  for (let i = 0; i < 1200; i++) ws.stepOnce();
+  const ball = ws.allBodies().find((b) => ws.serializeBody(b).label.startsWith('S Ball'));
+  check('v1.26: swing ball ends up hanging pulled toward the magnet',
+    ball.position.x > 720 && Math.hypot(ball.position.x - 800, ball.position.y - 372) < 110,
+    `at (${Math.round(ball.position.x)}, ${Math.round(ball.position.y)})`);
 }
 
 /* --- v1.25: share-link codec round-trip --- */

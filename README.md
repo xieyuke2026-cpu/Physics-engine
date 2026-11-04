@@ -1,9 +1,9 @@
 # MotionLab — 2D Physics Sandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.5.0-blue.svg)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.5.1-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-385%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-399%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -70,13 +70,14 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 - 快捷键：Ctrl+D 复制物体、方向键微调位置（Shift=10px）、R 旋转 15°（Shift+R 反向）
 - **画布截图导出 PNG**（顶部相机按钮）
 
-**实验预设（共 16 个，首页卡片带概览图，点卡片或按钮一键载入并自动运行）**
+**实验预设（共 18 个，首页卡片带概览图，点卡片或按钮一键载入并自动运行）**
 - 牛顿摆（5 球刚性摆杆）、多米诺骨牌、方块金字塔、斜坡滚球、高弹球阵列
 - **v1.6 新增**：双摆混沌（双连杆 + 轨迹）、桥梁承重（弹簧链桥面 + 重载）、钉板概率（高尔顿板）、
   蹦床弹簧网（弹性网兜住落体）、漏斗沙漏（小球穿 V 型漏斗）
 - **v1.9 新增**：过山车回环、保龄球（重球撞三角瓶阵）
 - **v1.23 新增**：万有引力轨道（两两引力下的双行星轨道）、浮力池（软木/木块/铁块按密度浮沉）
 - **v1.25 新增**：磁铁阵列（固定磁铁把磁球按极性分拣、铁球被吸附）、风洞实验（泡沫球被吹进收集区、铁块原地不动）
+- **v1.26 新增**：材质实验室（泡沫/木头/橡胶/冰/铁五种材质的球同坡竞速）、磁铁秋千（S 极摆球被固定 N 极磁铁吸偏，不再直上直下）
 - **v1.10 修复**：过山车回环重做——v1.9 的圆环是封闭的且小球从环下穿过，根本进不去；
   新版改为导杆回环：小球由一根刚性导杆牵引，沿 24 段轨道圆环内侧完整绕行约 1.7 圈后
   逐渐摆动停稳（自由滚动在分段轨道上会因段角卡滞与能量不足无法完成整圈，实测对比后选导杆方案）
@@ -112,7 +113,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 - **物体操作**：停止运动、水平/垂直翻转速度
 - 所有修改实时同步到物理引擎（尺寸修改通过原地重建保持 id 与材质参数）
 - 未选中时显示场景属性：**重力预设**（月球/地球/木星/零重力/侧向）、重力 X/Y、模拟速度、重力开关、
-  **世界效应（v1.23 起，v1.25 扩充）：万有引力 G、流体区域（浮力）与风场区域的添加/编辑；物体「材质」一节可设磁性（+N/−S 极，同极相斥、异极相吸、吸铁）**、
+  **世界效应（v1.23 起，v1.25/v1.26 扩充）：万有引力 G、流体区域（浮力）与风场区域的添加/编辑，流体/风场区域可在画布上直接拖动改位置；左侧工具栏有专门的磁铁工具（世界效应节也有添加按钮），物体「材质」一节可设磁性（+N/−S 极，同极相斥、异极相吸、吸铁），还有泡沫/木头/橡胶/冰/铁一键材质预设**、
   网格 / 速度向量 / **运动轨迹**显示开关、**物体列表**（点选定位、单删）
 
 **项目管理**

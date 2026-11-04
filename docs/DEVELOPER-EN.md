@@ -15,8 +15,8 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.25 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.5.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| MotionLab (app) | 1.26 | `APP_VERSION` in `js/ui.js` |
+| PhysicsEngine (2D core) | 1.5.1 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.5.0'
+  console.log(VERSION); // '1.5.1'
 </script>
 ```
 
@@ -226,6 +226,10 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   and a faster pairwise-force pass (one unified traversal, typed-array
   hoisting, symmetric gravitation pairs — ≈40% faster on an isolated
   150-body benchmark)
+- 1.5.1 — magnetism fix: a pole pair involving a static magnet was
+  skipped by the pair dedup when the dynamic pole had been added first;
+  the dedup now only applies when the earlier pass can actually run,
+  so pole pairs no longer depend on insertion order
 
 ---
 

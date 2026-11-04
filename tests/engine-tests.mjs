@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.5.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.5.1');
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
 pe.addBody({ kind: 'rect', x: 100, y: 400, width: 500, height: 20, isStatic: true });
@@ -391,6 +391,16 @@ function galtonBins(seed) {
   const fx = far.position.x, fy = far.position.y;
   for (let s = 0; s < 60; s++) pe.stepOnce();
   check('magnetism: no force beyond range (320)', far.position.x === fx && far.position.y === fy, `(${far.position.x}, ${far.position.y})`);
+}
+{
+  // 1.5.1 regression: a dynamic pole added BEFORE a static magnet must
+  // still be attracted — pole pairs must not depend on insertion order.
+  const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  const ball = pe.addBody({ kind: 'circle', x: 300, y: 300, radius: 15, density: 0.001, frictionAir: 0, magnet: -80 });
+  pe.addBody({ kind: 'circle', x: 430, y: 300, radius: 26, isStatic: true, frictionAir: 0, magnet: 100 });
+  for (let s = 0; s < 240; s++) pe.stepOnce();
+  check('magnetism: dynamic pole added before the static magnet is still attracted',
+    ball.position.x > 360, `x=${ball.position.x.toFixed(0)}`);
 }
 {
   // registry, setter, snapshot, disable switch, validation, formula signs
