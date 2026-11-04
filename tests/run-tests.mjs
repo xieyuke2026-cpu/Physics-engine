@@ -187,7 +187,7 @@ check('stop motion zeroes velocity', lk.velocity.x === 0 && lk.velocity.y === 0 
 
 /* --- v1.1/v1.6: presets --- */
 const presets = presetScenes();
-check('fourteen presets exist', presets.length === 14, `got ${presets.length}`);
+check('sixteen presets exist', presets.length === 16, `got ${presets.length}`);
 for (const p of presets) {
   check(`preset ${p.key} validates`, validateScene(JSON.parse(JSON.stringify(p.scene))).ok);
 }
@@ -278,6 +278,72 @@ check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b)
   wt.setVelocity(shot, 20, 0);
   for (let i = 0; i < 40; i++) wt.advance(1000 / 60, 1);
   check('v1.10: fast shot cannot tunnel through a thin wall (substeps=2)', shot.position.x < 294, `x=${Math.round(shot.position.x)}`);
+}
+
+/* --- v1.25: magnetism + winds in the scene layer --- */
+{
+  check('v1.25: non-finite magnet rejected',
+    !validateScene({ format: 'motionlab-scene', version: 2, bodies: [{ type: 'circle', x: 0, y: 0, magnet: 'x' }] }).ok);
+  check('v1.25: non-array winds rejected',
+    !validateScene({ format: 'motionlab-scene', version: 2, bodies: [], winds: {} }).ok);
+  check('v1.25: non-finite wind field rejected',
+    !validateScene({ format: 'motionlab-scene', version: 2, bodies: [], winds: [{ x: 0, y: 0, vx: 'gale' }] }).ok);
+  check('v1.25: scene with magnet + wind validates',
+    validateScene({ format: 'motionlab-scene', version: 2, bodies: [{ type: 'circle', x: 0, y: 0, magnet: -40 }], winds: [{ x: 100, y: 100, width: 200, height: 100, vx: 3 }] }).ok);
+  check('v1.25: bodyData clamps magnet to [-100, 100]',
+    bodyData({ type: 'circle', magnet: 150 }).magnet === 100 && bodyData({ type: 'circle', magnet: -150 }).magnet === -100);
+
+  const w1 = new PhysicsWorld();
+  w1.loadScene(sceneData({
+    name: 'magnet roundtrip',
+    bodies: [bodyData({ type: 'circle', x: 200, y: 200, radius: 15, magnet: 70, label: 'pole' })],
+    winds: [{ id: 'w1', x: 300, y: 300, width: 300, height: 200, vx: -2, vy: 1, power: 1.5 }],
+  }));
+  const ser = w1.serializeScene();
+  check('v1.25: serialize keeps magnet + winds', ser.bodies[0].magnet === 70 && ser.winds.length === 1 && ser.winds[0].vx === -2,
+    JSON.stringify(ser.winds));
+  const w2 = new PhysicsWorld();
+  w2.loadScene(sceneData(ser));
+  const pole = w2.allBodies()[0];
+  check('v1.25: reload restores pole + wind field', w2.magnetOf(pole) === 70 && w2.windCount === 1 && w2.windById('w1').power === 1.5);
+}
+
+/* --- v1.25: new preset behaviour --- */
+{
+  const presets = presetScenes();
+  const mag = presets.find((p) => p.key === 'magnets');
+  check('v1.25: magnets preset exists', !!mag);
+  const wm = new PhysicsWorld();
+  wm.loadScene(mag.scene);
+  for (let i = 0; i < 600; i++) wm.stepOnce();
+  const sBall = wm.allBodies().map((b) => wm.serializeBody(b)).find((d) => d.label.startsWith('S Ball'));
+  const sBody = wm.allBodies()[wm.allBodies().map((b) => wm.serializeBody(b)).findIndex((d) => d.label.startsWith('S Ball'))];
+  check('v1.25: S ball ends up stuck to the N magnet',
+    Math.hypot(sBody.position.x - 430, sBody.position.y - 300) < 90,
+    `at (${Math.round(sBody.position.x)}, ${Math.round(sBody.position.y)}) label=${sBall && sBall.label}`);
+
+  const tun = presets.find((p) => p.key === 'windtunnel');
+  check('v1.25: wind tunnel preset exists with one wind field', !!tun && tun.scene.winds.length === 1);
+  const ww = new PhysicsWorld();
+  ww.loadScene(tun.scene);
+  for (let i = 0; i < 600; i++) ww.stepOnce();
+  const foamMaxX = Math.max(...ww.allBodies().filter((b) => ww.serializeBody(b).label.startsWith('Foam')).map((b) => b.position.x));
+  const ironBody = ww.allBodies().find((b) => ww.serializeBody(b).label.startsWith('Iron'));
+  check('v1.25: foam balls are blown downwind into the bin', foamMaxX > 850, `maxX=${Math.round(foamMaxX)}`);
+  check('v1.25: iron block barely moves in the wind', ironBody.position.x < 560, `x=${Math.round(ironBody.position.x)}`);
+}
+
+/* --- v1.25: share-link codec round-trip --- */
+{
+  const { encodeScenePayload, decodeScenePayload, payloadFromHash } = await import('../js/share.js');
+  const scene = presetScenes().find((p) => p.key === 'windtunnel').scene;
+  const payload = await encodeScenePayload(scene);
+  check('v1.25: share payload has a codec tag', /^[gr]/.test(payload), payload.slice(0, 1));
+  check('v1.25: payload survives the hash round-trip', payloadFromHash(`#s=${payload}`) === payload && payloadFromHash('#other') === null);
+  const back = await decodeScenePayload(payload);
+  check('v1.25: decoded scene validates and matches',
+    !!back && validateScene(back).ok && back.bodies.length === scene.bodies.length && back.winds.length === 1);
+  check('v1.25: garbage payload decodes to null', (await decodeScenePayload('g!!!not-base64!!!')) === null);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

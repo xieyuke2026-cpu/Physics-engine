@@ -3,7 +3,8 @@
    drawing in render.js, panel DOM in ui.js, persistence in storage.js. */
 
 import { icon, TOOL_ICONS } from './icons.js';
-import { sceneData, bodyData, constraintData, fluidData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS } from './scene.js';
+import { sceneData, bodyData, constraintData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS } from './scene.js';
+import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';
 import { PhysicsWorld } from './physics.js';
 import { PhysicsEngine } from './engine/physics-engine.js';
 import { Renderer } from './render.js';
@@ -34,6 +35,7 @@ let running = false;
 let tool = 'select';
 let selectedId = null;
 let selectedFluidId = null;
+let selectedWindId = null;
 let initialSnapshot = null;   // for Reset: state at load / last save
 let preview = null;
 let dragPoint = null;
@@ -57,6 +59,7 @@ function currentScene() {
     bodies: world.allBodies().map((b) => world.serializeBody(b)),
     constraints: world.serializeConstraints(),
     fluids: world.fluids(),
+    winds: world.winds(),
   });
 }
 
@@ -68,6 +71,7 @@ function loadScene(scene, { markInitial = true } = {}) {
   world.loadScene(s);
   selectedId = null;
   selectedFluidId = null;
+  selectedWindId = null;
   springStart = null; springCur = null;
   renderer.clearTrails();
   if (markInitial) initialSnapshot = JSON.stringify(currentScene());
@@ -164,6 +168,7 @@ const panel = new Panel($('panelBody'), {
       case 'friction': world.setFriction(b, value); break;
       case 'frictionAir': world.setFrictionAir(b, value); break;
       case 'restitution': world.setRestitution(b, value); break;
+      case 'magnet': world.setMagnet(b, value); break;
       case 'isStatic': world.setStatic(b, value); break;
       case 'lockRotation': world.setLockRotation(b, value); break;
     }
@@ -182,6 +187,7 @@ const panel = new Panel($('panelBody'), {
     if (!world.bodyById(id)) return;
     selectedId = id;
     selectedFluidId = null;
+    selectedWindId = null;
     refreshPanel();
   },
   onDeleteBody(id) {
@@ -228,13 +234,13 @@ const panel = new Panel($('panelBody'), {
   },
   onAddFluid() {
     const f = world.addFluid(fluidData({}));
-    selectedFluidId = f.id; selectedId = null;
+    selectedFluidId = f.id; selectedId = null; selectedWindId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.fluidAdded'));
   },
   onSelectFluid(id) {
     if (!world.fluidById(id)) return;
-    selectedFluidId = id; selectedId = null;
+    selectedFluidId = id; selectedId = null; selectedWindId = null;
     refreshPanel();
   },
   onDeleteFluid(id) {
@@ -247,12 +253,43 @@ const panel = new Panel($('panelBody'), {
     world.updateFluid(id, { [key]: value });
     pushHistorySoon(); scheduleAutosave();
   },
-  onShowScene() { selectedFluidId = null; refreshPanel(); },
+  onAddWind() {
+    const w = world.addWind(windData({}));
+    selectedWindId = w.id; selectedId = null; selectedFluidId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.windAdded'));
+  },
+  onSelectWind(id) {
+    if (!world.windById(id)) return;
+    selectedWindId = id; selectedId = null; selectedFluidId = null;
+    refreshPanel();
+  },
+  onDeleteWind(id) {
+    world.removeWind(id);
+    if (selectedWindId === id) selectedWindId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.windDeleted'));
+  },
+  onWindProp(id, key, value) {
+    world.updateWind(id, { [key]: value });
+    pushHistorySoon(); scheduleAutosave();
+  },
+  onShowScene() { selectedFluidId = null; selectedWindId = null; refreshPanel(); },
 });
 
 /** Topmost fluid region containing a world point, or null. */
 function pickFluid(w) {
   const list = world.fluids();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const f = list[i];
+    if (Math.abs(w.x - f.x) <= f.width / 2 && Math.abs(w.y - f.y) <= f.height / 2) return f;
+  }
+  return null;
+}
+
+/** Topmost wind region containing a world point, or null. */
+function pickWind(w) {
+  const list = world.winds();
   for (let i = list.length - 1; i >= 0; i--) {
     const f = list[i];
     if (Math.abs(w.x - f.x) <= f.width / 2 && Math.abs(w.y - f.y) <= f.height / 2) return f;
@@ -268,7 +305,12 @@ function refreshPanel() {
     if (f) { panel.showFluid(f); return; }
     selectedFluidId = null;
   }
-  panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)), world.fluids());
+  if (selectedWindId) {
+    const w = world.windById(selectedWindId);
+    if (w) { panel.showWind(w); return; }
+    selectedWindId = null;
+  }
+  panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)), world.fluids(), world.winds());
 }
 
 function deleteSelected() {
@@ -442,6 +484,14 @@ canvas.addEventListener('pointerdown', (e) => {
       toast(t('msg.bodyDeleted'));
       return;
     }
+    const wn = pickWind(w);
+    if (wn) {
+      world.removeWind(wn.id);
+      if (selectedWindId === wn.id) selectedWindId = null;
+      refreshPanel(); pushHistorySoon(); scheduleAutosave();
+      toast(t('msg.windDeleted'));
+      return;
+    }
     const f = pickFluid(w);
     if (f) {
       world.removeFluid(f.id);
@@ -456,6 +506,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (b) {
     selectedId = world.dataIdOf(b);
     selectedFluidId = null;
+    selectedWindId = null;
     refreshPanel();
     if (!b.isStatic) {
       if (running) { world.beginDrag(b, w.x, w.y); dragPoint = { x: w.x, y: w.y, bodyX: b.position.x, bodyY: b.position.y }; }
@@ -467,9 +518,12 @@ canvas.addEventListener('pointerdown', (e) => {
     if (tool === 'move') {
       gesture = { kind: 'pan', sx: e.clientX, sy: e.clientY, camX: camera.x, camY: camera.y };
     } else {
-      // no body hit: a fluid region can still be selected for editing
-      const f = pickFluid(w);
+      // no body hit: a wind or fluid region can still be selected for
+      // editing (winds are drawn above fluids, so they win the pick)
+      const wn = pickWind(w);
+      const f = wn ? null : pickFluid(w);
       selectedId = null;
+      selectedWindId = wn ? wn.id : null;
       selectedFluidId = f ? f.id : null;
       refreshPanel();
       gesture = { kind: 'none' };
@@ -782,6 +836,40 @@ function openStoredScene(s) {
   toast(t('msg.opened', { name: s.name }));
 }
 
+/* ---------------- scene share links ----------------
+   The whole scene rides inside the link's #s= hash (gzip + base64url via
+   share.js): no backend, no upload — anyone opening the link lands in the
+   lab with this exact scene loaded. */
+async function shareSceneObject(sceneObj) {
+  try {
+    const payload = await encodeScenePayload(sceneData(sceneObj));
+    const url = `${window.location.origin}${window.location.pathname}#s=${payload}`;
+    let copied = false;
+    try { await navigator.clipboard.writeText(url); copied = true; } catch { /* clipboard unavailable (permissions / non-secure context) */ }
+    if (copied) toast(t('msg.shareCopied'), 3200);
+    else window.prompt(t('msg.sharePrompt'), url);
+  } catch { toast(t('msg.shareInvalid'), 3200); }
+}
+function shareCurrentScene() {
+  sceneName = $('projectName').value.trim() || sceneName;
+  shareSceneObject(currentScene());
+}
+/** Boot helper: when the URL carries a #s= payload, load that scene and
+ *  report true; false means "no (usable) link — carry on with normal boot". */
+async function openSharedSceneFromHash() {
+  const payload = payloadFromHash(window.location.hash);
+  if (!payload) return false;
+  // NB: window.history — the module-level `history` here is the undo stack.
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  const raw = await decodeScenePayload(payload);
+  const v = raw ? validateScene(raw) : { ok: false };
+  if (!v.ok) { toast(t('msg.shareInvalid'), 3800); return false; }
+  setRunning(false);
+  loadScene(v.scene); resetHistory();
+  toast(t('msg.shareOpened', { name: v.scene.name }), 3200);
+  return true;
+}
+
 function exportSceneData(s) {
   const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -827,6 +915,7 @@ function renderSceneCards(filter = '') {
           if (store.saveSceneToLibrary({ ...s, name: nn })) { renderSceneNav(); toast(t('msg.duplicated', { name: nn })); }
         }],
         [t('card.export'), '', () => exportSceneData(s)],
+        [t('card.share'), '', () => shareSceneObject(s)],
         [t('card.delete'), 'danger', () => {
           if (!confirm(t('msg.deleteSceneConfirm', { name }))) return;
           store.deleteSceneFromLibrary(name); renderSceneNav(); toast(t('msg.sceneDeleted'));
@@ -857,6 +946,7 @@ function renderSceneNav() {
     current: true, badge: t('card.badgeEditing'),
     actions: [
       [t('card.saveToLib'), 'primary', () => { saveCurrent(); renderSceneNav(); }],
+      [t('card.share'), '', () => shareSceneObject(now)],
       [t('card.keepEditing'), '', () => closeSceneNav()],
     ],
   }));
@@ -1185,6 +1275,7 @@ function initChrome() {
   $('btnStep').innerHTML = icon('step'); $('btnShot').innerHTML = icon('camera');
   $('btnSettings').innerHTML = icon('settings'); $('btnPanel').innerHTML = icon('panel');
   $('btnExport').innerHTML = icon('export'); $('btnImport').innerHTML = icon('import');
+  $('btnShare').innerHTML = icon('share');
   $('btnZoomIn').innerHTML = icon('plus', 17); $('btnZoomOut').innerHTML = icon('minus', 17);
   applyChromeLabels();
   document.querySelectorAll('.modal-close').forEach((b) => { b.innerHTML = icon('close', 18); });
@@ -1236,6 +1327,10 @@ function initChrome() {
     toast(t('msg.exportOk'));
   });
   $('btnImport').addEventListener('click', () => $('fileImport').click());
+  $('btnShare').addEventListener('click', shareCurrentScene);
+  // Home hub import entry: same file picker + loader as the lab's button,
+  // so a scene can be imported without entering the lab first.
+  $('btnImportHub').addEventListener('click', () => $('fileImport').click());
   $('fileImport').addEventListener('change', async (e) => {
     const f = e.target.files[0]; e.target.value = '';
     if (!f) return;
@@ -1246,6 +1341,7 @@ function initChrome() {
       if (!v.ok) { toast(t('msg.importFailed', { err: v.errors.slice(0, 2).join(getLang() === 'en' ? '; ' : '；') }), 4200); return; }
       setRunning(false);
       loadScene(v.scene); resetHistory();
+      closeSceneNav(); // imports started from the home hub land in the lab
       toast(t('msg.imported', { name: v.scene.name }));
     } catch { toast(t('msg.importNotJson'), 3600); }
   });
@@ -1278,7 +1374,7 @@ function initChrome() {
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); }
     else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); setRunning(!running); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { deleteSelected(); }
-    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; springStart = null; springCur = null; refreshPanel(); }
+    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; springStart = null; springCur = null; refreshPanel(); }
     else if (selectedId && e.key.startsWith('Arrow')) {
       e.preventDefault();
       const b = selectedBody(); if (!b) return;
@@ -1306,7 +1402,8 @@ function updateStatus() {
   $('stGravity').textContent = (settings.gravityEnabled
     ? `Gravity (${settings.gravityX}, ${settings.gravityY})` : 'Gravity Off')
     + (Number(settings.gravitation) > 0 ? ` · ${t('st.gravitation', { g: settings.gravitation })}` : '')
-    + (world.fluidCount ? ` · ${t('st.fluids', { n: world.fluidCount })}` : '');
+    + (world.fluidCount ? ` · ${t('st.fluids', { n: world.fluidCount })}` : '')
+    + (world.windCount ? ` · ${t('st.winds', { n: world.windCount })}` : '');
   $('stSpeed').textContent = `Speed ${settings.speed.toFixed(1)}×`;
 }
 setInterval(() => {
@@ -1331,6 +1428,7 @@ function loop(now) {
   renderer.draw(world, {
     selectedId,
     selectedFluidId,
+    selectedWindId,
     showGrid: settings.showGrid,
     showVectors: settings.showVectors,
     showTrails: settings.showTrails,
@@ -1459,9 +1557,14 @@ function boot() {
   setRunning(false);
   updateStatus();
   requestAnimationFrame(loop);
-  // The hub is the home page: returning users land here first, then step into the lab.
-  if (store.loadVisited()) openSceneNav();
-  else if (auto) toast(t('msg.autosaveRestored'));
+  // The hub is the home page: returning users land here first, then step
+  // into the lab. A share link (#s=...) outranks the hub: the visitor came
+  // for that scene, so it opens directly in the lab instead.
+  openSharedSceneFromHash().then((opened) => {
+    if (opened) return;
+    if (store.loadVisited()) openSceneNav();
+    else if (auto) toast(t('msg.autosaveRestored'));
+  });
   checkForUpdate();
 }
 boot();

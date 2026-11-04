@@ -15,6 +15,7 @@ function mlToDesc(d) {
     radius: d.radius, sides: d.sides,
     density: d.density, friction: d.friction, frictionAir: d.frictionAir,
     restitution: d.restitution, isStatic: d.isStatic, lockRotation: d.lockRotation,
+    magnet: d.magnet,
     vx: d.vx, vy: d.vy, label: d.label,
     // The scene label doubles as the engine-level body name (1.4.0), so
     // scene bodies are addressable via core.getBodyByName(label) too.
@@ -63,6 +64,7 @@ export class PhysicsWorld {
     for (const d of scene.bodies) this.addBody(d);
     for (const c of scene.constraints || []) this.addConstraint(c);
     for (const f of scene.fluids || []) this.core.addFluid(f);
+    for (const w of scene.winds || []) this.core.addWind(w);
     this.applySettings(scene.settings);
   }
 
@@ -80,6 +82,22 @@ export class PhysicsWorld {
     return this.core.addFluid({ ...f, ...patch, id });
   }
   get gravitation() { return this.core.gravitation; }
+
+  /* ---------- winds (target-velocity fields) + magnetism ---------- */
+  addWind(w) { return this.core.addWind(w); }
+  removeWind(id) { return this.core.removeWind(id); }
+  windById(id) { return this.core.windById(id); }
+  winds() { return this.core.winds(); }
+  get windCount() { return this.core.windCount; }
+  /** Replace a wind's fields (the engine has no in-place update). */
+  updateWind(id, patch) {
+    const w = this.core.windById(id);
+    if (!w) return null;
+    this.core.removeWind(id);
+    return this.core.addWind({ ...w, ...patch, id });
+  }
+  setMagnet(body, v) { this.core.setMagnet(body, v); }
+  magnetOf(body) { return this.core.magnetOf(body); }
 
   bodyById(dataId) { return this.core.bodyById(dataId); }
   /** Engine-level naming (1.4.0): find / rename scene bodies by label-name. */
@@ -107,7 +125,7 @@ export class PhysicsWorld {
       width: d.width, height: d.height, radius: d.radius,
       sides: ud.sides !== undefined ? ud.sides : d.sides,
       density: d.density, friction: d.friction, frictionAir: d.frictionAir,
-      restitution: d.restitution, isStatic: d.isStatic,
+      restitution: d.restitution, isStatic: d.isStatic, magnet: d.magnet,
       isBound: ud.isBound === true, lockRotation: d.lockRotation,
       // A rename done through the engine wins over the creation label.
       vx: d.vx, vy: d.vy, label: d.name || d.label,
@@ -119,6 +137,7 @@ export class PhysicsWorld {
       bodies: this.allBodies().map((b) => this.serializeBody(b)),
       constraints: this.serializeConstraints(),
       fluids: this.core.fluids(),
+      winds: this.core.winds(),
     };
   }
 

@@ -81,6 +81,8 @@ const DICT = {
   'st.objects': ['物体 {n}', 'Objects: {n}'],
   'st.gravitation': ['万有引力 G {g}', 'Gravitation G {g}'],
   'st.fluids': ['流体 {n}', 'Fluids: {n}'],
+  'st.winds': ['风场 {n}', 'Winds: {n}'],
+  'tb.title.share': ['分享场景（复制链接）', 'Share scene (copy link)'],
 
   'tb.mode2d': ['2D 实验室', '2D Lab'],
   'tb.mode3d': ['3D 实验室', '3D Lab'],
@@ -95,9 +97,9 @@ const DICT = {
   'toolT.line': ['静态线段：拖拽画出斜坡，始终为静态', 'Static line: drag to draw a ramp, always static'],
   'toolT.spring': ['弹簧 / 连杆：依次点两个物体连接，点空白为固定锚点', 'Spring / rod: tap two bodies to connect; empty space = fixed anchor'],
   'toolT.blast': ['冲击波：在画布上点按，推开附近物体', 'Blast: tap the canvas to push nearby bodies'],
-  'toolT.delete': ['删除：点按物体、弹簧或流体区域将其删除', 'Delete: tap a body, spring or fluid region to remove it'],
+  'toolT.delete': ['删除：点按物体、弹簧、流体或风场区域将其删除', 'Delete: tap a body, spring, fluid or wind region to remove it'],
   /* ---------- tool rail tips ---------- */
-  'tool.select': ['选择 — 点选物体看参数 · 拖拽移动物体 · 点蓝色流体区编辑浮力', 'Select — click a body for its properties · drag to move it · click a blue fluid region to edit buoyancy'],
+  'tool.select': ['选择 — 点选物体看参数 · 拖拽移动物体 · 点选流体/风场区域编辑', 'Select — click a body for its properties · drag to move it · click a fluid or wind region to edit it'],
   'tool.move': ['移动 — 拖拽物体移动 · 拖拽空白平移画布 · 滚轮 / 双指缩放', 'Move — drag bodies to move them · drag empty space to pan · wheel / pinch to zoom'],
   'tool.circle': ['圆形 — 在画布上拖拽画圆，松手创建（点按直接放一个）', 'Circle — drag on the canvas to size it, release to create (a tap drops a default one)'],
   'tool.rectangle': ['矩形 — 拖拽画出矩形，松手创建', 'Rectangle — drag to draw, release to create'],
@@ -106,10 +108,10 @@ const DICT = {
   'tool.line': ['静态线段 — 拖拽画出斜坡（始终静态），松手创建', 'Static line — drag to draw a ramp (always static), release to create'],
   'tool.spring': ['弹簧 / 连杆 — 先点起点物体，再点第二个物体；点空白 = 固定锚点', 'Spring / rod — tap a start body, then a second body; empty space = fixed anchor'],
   'tool.blast': ['冲击波 — 在画布上点按，产生冲击波推开附近物体', 'Blast — tap the canvas to send a shockwave that pushes nearby bodies'],
-  'tool.delete': ['删除 — 点按物体、弹簧线或流体区域将其删除', 'Delete — tap a body, a spring line or a fluid region to remove it'],
+  'tool.delete': ['删除 — 点按物体、弹簧线、流体或风场区域将其删除', 'Delete — tap a body, a spring line, a fluid or a wind region to remove it'],
 
   /* ---------- stage hints ---------- */
-  'hint.select': ['点选物体查看参数 · 拖拽物体移动 · 点选蓝色流体区域编辑浮力', 'Click a body for its properties · drag to move · click a blue fluid region to edit buoyancy'],
+  'hint.select': ['点选物体查看参数 · 拖拽物体移动 · 点选流体/风场区域可编辑', 'Click a body for its properties · drag to move · click a fluid or wind region to edit it'],
   'hint.move': ['拖拽物体移动 · 拖拽空白平移画布 · 滚轮 / 双指缩放', 'Drag bodies to move · drag empty space to pan · wheel / pinch to zoom'],
   'hint.circle': ['在画布上点按或拖拽画出圆形，松手创建', 'Tap or drag on the canvas to draw a circle, release to create'],
   'hint.rectangle': ['在画布上拖拽画出矩形，松手创建', 'Drag on the canvas to draw a rectangle, release to create'],
@@ -119,7 +121,7 @@ const DICT = {
   'hint.springStart': ['先点一个物体作为弹簧起点（点空白 = 固定锚点）', 'Tap a body as the spring start (empty space = fixed anchor)'],
   'hint.springNext': ['再点第二个物体（或空白处作为固定锚点）完成弹簧', 'Tap a second body (or empty space as a fixed anchor) to finish the spring'],
   'hint.blast': ['在画布上点按，产生一圈冲击波，把附近的物体推开', 'Tap the canvas to blast nearby bodies away'],
-  'hint.delete': ['点按物体删除 · 点按弹簧线可删除弹簧', 'Tap a body to delete it · tap a spring line to delete the spring'],
+  'hint.delete': ['点按物体删除 · 点按弹簧线可删除弹簧 · 点按流体/风场区域可删除区域', 'Tap a body to delete it · tap a spring line to delete the spring · tap a fluid/wind region to delete it'],
 
   /* ---------- landing ---------- */
   'land.pickLang': ['选择语言 / Choose your language', 'Choose your language / 选择语言'],
@@ -173,6 +175,8 @@ const DICT = {
   'card.keepEditing': ['继续编辑', 'Keep Editing'],
   'card.restore': ['恢复这个进度', 'Restore'],
   'card.loadRun': ['载入并运行', 'Load & Run'],
+  'card.share': ['分享', 'Share'],
+  'hub.import': ['导入场景', 'Import Scene'],
   'card.presetTitle': ['点击卡片也可直接载入并运行', 'Click the card to load and run it directly'],
   'hub.emptyNoMatch': ['没有匹配的场景。', 'No matching scenes.'],
   'hub.emptySaved': ['暂无已保存场景。在实验室里点顶部「保存」，或用上方「复制当前场景」，就会出现在这里。', 'No saved scenes yet. Use Save in the lab, or "Duplicate Scene" above, and they will appear here.'],
@@ -190,6 +194,12 @@ const DICT = {
   'msg.renamed': ['已重命名为「{name}」', 'Renamed to "{name}"'],
   'msg.nameCleared': ['已清除物体名称', 'Body name cleared'],
   'msg.fluidAdded': ['已添加流体区域：点选蓝色区域可调密度与范围，往里面丢不同密度的物体试试浮力', 'Fluid region added: click the blue region to tune density and size — drop bodies of different densities in and watch buoyancy'],
+  'msg.windAdded': ['已添加风场区域：点选区域可调风向与风速，往里面放轻的物体试试被吹走的感觉', 'Wind region added: click the region to tune direction and speed — put light bodies inside and watch them blow away'],
+  'msg.windDeleted': ['风场区域已删除', 'Wind region deleted'],
+  'msg.shareCopied': ['分享链接已复制：发给任何人，对方打开链接就直接进入这个场景', 'Share link copied: anyone opening it lands right in this scene'],
+  'msg.sharePrompt': ['复制这条链接即可分享场景：', 'Copy this link to share the scene:'],
+  'msg.shareOpened': ['已打开分享的场景「{name}」', 'Opened shared scene "{name}"'],
+  'msg.shareInvalid': ['分享链接无效或已损坏', 'This share link is invalid or corrupted'],
   'msg.blast': ['冲击波推开了 {n} 个物体', 'Blast pushed {n} bodies'],
   'msg.springStartBody': ['已选起点，再点第二个物体或空白锚点', 'Start set — tap a second body or an empty-space anchor'],
   'msg.springStartAnchor': ['已放置固定锚点，再点一个物体', 'Fixed anchor placed — now tap a body'],
@@ -269,6 +279,7 @@ const PRESET_EN = {
   bridge: 'Plank Bridge', galton: 'Galton Board', trampoline: 'Trampoline Net',
   funnel: 'Funnel Hourglass', coaster: 'Loop Coaster', bowling: 'Bowling',
   orbit: 'Orbital Gravitation', buoyancy: 'Buoyancy Pool',
+  magnets: 'Magnet Array', windtunnel: 'Wind Tunnel',
 };
 export function presetDisplayName(p) {
   return current === 'en' && PRESET_EN[p.key] ? PRESET_EN[p.key] : p.name;

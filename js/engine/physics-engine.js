@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.4.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.5.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -40,6 +40,13 @@
              gravitation, fluid regions (buoyancy + drag), a Formulas
              library of pure physics helpers, and stability hardening
              (descriptor validation, non-finite setter guards, maxSpeed)
+     1.5.0 — magnetism (descriptor `magnet`: signed pole strength; poles
+             attract/repel each other and pull unmagnetised "iron" bodies,
+             range-limited, momentum-conserving), wind regions (addWind —
+             a target-velocity field, the gaseous sibling of fluids), and
+             a faster pairwise-force pass (positions/masses hoisted into
+             typed arrays once per step, one unified pass for gravitation
+             + magnetism, uniform-grid range culling for magnet pairs)
    ========================================================================== */
 
 let _M = null;
@@ -60,7 +67,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.4.0';
+export const VERSION = '1.5.0';
 
 /* ============================================================================
    Formulas — pure physics helpers (no engine state).
@@ -81,6 +88,10 @@ export const Formulas = {
   impulseForDeltaV: (mass, dvx, dvy) => ({ x: mass * dvx, y: mass * dvy }),
   /** Newton's law of gravitation — force magnitude: G·m1·m2 / r² */
   gravitationalForce: (G, m1, m2, distance) => (distance > 0 ? (G * m1 * m2) / (distance * distance) : 0),
+  /** Magnetic pole interaction — signed force scalar: K·s1·s2 / (d² + ε²).
+   *  Positive = repulsion (like poles), negative = attraction. This is the
+   *  exact scalar the engine's magnetism pass applies along the pair axis. */
+  magneticForce: (K, s1, s2, distSq, softening) => (K * s1 * s2) / (distSq + Math.max(0, softening)),
   /** Circular-orbit speed around a central mass: √(G·M / r) */
   orbitVelocity: (G, centralMass, radius) => Math.sqrt((G * centralMass) / Math.max(1e-9, radius)),
   /** Escape velocity from a central mass at radius r: √(2·G·M / r) */
@@ -134,6 +145,7 @@ export class PhysicsEngine {
     }
     if (d.density !== undefined && Number(d.density) < 0) problems.push('density must be >= 0');
     if (d.name !== undefined && typeof d.name !== 'string') problems.push('name must be a string');
+    if (d.magnet !== undefined && !Number.isFinite(Number(d.magnet))) problems.push('magnet is not a finite number');
     return problems;
   }
 
@@ -162,6 +174,10 @@ export class PhysicsEngine {
    * @param {{G:number, softening?:number}|number} [opts.gravitation]
    *        pairwise Newtonian attraction between all bodies (see
    *        setGravitation). Off by default.
+   * @param {{K:number, range?:number, softening?:number}|number} [opts.magnetism]
+   *        global magnetism tuning (see setMagnetism). Bodies only feel it
+   *        when their descriptor carries a `magnet` pole strength; the
+   *        default (K = 1.2, range 320) is active out of the box.
    */
   constructor(opts = {}) {
     const M = opts.matter || matter();
@@ -190,6 +206,13 @@ export class PhysicsEngine {
       this.setGravitation(g.G, g);
     }
     this._fluids = new Map();      // id -> {id, x, y, width, height, density, drag}
+    this._winds = new Map();       // id -> {id, x, y, width, height, vx, vy, power}
+    this._magnets = new Set();     // Matter bodies whose descriptor magnet !== 0
+    this._magnetism = { K: 1.2, range: 320, softening: 900 };
+    if (opts.magnetism !== undefined && opts.magnetism !== null) {
+      const m = typeof opts.magnetism === 'number' ? { K: opts.magnetism } : opts.magnetism;
+      this.setMagnetism(m.K, m);
+    }
     this.onChange = null;          // () => void, structural changes
     this._collisionCbs = [];
     if (opts.gravity) this.setGravity(opts.gravity.x, opts.gravity.y, opts.gravity.enabled !== false);
@@ -213,7 +236,9 @@ export class PhysicsEngine {
    * Create a body from a plain descriptor and add it to the world.
    * desc: { id?, kind:'circle'|'rect'|'polygon', x, y, angle?(rad), width,
    *   height, radius, sides, density, friction, frictionAir, restitution,
-   *   isStatic, lockRotation, vx, vy, label, name, userData }
+   *   isStatic, lockRotation, vx, vy, label, name, magnet, userData }
+   * `magnet` is a signed pole strength in [-100, 100] (0 = not magnetic);
+   * see the magnetism section for how poles interact.
    * `name` is a developer-facing identifier (see getBodyByName); it is
    * independent of Matter's `label`. Returns the Matter body. The
    * (normalized) descriptor is kept on the body and can be read back
@@ -237,6 +262,7 @@ export class PhysicsEngine {
       restitution: num(partial.restitution, 0.2),
       isStatic: partial.isStatic === true,
       lockRotation: partial.lockRotation === true,
+      magnet: Math.min(100, Math.max(-100, num(partial.magnet, 0))),
       vx: num(partial.vx, 0), vy: num(partial.vy, 0),
       label: typeof partial.label === 'string' ? partial.label : '',
       name: typeof partial.name === 'string' ? partial.name : '',
@@ -259,6 +285,7 @@ export class PhysicsEngine {
     Composite.add(this.world, body);
     this._byId.set(desc.id, body);
     if (desc.lockRotation) this._locked.add(body);
+    if (desc.magnet !== 0) this._magnets.add(body);
     this._emitChange();
     return body;
   }
@@ -273,6 +300,7 @@ export class PhysicsEngine {
     this.M.Composite.remove(this.world, body);
     this._byId.delete(id);
     this._locked.delete(body);
+    this._magnets.delete(body);
     this._emitChange();
     return true;
   }
@@ -283,7 +311,9 @@ export class PhysicsEngine {
     for (const b of this._byId.values()) this.M.Composite.remove(this.world, b);
     this._byId.clear();
     this._locked.clear();
+    this._magnets.clear();
     this._fluids.clear();
+    this._winds.clear();
     this.endDrag();
     this._acc = 0;
     this._emitChange();
@@ -458,15 +488,16 @@ export class PhysicsEngine {
   /* ---------------- bulk load ---------------- */
   /**
    * Replace the world from plain data ({ bodies, constraints, fluids?,
-   * gravity?, rng? }). Malformed entries (non-objects) are skipped rather
-   * than crashing the load. Returns how many of each kind were loaded.
+   * winds?, gravity?, rng? }). Malformed entries (non-objects) are skipped
+   * rather than crashing the load. Returns how many of each kind were loaded.
    */
   load(data = {}) {
     this.clear();
-    let bodies = 0, constraints = 0, fluids = 0;
+    let bodies = 0, constraints = 0, fluids = 0, winds = 0;
     for (const d of data.bodies || []) { if (d && typeof d === 'object') { this.addBody(d); bodies++; } }
     for (const c of data.constraints || []) { if (c && typeof c === 'object' && this.addConstraint(c)) constraints++; }
     for (const f of data.fluids || []) { if (f && typeof f === 'object') { this.addFluid(f); fluids++; } }
+    for (const w of data.winds || []) { if (w && typeof w === 'object') { this.addWind(w); winds++; } }
     if (data.gravity) this.setGravity(data.gravity.x, data.gravity.y, data.gravity.enabled !== false);
     if (data.rng && Number.isFinite(data.rng.state)) {
       // Restore the RNG stream exactly where the snapshot left it, so a
@@ -474,13 +505,14 @@ export class PhysicsEngine {
       this._seed = num(data.rng.seed, this._seed) >>> 0;
       this._rngState = data.rng.state >>> 0;
     }
-    return { bodies, constraints, fluids };
+    return { bodies, constraints, fluids, winds };
   }
   snapshot() {
     return {
       bodies: this.allBodies().map((b) => this.describeBody(b)),
       constraints: this.describeConstraints(),
       fluids: this.fluids(),
+      winds: this.winds(),
       rng: { seed: this._seed, state: this._rngState },
     };
   }
@@ -515,9 +547,10 @@ export class PhysicsEngine {
   }
 
   _stepOnce() {
-    // Gravitation kicks velocities once per fixed step (not per substep),
-    // so its strength does not depend on the anti-tunnelling setting.
-    if (this._gravitation) this._applyGravitation();
+    // Pairwise forces (gravitation + magnetism) kick velocities once per
+    // fixed step (not per substep), so their strength does not depend on
+    // the anti-tunnelling setting.
+    if (this._gravitation || (this._magnetism.K > 0 && this._magnets.size)) this._applyPairForces();
     // Split the fixed step into `substeps` engine updates (anti-tunnelling:
     // a body can move at most fixedDt/substeps worth of travel per update).
     const n = this.substeps;
@@ -553,6 +586,7 @@ export class PhysicsEngine {
     // Fluid forces must be applied right before the update: Matter clears
     // accumulated forces as part of every Engine.update.
     if (this._fluids.size) this._applyFluids();
+    if (this._winds.size) this._applyWinds();
     this.M.Engine.update(this.engine, dt);
   }
 
@@ -580,26 +614,128 @@ export class PhysicsEngine {
     return body.area * (Number.isFinite(d) ? d : 0);
   }
 
-  _applyGravitation() {
-    const { G, softening } = this._gravitation;
+  /* ---------------- magnetism (pairwise, range-limited) ----------------
+     A body's descriptor `magnet` is a signed pole strength in [-100, 100];
+     the sign is the pole (positive = "N", negative = "S"). Two magnetic
+     bodies interact with the signed scalar F = K · s1 · s2 / (d² + ε²)
+     (Formulas.magneticForce): same signs repel, opposite signs attract —
+     exactly like real poles. A magnetic body also attracts UNMAGNETISED
+     dynamic bodies ("iron") with an effective strength of IRON = 35,
+     always attractively. Kicks are force ÷ mass on both sides, so total
+     momentum is conserved, and light bodies respond more than heavy ones.
+     Unlike gravitation, magnetism is short-ranged: pairs beyond `range`
+     (default 320px) feel nothing, which also keeps the cost local. */
+  /** Retune global magnetism. `setMagnetism(0)` disables it entirely. */
+  setMagnetism(K, opts = {}) {
+    const k = num(K, 0);
+    this._magnetism = {
+      K: Math.max(0, k),
+      range: Math.max(10, num(opts.range, this._magnetism ? this._magnetism.range : 320)),
+      softening: Math.max(0, num(opts.softening, this._magnetism ? this._magnetism.softening : 900)),
+    };
+  }
+  /** Current magnetism config ({ K, range, softening }). */
+  get magnetism() { return { ...this._magnetism }; }
+  /** Number of bodies currently carrying a pole strength. */
+  get magnetCount() { return this._magnets.size; }
+
+  /* One unified pairwise pass for gravitation + magnetism (1.5.0).
+     Positions and effective masses are hoisted into typed arrays once,
+     instead of property lookups and a _gravMass() call per pair (the
+     1.4.0 inner loop). Gravitation stays O(n²) (it is infinite-ranged);
+     magnetism queries a uniform grid (cell = range) so its cost scales
+     with the number of magnets × local density, not with n². */
+  _applyPairForces() {
     const arr = this._bodies();
     const n = arr.length;
+    if (!n) return;
+    const px = new Float64Array(n), py = new Float64Array(n), ms = new Float64Array(n);
     for (let i = 0; i < n; i++) {
-      const a = arr[i];
-      if (a.isStatic) continue;
-      let ax = 0, ay = 0;
-      for (let j = 0; j < n; j++) {
-        if (j === i) continue;
-        const b = arr[j];
-        const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y;
-        const dSq = dx * dx + dy * dy + softening;
-        const inv = 1 / (dSq * Math.sqrt(dSq));
-        const s = G * this._gravMass(b) * inv;
-        ax += dx * s; ay += dy * s;
+      px[i] = arr[i].position.x; py[i] = arr[i].position.y;
+      ms[i] = this._gravMass(arr[i]);
+    }
+    const { Body, Sleeping } = this.M;
+    const kick = (i, kx, ky) => {
+      if (!kx && !ky) return;
+      const b = arr[i];
+      if (b.isSleeping) Sleeping.set(b, false);
+      Body.setVelocity(b, { x: b.velocity.x + kx, y: b.velocity.y + ky });
+    };
+    if (this._gravitation) {
+      const { G, softening } = this._gravitation;
+      // symmetric pairs: each unordered pair is evaluated ONCE and both
+      // accelerations accumulated (a_i gets G·m_j, a_j gets −G·m_i along
+      // the same axis) — half the sqrt work of the naive double loop.
+      const axs = new Float64Array(n), ays = new Float64Array(n);
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const dx = px[j] - px[i], dy = py[j] - py[i];
+          const dSq = dx * dx + dy * dy + softening;
+          const inv = 1 / (dSq * Math.sqrt(dSq));
+          const si = G * ms[j] * inv, sj = G * ms[i] * inv;
+          axs[i] += dx * si; ays[i] += dy * si;
+          axs[j] -= dx * sj; ays[j] -= dy * sj;
+        }
       }
-      if (ax || ay) {
-        if (a.isSleeping) this.M.Sleeping.set(a, false);
-        this.M.Body.setVelocity(a, { x: a.velocity.x + ax, y: a.velocity.y + ay });
+      for (let i = 0; i < n; i++) if (!arr[i].isStatic) kick(i, axs[i], ays[i]);
+    }
+    const { K, range, softening } = this._magnetism;
+    if (K > 0 && this._magnets.size) {
+      const IRON = 35;
+      const rangeSq = range * range;
+      const indexOf = new Map();
+      for (let i = 0; i < n; i++) indexOf.set(arr[i], i);
+      // uniform grid over all bodies (cell = range): neighbours within
+      // `range` live in the 3×3 block of cells around the source.
+      const grid = new Map();
+      for (let i = 0; i < n; i++) {
+        const key = `${Math.floor(px[i] / range)},${Math.floor(py[i] / range)}`;
+        let cell = grid.get(key);
+        if (!cell) { cell = []; grid.set(key, cell); }
+        cell.push(i);
+      }
+      const magnets = [...this._magnets];
+      const ordinal = new Map(magnets.map((b, i) => [b, i]));
+      for (const src of magnets) {
+        const si = indexOf.get(src);
+        if (si === undefined) continue;
+        const ss = src.plugin.pe.desc.magnet;
+        const cx = Math.floor(px[si] / range), cy = Math.floor(py[si] / range);
+        for (let gx = cx - 1; gx <= cx + 1; gx++) for (let gy = cy - 1; gy <= cy + 1; gy++) {
+          const cell = grid.get(`${gx},${gy}`);
+          if (!cell) continue;
+          for (const ti of cell) {
+            if (ti === si) continue;
+            const tgt = arr[ti];
+            if (tgt.isStatic) continue; // statics exert (as sources) but never move
+            const tm = tgt.plugin.pe.desc.magnet;
+            // magnet–magnet pairs are handled once, from the earlier source
+            if (tm !== 0 && ordinal.get(tgt) < ordinal.get(src)) continue;
+            const dx = px[ti] - px[si], dy = py[ti] - py[si];
+            const dSq = dx * dx + dy * dy;
+            if (dSq > rangeSq || dSq < 1e-9 || ms[ti] <= 0) continue;
+            const d = Math.sqrt(dSq);
+            const ux = dx / d, uy = dy / d;
+            // signed scalar along source->target: >0 pushes apart, <0 pulls together
+            const f = tm !== 0
+              ? (K * ss * tm) / (dSq + softening)
+              : -(K * Math.abs(ss) * IRON) / (dSq + softening);
+            // Per-step kick clamp: at contact distance the raw force is
+            // huge; an uncapped kick makes stuck bodies buzz against the
+            // contact solver and can sling overlap pairs across the world.
+            const MAXK = 0.8;
+            let kx = ux * f / ms[ti], ky = uy * f / ms[ti];
+            const km = Math.hypot(kx, ky);
+            if (km > MAXK) { kx *= MAXK / km; ky *= MAXK / km; }
+            kick(ti, kx, ky);
+            if (!src.isStatic && ms[si] > 0) {
+              let sx = -ux * f / ms[si], sy = -uy * f / ms[si];
+              const sm = Math.hypot(sx, sy);
+              if (sm > MAXK) { sx *= MAXK / sm; sy *= MAXK / sm; }
+              kick(si, sx, sy);
+            }
+          }
+        }
       }
     }
   }
@@ -661,6 +797,63 @@ export class PhysicsEngine {
           const keep = 1 - f.drag * frac;
           Body.setVelocity(b, { x: b.velocity.x * keep, y: b.velocity.y * keep });
         }
+      }
+    }
+  }
+
+  /* ---------------- wind regions (target-velocity fields) ----------------
+     A wind is an axis-aligned rectangle (given by its CENTER and size)
+     carrying a target velocity (vx, vy) in px/step. A dynamic body
+     overlapping the region is blended toward that velocity — the gaseous
+     sibling of fluid drag. The blend rate scales with the bounds-overlap
+     fraction and with (reference density / body density), so light, airy
+     bodies are blown around while dense blocks barely stir; `power`
+     (0..2, default 1) scales the effect per region. */
+  /**
+   * Add a wind region: { id?, x, y, width, height, vx = 3, vy = 0,
+   * power = 1 }. Returns the stored record (a copy).
+   */
+  addWind(partial = {}) {
+    const rec = {
+      id: typeof partial.id === 'string' && partial.id ? partial.id : `wind-${this._seq++}`,
+      x: num(partial.x, 0), y: num(partial.y, 0),
+      width: Math.max(1, num(partial.width, 400)), height: Math.max(1, num(partial.height, 240)),
+      vx: Math.min(16, Math.max(-16, num(partial.vx, 3))),
+      vy: Math.min(16, Math.max(-16, num(partial.vy, 0))),
+      power: Math.min(2, Math.max(0, num(partial.power, 1))),
+    };
+    this._winds.set(rec.id, rec);
+    return { ...rec };
+  }
+  removeWind(id) { return this._winds.delete(id); }
+  clearWinds() { this._winds.clear(); }
+  windById(id) { const w = this._winds.get(id); return w ? { ...w } : null; }
+  /** All wind regions (copies), in insertion order. */
+  winds() { return [...this._winds.values()].map((w) => ({ ...w })); }
+  get windCount() { return this._winds.size; }
+
+  _applyWinds() {
+    const { Body, Sleeping } = this.M;
+    for (const w of this._winds.values()) {
+      if (w.power <= 0) continue;
+      const top = w.y - w.height / 2, bottom = w.y + w.height / 2;
+      const left = w.x - w.width / 2, right = w.x + w.width / 2;
+      for (const b of this._byId.values()) {
+        if (b.isStatic) continue;
+        const bd = b.bounds;
+        const ox = Math.min(bd.max.x, right) - Math.max(bd.min.x, left);
+        const oy = Math.min(bd.max.y, bottom) - Math.max(bd.min.y, top);
+        if (ox <= 0 || oy <= 0) continue;
+        const area = Math.max(1, (bd.max.x - bd.min.x) * (bd.max.y - bd.min.y));
+        const frac = Math.min(1, (ox * oy) / area);
+        const densityRatio = 0.0012 / Math.max(0.0001, b.density);
+        const rate = Math.min(0.5, 0.06 * w.power * frac * densityRatio);
+        if (rate <= 0.001) continue;
+        if (b.isSleeping) Sleeping.set(b, false);
+        Body.setVelocity(b, {
+          x: b.velocity.x + (w.vx - b.velocity.x) * rate,
+          y: b.velocity.y + (w.vy - b.velocity.y) * rate,
+        });
       }
     }
   }
@@ -743,6 +936,17 @@ export class PhysicsEngine {
   setFriction(body, v) { body.friction = v; body.plugin.pe.desc.friction = v; }
   setFrictionAir(body, v) { body.frictionAir = Math.min(1, Math.max(0, v)); body.plugin.pe.desc.frictionAir = body.frictionAir; }
   setRestitution(body, v) { body.restitution = v; body.plugin.pe.desc.restitution = v; }
+  /** Set a body's magnetic pole strength (signed, clamped to [-100, 100]).
+   *  Keeps the magnet registry in sync; non-finite input is ignored. */
+  setMagnet(body, v) {
+    if (!body || !body.plugin || !body.plugin.pe || !Number.isFinite(Number(v))) return;
+    const val = Math.min(100, Math.max(-100, Number(v)));
+    body.plugin.pe.desc.magnet = val;
+    if (val !== 0) this._magnets.add(body); else this._magnets.delete(body);
+    this.wake(body);
+  }
+  /** A body's current magnetic pole strength (0 when not magnetic). */
+  magnetOf(body) { return body && body.plugin && body.plugin.pe ? body.plugin.pe.desc.magnet : 0; }
   setStatic(body, flag) {
     this.M.Body.setStatic(body, flag);
     body.plugin.pe.desc.isStatic = flag;

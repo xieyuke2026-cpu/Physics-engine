@@ -1,9 +1,9 @@
 # MotionLab — 2D Physics Sandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.4.0-blue.svg)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.5.0-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-328%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-385%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -41,7 +41,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 做成一个**任何项目都能直接复用的开源引擎**：
 
 - **PhysicsEngine**（`js/engine/physics-engine.js`）：与应用无关的 2D 物理核心——
-  纯数据描述符、固定步进、种子随机、物体命名、万有引力、流体浮力、Formulas 公式库。
+  纯数据描述符、固定步进、种子随机、物体命名、万有引力、流体浮力、磁力、风场、Formulas 公式库。
   复制这一个文件（加 `vendor/matter.min.js`）即可在你自己的项目里用。
 - **在线示例**（GitHub Pages 可直接打开）：
   [万有引力轨道](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) ·
@@ -70,12 +70,13 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 - 快捷键：Ctrl+D 复制物体、方向键微调位置（Shift=10px）、R 旋转 15°（Shift+R 反向）
 - **画布截图导出 PNG**（顶部相机按钮）
 
-**实验预设（共 14 个，首页卡片带概览图，点卡片或按钮一键载入并自动运行）**
+**实验预设（共 16 个，首页卡片带概览图，点卡片或按钮一键载入并自动运行）**
 - 牛顿摆（5 球刚性摆杆）、多米诺骨牌、方块金字塔、斜坡滚球、高弹球阵列
 - **v1.6 新增**：双摆混沌（双连杆 + 轨迹）、桥梁承重（弹簧链桥面 + 重载）、钉板概率（高尔顿板）、
   蹦床弹簧网（弹性网兜住落体）、漏斗沙漏（小球穿 V 型漏斗）
 - **v1.9 新增**：过山车回环、保龄球（重球撞三角瓶阵）
 - **v1.23 新增**：万有引力轨道（两两引力下的双行星轨道）、浮力池（软木/木块/铁块按密度浮沉）
+- **v1.25 新增**：磁铁阵列（固定磁铁把磁球按极性分拣、铁球被吸附）、风洞实验（泡沫球被吹进收集区、铁块原地不动）
 - **v1.10 修复**：过山车回环重做——v1.9 的圆环是封闭的且小球从环下穿过，根本进不去；
   新版改为导杆回环：小球由一根刚性导杆牵引，沿 24 段轨道圆环内侧完整绕行约 1.7 圈后
   逐渐摆动停稳（自由滚动在分段轨道上会因段角卡滞与能量不足无法完成整圈，实测对比后选导杆方案）
@@ -111,7 +112,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 - **物体操作**：停止运动、水平/垂直翻转速度
 - 所有修改实时同步到物理引擎（尺寸修改通过原地重建保持 id 与材质参数）
 - 未选中时显示场景属性：**重力预设**（月球/地球/木星/零重力/侧向）、重力 X/Y、模拟速度、重力开关、
-  **世界效应（v1.23）：万有引力 G 与流体区域（浮力）的添加/编辑**、
+  **世界效应（v1.23 起，v1.25 扩充）：万有引力 G、流体区域（浮力）与风场区域的添加/编辑；物体「材质」一节可设磁性（+N/−S 极，同极相斥、异极相吸、吸铁）**、
   网格 / 速度向量 / **运动轨迹**显示开关、**物体列表**（点选定位、单删）
 
 **项目管理**
@@ -121,7 +122,8 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
   更新时间，以及打开 / 重命名 / 复制 / 导出 / 删除操作；可按名称搜索。
   在实验室里点顶部「我的项目」或左上角 Logo 随时回首页；窄屏时侧边栏自动变为顶部横条
 - 新建 / 保存 / 加载 / 重命名 / 复制 / 删除场景（场景库存于 localStorage）
-- 导出 / 导入 JSON（格式 `motionlab-scene` v2，含 `constraints`；v1 文件可继续导入，导入时完整校验，错误会逐条提示）
+- 导出 / 导入 JSON（格式 `motionlab-scene` v2，含 `constraints`；v1 文件可继续导入，导入时完整校验，错误会逐条提示）；**主页工具栏也有「导入场景」入口**，不必先进实验室
+- **分享链接（v1.25）**：点顶部或场景卡上的「分享」，整个场景被压缩编码进链接（`#s=` 哈希，无后端），对方打开链接直接进入这个场景
 - 自动保存：刷新页面后恢复上次场景
 
 **状态栏**：FPS、物体数量、模拟状态、重力、模拟速度、缩放比例。

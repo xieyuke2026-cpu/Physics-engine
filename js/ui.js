@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.24';
+export const APP_VERSION = '1.25';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -56,7 +56,8 @@ export class Panel {
    *        onDeleteSelected(), onDuplicateSelected(), onSaveScene(), onNewScene(),
    *        onBodyAction(action), onSelectBody(id), onDeleteBody(id), onGravityPreset(key),
    *        onBodyRename(name), onAddFluid(), onSelectFluid(id), onDeleteFluid(id),
-   *        onFluidProp(id,key,value), onShowScene() } */
+   *        onFluidProp(id,key,value), onAddWind(), onSelectWind(id), onDeleteWind(id),
+   *        onWindProp(id,key,value), onShowScene() } */
   constructor(root, cb) {
     this.root = root;
     this.cb = cb;
@@ -91,13 +92,14 @@ export class Panel {
     });
   }
 
-  showScene(settings, bodies, fluids) {
+  showScene(settings, bodies, fluids, winds) {
     const list = Array.isArray(bodies) ? bodies : [];
     const flist = Array.isArray(fluids) ? fluids : [];
-    const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',');
+    const wlist = Array.isArray(winds) ? winds : [];
+    const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',') + '|' + wlist.map((w) => `${w.id}:${w.vx},${w.vy}`).join(',');
     if (this.mode === 'scene' && this.root.childElementCount && this._sceneSig === sig) { this.refreshScene(settings, list.length); return; }
     this._sceneSig = sig;
-    this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null;
+    this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('场景属性 Scene', 'Scene Properties')));
     const ro = el(`<div class="readonly-grid"><span>${L('物体数量', 'Bodies')}</span><b data-ro="count">${list.length}</b>
@@ -119,7 +121,7 @@ export class Panel {
     r.appendChild(row(gx, gy));
     r.appendChild(sliderField('Simulation Speed', 'speed', settings.speed, 0.1, 2, 0.1));
     r.appendChild(switchRow(L('启用重力 Enable Gravity', 'Enable Gravity'), 'gravityEnabled', settings.gravityEnabled));
-    r.appendChild(title(L('世界效应 · 引力与浮力', 'World Effects · Gravitation & Fluids')));
+    r.appendChild(title(L('世界效应 · 引力、浮力与风场', 'World Effects · Gravitation, Fluids & Wind')));
     r.appendChild(el(`<p class="empty-note">${L('万有引力让所有物体两两相吸（牛顿公式，连地面和墙壁也会参与），适合行星轨道类实验；建议同时关掉上面的普通重力，或直接载入「万有引力轨道」预设。G = 0 即关闭。', 'Pairwise gravitation pulls every body toward every other (Newton\'s law — floors and walls join in), ideal for planetary orbits. Turn regular gravity off above, or load the "Orbital Gravitation" preset. G = 0 disables it.')}</p>`));
     r.appendChild(sliderField(L('万有引力 Gravitation G', 'Gravitation G'), 'gravitation', settings.gravitation || 0, 0, 60, 1));
     r.appendChild(row(
@@ -141,6 +143,22 @@ export class Panel {
         fwrap.appendChild(rowEl);
       });
       r.appendChild(fwrap);
+    }
+    r.appendChild(el(`<p class="empty-note">${L('风场区域是一块带方向的空气：区域内的物体被吹向风速的方向，越轻吹得越快，密实铁块几乎不动。点「添加」放一块默认向右吹的风场，再点选区域编辑风向与范围。物体的磁性在各自的属性里设置（材质一节）。', 'A wind region is a block of moving air: bodies inside are blown toward the wind velocity — lighter bodies go faster, dense iron barely stirs. Add a default rightward field, then click the region to edit its direction and size. Magnetism is set per body (Material section).')}</p>`));
+    const addWind = el(`<button class="btn block">${icon('plus', 16)}${L(' 添加风场区域（风）', ' Add Wind Region')}</button>`);
+    addWind.addEventListener('click', () => this.cb.onAddWind());
+    r.appendChild(addWind);
+    if (wlist.length) {
+      const wwrap = el('<div class="obj-list"></div>');
+      wlist.forEach((w, i) => {
+        const rowEl = el(`<button class="obj-row"><span class="o-name">${L(`风场 ${i + 1}`, `Wind ${i + 1}`)}</span><span class="o-type">${L(`风速 (${w.vx}, ${w.vy})`, `wind (${w.vx}, ${w.vy})`)} · ${Math.round(w.width)}×${Math.round(w.height)}</span></button>`);
+        rowEl.addEventListener('click', () => this.cb.onSelectWind(w.id));
+        const del = el(`<span class="tb-btn icon o-del">${icon('trash', 16)}</span>`);
+        del.addEventListener('click', (e) => { e.stopPropagation(); this.cb.onDeleteWind(w.id); });
+        rowEl.appendChild(del);
+        wwrap.appendChild(rowEl);
+      });
+      r.appendChild(wwrap);
     }
     r.appendChild(title(L('显示', 'Display')));
     r.appendChild(switchRow(L('显示网格 Grid', 'Show Grid'), 'showGrid', settings.showGrid));
@@ -166,7 +184,7 @@ export class Panel {
       }
       r.appendChild(wrap);
     }
-    r.appendChild(el(`<p class="empty-note">${L('在画布上点选一个物体，这里会显示它的物理参数；点选蓝色流体区域可编辑浮力参数，在上方「名称」框里还能给物体改名。', 'Click a body on the canvas to see its physics parameters here; click a blue fluid region to edit buoyancy, and rename bodies in the Name field of their panel.')}</p>`));
+    r.appendChild(el(`<p class="empty-note">${L('在画布上点选一个物体，这里会显示它的物理参数；点选流体/风场区域可编辑区域参数，在物体的「名称」框里还能给它改名。', 'Click a body on the canvas to see its physics parameters here; click a fluid or wind region to edit it, and rename bodies in the Name field of their panel.')}</p>`));
     this._wireNumbers(r, (k, v) => this.cb.onSceneProp(k, v));
     this._collectInputs();
   }
@@ -181,7 +199,7 @@ export class Panel {
   showBody(data, live) {
     const sameTarget = this.mode === 'body' && this.selectedId === data.id;
     if (sameTarget) { this.refreshBody(live); return; }
-    this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null;
+    this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null; this.selectedWindId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('物体属性 Object', 'Object Properties')));
     const head = el(`<div class="readonly-grid"><span>${L('类型 Type', 'Type')}</span><b>${typeLabel(data.type)}</b>
@@ -242,6 +260,8 @@ export class Panel {
     r.appendChild(sliderField(L('Friction 摩擦力', 'Friction'), 'friction', data.friction, 0, 1, 0.01));
     r.appendChild(sliderField(L('Restitution 弹性', 'Restitution'), 'restitution', data.restitution, 0, 1, 0.01));
     r.appendChild(sliderField(L('Air Friction 空气阻力', 'Air Friction'), 'frictionAir', data.frictionAir, 0, 0.1, 0.001));
+    r.appendChild(sliderField(L('磁性 Magnetism（+N 极 / −S 极）', 'Magnetism (+N / −S pole)'), 'magnet', data.magnet || 0, -100, 100, 5));
+    r.appendChild(el(`<p class="empty-note">${L('磁极：同极相斥、异极相吸（作用范围约 320），磁铁还会吸引没有磁性的铁质物体；轻的物体反应更强。0 = 无磁性。', 'Poles: like poles repel, opposite poles attract (range ≈ 320); magnets also pull unmagnetised iron bodies, and lighter bodies react more. 0 = not magnetic.')}</p>`));
     if (data.type !== 'line') {
       r.appendChild(switchRow(L('Static 静态物体', 'Static'), 'isStatic', data.isStatic));
       r.appendChild(switchRow(L('锁定旋转 Lock Rotation', 'Lock Rotation'), 'lockRotation', data.lockRotation === true));
@@ -273,10 +293,40 @@ export class Panel {
     this.refreshBody(live);
   }
 
+  /** Wind-region editor: geometry + wind velocity/power, wired to onWindProp. */
+  showWind(wind) {
+    if (this.mode === 'wind' && this.selectedWindId === wind.id && this.root.childElementCount) return;
+    this.mode = 'wind'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = wind.id;
+    const r = this.root; r.innerHTML = '';
+    r.appendChild(title(L('风场区域 Wind · 风', 'Wind Region')));
+    r.appendChild(el(`<p class="empty-note">${L('区域内的物体被吹向风速 (vx, vy) 的方向：密度越小吹得越快（按 0.0012 ÷ 物体密度 放大），密实重物几乎不动。负数表示向左/向上吹。强度 Power 整体放大或减弱这个效果。', 'Bodies inside are blended toward the wind velocity (vx, vy): the lower a body\'s density, the faster it goes (scaled by 0.0012 ÷ body density); dense blocks barely stir. Negative values blow left/up. Power scales the whole effect.')}</p>`));
+    r.appendChild(row(
+      numField(L('中心 X', 'Center X'), 'wx', wind.x, { step: 5 }),
+      numField(L('中心 Y', 'Center Y'), 'wy', wind.y, { step: 5 }),
+    ));
+    r.appendChild(row(
+      numField(L('Width 宽度', 'Width'), 'wwidth', wind.width, { step: 10, min: 20, max: 4000 }),
+      numField(L('Height 高度', 'Height'), 'wheight', wind.height, { step: 10, min: 10, max: 2000 }),
+    ));
+    r.appendChild(sliderField(L('风速 X Wind X', 'Wind X'), 'wvx', wind.vx, -12, 12, 0.5));
+    r.appendChild(sliderField(L('风速 Y Wind Y', 'Wind Y'), 'wvy', wind.vy, -12, 12, 0.5));
+    r.appendChild(sliderField(L('强度 Power', 'Power'), 'wpower', wind.power, 0, 2, 0.1));
+    const back = el(`<button class="btn block">${L('返回场景属性', 'Back to Scene Properties')}</button>`);
+    back.addEventListener('click', () => this.cb.onShowScene());
+    const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除风场区域', ' Delete Wind Region')}</button>`);
+    del.addEventListener('click', () => this.cb.onDeleteWind(wind.id));
+    r.appendChild(back); r.appendChild(del);
+    this._wireNumbers(r, (k, v) => {
+      const map = { wx: 'x', wy: 'y', wwidth: 'width', wheight: 'height', wvx: 'vx', wvy: 'vy', wpower: 'power' };
+      if (map[k]) this.cb.onWindProp(wind.id, map[k], v);
+    });
+    this._collectInputs();
+  }
+
   /** Fluid-region editor: geometry + density/drag, wired to onFluidProp. */
   showFluid(fluid) {
     if (this.mode === 'fluid' && this.selectedFluidId === fluid.id && this.root.childElementCount) return;
-    this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id;
+    this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id; this.selectedWindId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('流体区域 Fluid · 浮力', 'Fluid Region · Buoyancy')));
     r.appendChild(el(`<p class="empty-note">${L('区域上沿是液面。浮力按「流体密度 ÷ 物体密度 × 浸没比例」计算：物体密度小于流体就浮起，大于就沉底。默认水的密度约 0.0012。', 'The top edge of the region is the surface. Buoyancy = fluid density ÷ body density × submerged fraction: bodies less dense than the fluid float, denser ones sink. Default water density ≈ 0.0012.')}</p>`));

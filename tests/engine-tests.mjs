@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.4.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.5.0');
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
 pe.addBody({ kind: 'rect', x: 100, y: 400, width: 500, height: 20, isStatic: true });
@@ -355,6 +355,84 @@ function galtonBins(seed) {
   pe.removeFluid('water');
   for (let s = 0; s < 240; s++) pe.stepOnce();
   check('fluids: removing the fluid lets the floater sink', wood.position.y > 500, `y=${wood.position.y.toFixed(1)}`);
+}
+
+/* --- v1.5.0: magnetism --- */
+{
+  const dist = (a, b) => Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y);
+  // opposite poles attract
+  const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  const a = pe.addBody({ kind: 'circle', x: 300, y: 300, radius: 15, density: 0.001, frictionAir: 0, magnet: 80 });
+  const b = pe.addBody({ kind: 'circle', x: 420, y: 300, radius: 15, density: 0.001, frictionAir: 0, magnet: -80 });
+  const d0 = dist(a, b);
+  for (let s = 0; s < 240; s++) pe.stepOnce();
+  check('magnetism: opposite poles attract (distance shrinks)', dist(a, b) < d0 - 50, `${d0.toFixed(0)} -> ${dist(a, b).toFixed(0)}`);
+  check('magnetism: both bodies moved toward each other', a.position.x > 315 && b.position.x < 405, `a=${a.position.x.toFixed(0)} b=${b.position.x.toFixed(0)}`);
+}
+{
+  const dist = (a, b) => Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y);
+  // like poles repel + momentum conserved (no collisions on this path)
+  const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  const a = pe.addBody({ kind: 'circle', x: 300, y: 300, radius: 15, density: 0.001, frictionAir: 0, magnet: 80 });
+  const b = pe.addBody({ kind: 'circle', x: 420, y: 300, radius: 15, density: 0.002, frictionAir: 0, magnet: 80 });
+  for (let s = 0; s < 240; s++) pe.stepOnce();
+  check('magnetism: like poles repel (distance grows)', dist(a, b) > 190, `d=${dist(a, b).toFixed(0)}`);
+  const p = pe.totalMomentum();
+  check('magnetism: total momentum conserved', Math.abs(p.x) < 0.01 && Math.abs(p.y) < 0.01, `p=(${p.x.toFixed(4)}, ${p.y.toFixed(4)})`);
+}
+{
+  // a magnet pulls unmagnetised iron; out-of-range pairs feel nothing
+  const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  pe.addBody({ kind: 'rect', x: 300, y: 300, width: 40, height: 40, isStatic: true, magnet: 90 });
+  const iron = pe.addBody({ kind: 'circle', x: 430, y: 300, radius: 14, density: 0.004, frictionAir: 0 });
+  for (let s = 0; s < 240; s++) pe.stepOnce();
+  check('magnetism: static magnet attracts an iron body', iron.position.x < 375, `x=${iron.position.x.toFixed(0)}`);
+  const far = pe.addBody({ kind: 'circle', x: 300, y: 900, radius: 14, density: 0.001, frictionAir: 0, magnet: -90 });
+  const fx = far.position.x, fy = far.position.y;
+  for (let s = 0; s < 60; s++) pe.stepOnce();
+  check('magnetism: no force beyond range (320)', far.position.x === fx && far.position.y === fy, `(${far.position.x}, ${far.position.y})`);
+}
+{
+  // registry, setter, snapshot, disable switch, validation, formula signs
+  const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  const body = pe.addBody({ kind: 'rect', x: 100, y: 100, width: 30, height: 30 });
+  check('magnetism: plain body is not magnetic', pe.magnetOf(body) === 0 && pe.magnetCount === 0);
+  pe.setMagnet(body, -50);
+  check('magnetism: setMagnet registers the pole', pe.magnetOf(body) === -50 && pe.magnetCount === 1);
+  check('magnetism: snapshot carries the pole strength', pe.snapshot().bodies.find((d) => d.id === pe.idOf(body)).magnet === -50);
+  pe.setMagnet(body, 0);
+  check('magnetism: clearing the pole deregisters it', pe.magnetCount === 0);
+  check('magnetism: descriptor validation flags a bad magnet', PhysicsEngine.validateDescriptor({ magnet: 'x' }).length > 0);
+  check('magnetism: Formulas.magneticForce sign (repel + / attract -)',
+    Formulas.magneticForce(1.2, 50, 50, 10000, 400) > 0 && Formulas.magneticForce(1.2, 50, -50, 10000, 400) < 0);
+  const pe2 = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  pe2.setMagnetism(0);
+  const a = pe2.addBody({ kind: 'circle', x: 300, y: 300, radius: 15, density: 0.001, frictionAir: 0, magnet: 80 });
+  const b = pe2.addBody({ kind: 'circle', x: 420, y: 300, radius: 15, density: 0.001, frictionAir: 0, magnet: -80 });
+  for (let s = 0; s < 120; s++) pe2.stepOnce();
+  check('magnetism: setMagnetism(0) disables all pole forces', a.position.x === 300 && b.position.x === 420);
+}
+
+/* --- v1.5.0: wind regions --- */
+{
+  const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  pe.addWind({ id: 'gale', x: 400, y: 300, width: 700, height: 300, vx: 6, vy: 0, power: 1 });
+  const light = pe.addBody({ kind: 'circle', x: 250, y: 300, radius: 14, density: 0.0003, frictionAir: 0, name: 'leaf' });
+  const heavy = pe.addBody({ kind: 'rect', x: 250, y: 380, width: 30, height: 30, density: 0.01, frictionAir: 0, name: 'iron' });
+  const outside = pe.addBody({ kind: 'circle', x: 100, y: 60, radius: 10, density: 0.0003, frictionAir: 0, name: 'far' });
+  for (let s = 0; s < 30; s++) pe.stepOnce();
+  check('wind: light body is blown toward wind speed fast', light.velocity.x > 3.5, `vx=${light.velocity.x.toFixed(2)}`);
+  check('wind: dense body responds far more slowly', heavy.velocity.x < 1.5, `vx=${heavy.velocity.x.toFixed(2)}`);
+  check('wind: body outside the region is untouched', outside.velocity.x === 0 && outside.position.x === 100);
+  for (let s = 0; s < 210; s++) pe.stepOnce();
+  check('wind: light body travels downwind', light.position.x > 430, `x=${light.position.x.toFixed(0)}`);
+  check('wind: snapshot carries winds; registry reads back',
+    pe.snapshot().winds.length === 1 && pe.windById('gale').vx === 6 && pe.windCount === 1);
+  const pe2 = new PhysicsEngine({});
+  const counts = pe2.load(pe.snapshot());
+  check('wind: load() restores winds', counts.winds === 1 && pe2.windCount === 1);
+  pe2.removeWind('gale');
+  check('wind: removeWind works', pe2.windCount === 0);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -128,9 +128,9 @@ check('nav: card has a thumbnail canvas', !!doc.querySelector('#sceneList .scene
 await wait(120); // thumbnails draw on rAF
 check('nav: thumbnail actually drawn', drawCalls > 0);
 check('nav: presets listed as cards with overview thumbnails',
-  doc.querySelectorAll('#presetList .preset-card').length === 14
+  doc.querySelectorAll('#presetList .preset-card').length === 16
   && !!doc.querySelector('#presetList .preset-card canvas.thumb'));
-check('nav: sidebar preset count shows 2D only while 3D is hidden', doc.getElementById('countPresets').textContent === '14');
+check('nav: sidebar preset count shows 2D only while 3D is hidden', doc.getElementById('countPresets').textContent === '16');
 
 // search filters cards
 const search = doc.getElementById('sceneSearch');

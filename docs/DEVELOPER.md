@@ -14,8 +14,8 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.24 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.4.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| MotionLab（应用） | 1.25 | `js/ui.js` 的 `APP_VERSION` |
+| PhysicsEngine（2D 核心） | 1.5.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -40,7 +40,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.4.0'
+  console.log(VERSION); // '1.5.0'
 </script>
 ```
 
@@ -93,6 +93,8 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 | 命名（1.4.0 新增） | 描述符 `name` 字段、`nameOf(body)`、`getBodyByName(name)`、`getBodiesByName(name)`、`renameBody(bodyOrId, name)` |
 | 万有引力（1.4.0 新增） | `setGravitation(G, { softening })`、`gravitation`（读配置）、`setGravitation(0)` 关闭 |
 | 流体浮力（1.4.0 新增） | `addFluid({ id?, x, y, width, height, density, drag })`、`removeFluid(id)`、`fluids()`、`fluidById(id)`、`fluidCount` |
+| 磁力（1.5.0 新增） | 描述符字段 `magnet`（−100..100）、`setMagnetism(K, { range, softening })`、`magnetism`、`setMagnet(body, v)`、`magnetOf(body)`、`magnetCount` |
+| 风场（1.5.0 新增） | `addWind({ id?, x, y, width, height, vx, vy, power })`、`removeWind(id)`、`winds()`、`windById(id)`、`windCount` |
 | 公式与测量（1.4.0 新增） | `Formulas.*`（纯函数，见下）、`bodyKineticEnergy(body)`、`totalKineticEnergy()`、`bodyMomentum(body)`、`totalMomentum()`、`centerOfMass()` |
 | 稳定性（1.4.0 新增） | `PhysicsEngine.validateDescriptor(desc)`、`findNonFiniteBodies()`、`{ maxSpeed }` / `setMaxSpeed(v)` |
 
@@ -135,6 +137,25 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 缩放——全浸且密度相等时恰好中性悬浮；`drag` 为浸没时每子步的速度保留
 衰减。浮力只在世界重力非零时生效。快照携带 `fluids` 数组。
 
+### 磁力（1.5.0）
+
+描述符字段 `magnet` 是带符号的极性强度（−100..100，正为 N 极、负为 S 极）。
+两个磁性体之间按 `F = K · s1 · s2 / (d² + ε²)` 相互作用：同号相斥、异号
+相吸（即 `Formulas.magneticForce`）；磁性体还会以等效强度 35 吸引无磁性
+的动态体（「铁」）。与引力相同，磁力以速度踢方式每固定步施加一次；双边
+踢量为 力 ÷ 各自质量，故总动量守恒、轻体反应更强；单步踢速上限 0.8。
+与引力不同，磁力是短程的：超出 `range`（默认 320）的配对完全无力，
+内部用均匀网格做范围裁剪。全局用 `setMagnetism(K, { range, softening })`
+调参，`setMagnetism(0)` 关闭；运行时改单个物体用 `setMagnet(body, v)`。
+
+### 风场区域（1.5.0）
+
+`addWind({ x, y, width, height, vx = 3, vy = 0, power = 1 })`：(x, y) 为
+区域**中心**，(vx, vy) 是风速（px/步）。动态体与区域重叠时，其速度每子步
+按比例混合趋向风速，混合率 ∝ 重叠面积比例 × `power` × (0.0012 ÷ 物体
+密度)：轻体迅速被吹到风速，密实体几乎不动——流体的气态对应物（浮力靠
+密度比，这里的混合率同样靠密度比）。快照携带 `winds` 数组。
+
 ### Formulas 公式库（1.4.0）
 
 `import { Formulas } from '.../physics-engine.js'`（或
@@ -145,6 +166,7 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 | 动能 / 转动动能 | `kineticEnergy(m, vx, vy)` / `rotationalEnergy(I, ω)` |
 | 动量 / 改速冲量 | `momentum(m, vx, vy)` / `impulseForDeltaV(m, dvx, dvy)` |
 | 万有引力大小 | `gravitationalForce(G, m1, m2, r)` |
+| 磁极作用力（有符号，1.5.0） | `magneticForce(K, s1, s2, d², ε²)`（正为斥、负为吸） |
 | 环绕 / 逃逸速度 | `orbitVelocity(G, M, r)` / `escapeVelocity(G, M, r)` |
 | 胡克定律 / 弹簧势能 | `springForce(k, x)` / `springEnergy(k, x)` |
 | 单摆周期 | `pendulumPeriod(L, g)` |
@@ -162,7 +184,7 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
   `findNonFiniteBodies()` 可审计世界健康。
 - `{ maxSpeed }`（或 `setMaxSpeed(v)`）给速度封顶（px/步，0 = 关）：封顶在求解器
   之前执行，失控冲量不会把物体送出世界。
-- `load()` 跳过非对象条目并返回 `{ bodies, constraints, fluids }` 载入计数。
+- `load()` 跳过非对象条目并返回 `{ bodies, constraints, fluids, winds }` 载入计数。
 
 ### 版本历史
 
@@ -173,6 +195,9 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 - 1.3.0 — 种子随机（`seed` 选项、`random` 系列 API、快照携带 RNG 状态）
 - 1.4.0 — 命名物体、万有引力、流体浮力、Formulas 公式库、稳定性加固
   （校验 / 非有限守卫 / 速度封顶）
+- 1.5.0 — 磁力（`magnet` 描述符字段、极性互斥/相吸、吸铁、范围裁剪）、
+  风场区域（`addWind`）、两两力通道优化（统一遍历 + 类型化数组 +
+  引力对称配对，隔离基准约快 40%）
 
 ---
 

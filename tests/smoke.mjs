@@ -141,7 +141,7 @@ check('scenes modal lists saved scene', doc.getElementById('sceneList').textCont
 
 /* --- v1.1/v1.6: presets (cards with overview thumbnails since 1.6) --- */
 const presetBtns = doc.querySelectorAll('#presetList .preset-card');
-check('v1.9: fourteen preset cards rendered', presetBtns.length === 14, `got ${presetBtns.length}`);
+check('v1.9: sixteen preset cards rendered', presetBtns.length === 16, `got ${presetBtns.length}`);
 check('v1.6: preset cards carry overview thumbnails', !!presetBtns[0].querySelector('canvas.thumb'));
 click(presetBtns[0].querySelector('.mini-btn')); // Newton's cradle (auto-runs)
 await wait(500);
@@ -198,8 +198,8 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.24')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.4.0')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.25')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.5.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
@@ -298,6 +298,17 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
     && doc.getElementById('panelBody').textContent.includes('场景属性'));
   click(doc.querySelector('#modalSettings [data-close]'));
   await wait(60);
+}
+
+/* --- v1.25: share button, hub import entry, wind add button --- */
+{
+  check('v1.25: top bar has a share button with an icon',
+    !!doc.getElementById('btnShare') && doc.getElementById('btnShare').innerHTML.includes('<svg'));
+  check('v1.25: home hub toolbar has an import-scene entry',
+    !!doc.getElementById('btnImportHub') && doc.getElementById('btnImportHub').textContent.includes('导入场景'));
+  check('v1.25: scene panel offers adding a wind region',
+    doc.getElementById('panelBody').textContent.includes('添加风场区域'),
+    doc.getElementById('panelBody').textContent.slice(0, 80));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

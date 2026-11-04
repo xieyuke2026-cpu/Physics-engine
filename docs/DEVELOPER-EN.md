@@ -15,8 +15,8 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.24 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.4.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| MotionLab (app) | 1.25 | `APP_VERSION` in `js/ui.js` |
+| PhysicsEngine (2D core) | 1.5.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.4.0'
+  console.log(VERSION); // '1.5.0'
 </script>
 ```
 
@@ -98,6 +98,8 @@ restore the whole world.
 | Naming (added 1.4.0) | descriptor `name` field, `nameOf(body)`, `getBodyByName(name)`, `getBodiesByName(name)`, `renameBody(bodyOrId, name)` |
 | Gravitation (added 1.4.0) | `setGravitation(G, { softening })`, `gravitation` (read the config), `setGravitation(0)` to disable |
 | Fluids (added 1.4.0) | `addFluid({ id?, x, y, width, height, density, drag })`, `removeFluid(id)`, `fluids()`, `fluidById(id)`, `fluidCount` |
+| Magnetism (added 1.5.0) | descriptor field `magnet` (−100..100), `setMagnetism(K, { range, softening })`, `magnetism`, `setMagnet(body, v)`, `magnetOf(body)`, `magnetCount` |
+| Wind fields (added 1.5.0) | `addWind({ id?, x, y, width, height, vx, vy, power })`, `removeWind(id)`, `winds()`, `windById(id)`, `windCount` |
 | Formulas & measurement (added 1.4.0) | `Formulas.*` (pure functions, below), `bodyKineticEnergy(body)`, `totalKineticEnergy()`, `bodyMomentum(body)`, `totalMomentum()`, `centerOfMass()` |
 | Stability (added 1.4.0) | `PhysicsEngine.validateDescriptor(desc)`, `findNonFiniteBodies()`, `{ maxSpeed }` / `setMaxSpeed(v)` |
 
@@ -149,6 +151,31 @@ equal density means neutral buoyancy. `drag` is the per-substep velocity
 retention decay while submerged. Buoyancy only applies while world gravity
 is non-zero. Snapshots carry a `fluids` array.
 
+### Magnetism (1.5.0)
+
+The descriptor field `magnet` is a signed pole strength (−100..100;
+positive = N pole, negative = S pole). Two magnetic bodies interact with
+`F = K · s1 · s2 / (d² + ε²)`: same signs repel, opposite signs attract
+(this is `Formulas.magneticForce`). A magnetic body also attracts
+unmagnetised dynamic bodies ("iron") with an effective strength of 35.
+Like gravitation, magnetism is applied as a velocity kick once per fixed
+step; the kick on each side is force ÷ that body's mass, so total momentum
+is conserved and lighter bodies react more; each kick is capped at
+0.8 px/step. Unlike gravitation, magnetism is short-ranged: pairs beyond
+`range` (default 320) feel nothing, and a uniform grid keeps the cost
+local. Tune globally with `setMagnetism(K, { range, softening })`,
+`setMagnetism(0)` disables it; change one body with `setMagnet(body, v)`.
+
+### Wind regions (1.5.0)
+
+`addWind({ x, y, width, height, vx = 3, vy = 0, power = 1 })`: (x, y) is
+the region's **center**; (vx, vy) is the wind velocity in px/step. A
+dynamic body overlapping the region has its velocity blended toward the
+wind velocity every substep, at a rate ∝ overlap-area fraction × `power`
+× (0.0012 ÷ body density): light bodies quickly reach wind speed while
+dense blocks barely stir — the gaseous counterpart of fluids. Snapshots
+carry a `winds` array.
+
 ### The Formulas library (1.4.0)
 
 `import { Formulas } from '.../physics-engine.js'` (or
@@ -159,6 +186,7 @@ is non-zero. Snapshots carry a `fluids` array.
 | Kinetic / rotational energy | `kineticEnergy(m, vx, vy)` / `rotationalEnergy(I, ω)` |
 | Momentum / impulse for Δv | `momentum(m, vx, vy)` / `impulseForDeltaV(m, dvx, dvy)` |
 | Gravitational force | `gravitationalForce(G, m1, m2, r)` |
+| Magnetic pole force (signed, 1.5.0) | `magneticForce(K, s1, s2, d², ε²)` (positive = repel, negative = attract) |
 | Orbital / escape velocity | `orbitVelocity(G, M, r)` / `escapeVelocity(G, M, r)` |
 | Hooke's law / spring energy | `springForce(k, x)` / `springEnergy(k, x)` |
 | Pendulum period | `pendulumPeriod(L, g)` |
@@ -181,7 +209,7 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
 - `{ maxSpeed }` (or `setMaxSpeed(v)`) caps velocity (px/step, 0 = off). The
   cap runs before the solver, so a runaway impulse can't eject a body from
   the world.
-- `load()` skips non-object entries and returns `{ bodies, constraints, fluids }`
+- `load()` skips non-object entries and returns `{ bodies, constraints, fluids, winds }`
   load counts.
 
 ### Version history
@@ -193,6 +221,11 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
 - 1.3.0 — seeded RNG (`seed` option, the `random` API family, RNG state in snapshots)
 - 1.4.0 — named bodies, pairwise gravitation, fluid buoyancy, the Formulas
   library, stability hardening (validation / non-finite guards / speed cap)
+- 1.5.0 — magnetism (the `magnet` descriptor field, pole attraction /
+  repulsion, iron attraction, range culling), wind regions (`addWind`),
+  and a faster pairwise-force pass (one unified traversal, typed-array
+  hoisting, symmetric gravitation pairs — ≈40% faster on an isolated
+  150-body benchmark)
 
 ---
 

@@ -48,7 +48,7 @@ export class Renderer {
 
   draw(world, opts) {
     const { ctx, view, camera } = this;
-    const { selectedId = null, selectedFluidId = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null } = opts;
+    const { selectedId = null, selectedFluidId = null, selectedWindId = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null } = opts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = '#fafafa';
     ctx.fillRect(0, 0, view.w, view.h);
@@ -62,6 +62,10 @@ export class Renderer {
     // fluid regions sit behind everything else (drawn first, under bodies)
     if (typeof world.fluids === 'function') {
       for (const f of world.fluids()) this._fluid(f, f.id === selectedFluidId);
+    }
+    // wind regions share the back layer (above fluids, still under bodies)
+    if (typeof world.winds === 'function') {
+      for (const w of world.winds()) this._wind(w, w.id === selectedWindId);
     }
     // fetch the body list ONCE per frame (allBodies() copies; trails/vectors reuse it)
     const bodies = world.allBodies();
@@ -122,6 +126,43 @@ export class Renderer {
     ctx.fillStyle = 'rgba(47,109,179,0.75)';
     ctx.font = `${12 / camera.zoom}px sans-serif`;
     ctx.fillText(getLang() === 'en' ? 'Fluid · Buoyancy' : '流体 Fluid · 浮力', x + 8 / camera.zoom, y + 16 / camera.zoom);
+  }
+
+  /** A wind region: pale slate fill, dashed outline, and flow arrows along
+   *  the wind direction (arrow length grows with wind speed), plus a caption. */
+  _wind(w, isSel) {
+    const { ctx, camera } = this;
+    const x = w.x - w.width / 2, y = w.y - w.height / 2;
+    ctx.fillStyle = 'rgba(96,125,139,0.07)';
+    ctx.fillRect(x, y, w.width, w.height);
+    ctx.strokeStyle = isSel ? COLORS.accent : 'rgba(96,125,139,0.45)';
+    ctx.lineWidth = (isSel ? 2 : 1.2) / Math.sqrt(camera.zoom);
+    ctx.setLineDash([6 / camera.zoom, 5 / camera.zoom]);
+    ctx.strokeRect(x, y, w.width, w.height);
+    ctx.setLineDash([]);
+    const sp = Math.hypot(w.vx, w.vy);
+    if (sp > 0.1) {
+      const ux = w.vx / sp, uy = w.vy / sp;
+      const a = Math.atan2(uy, ux);
+      const len = Math.min(46, 14 + sp * 6);
+      const cols = Math.max(1, Math.min(12, Math.floor(w.width / 110)));
+      const rows = Math.max(1, Math.min(8, Math.floor(w.height / 64)));
+      ctx.strokeStyle = 'rgba(96,125,139,0.55)';
+      ctx.lineWidth = 1.4 / Math.sqrt(camera.zoom);
+      ctx.beginPath();
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const cx = x + (c + 0.5) * (w.width / cols), cy = y + (r + 0.5) * (w.height / rows);
+        const x1 = cx - ux * len / 2, y1 = cy - uy * len / 2;
+        const x2 = cx + ux * len / 2, y2 = cy + uy * len / 2;
+        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+        ctx.moveTo(x2, y2); ctx.lineTo(x2 - Math.cos(a - 0.45) * 6, y2 - Math.sin(a - 0.45) * 6);
+        ctx.moveTo(x2, y2); ctx.lineTo(x2 - Math.cos(a + 0.45) * 6, y2 - Math.sin(a + 0.45) * 6);
+      }
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(96,125,139,0.8)';
+    ctx.font = `${12 / camera.zoom}px sans-serif`;
+    ctx.fillText(getLang() === 'en' ? `Wind · (${w.vx}, ${w.vy})` : `风场 Wind · (${w.vx}, ${w.vy})`, x + 8 / camera.zoom, y + 16 / camera.zoom);
   }
 
   _grid() {
@@ -190,6 +231,21 @@ export class Renderer {
       ctx.setLineDash([6 / camera.zoom, 4 / camera.zoom]);
       ctx.strokeRect(b.min.x - 4, b.min.y - 4, (b.max.x - b.min.x) + 8, (b.max.y - b.min.y) + 8);
       ctx.setLineDash([]);
+    }
+    // magnetic pole badge at the body's top-right bounds corner:
+    // red N (positive) / blue S (negative)
+    const mag = typeof world.magnetOf === 'function' ? world.magnetOf(body) : 0;
+    if (mag !== 0) {
+      const bx = body.bounds.max.x, by = body.bounds.min.y;
+      const r = 7.5 / camera.zoom;
+      ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2);
+      ctx.fillStyle = mag > 0 ? COLORS.danger : COLORS.accent;
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${9 / camera.zoom}px sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(mag > 0 ? 'N' : 'S', bx, by + 0.5 / camera.zoom);
+      ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
     }
   }
 

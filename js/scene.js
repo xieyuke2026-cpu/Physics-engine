@@ -40,6 +40,7 @@ export function bodyData(partial = {}) {
     friction: num(partial.friction, 0.3),
     frictionAir: num(partial.frictionAir, 0.01),
     restitution: num(partial.restitution, 0.2),
+    magnet: Math.min(100, Math.max(-100, num(partial.magnet, 0))),
     isStatic: partial.isStatic === true || type === 'line',
     isBound: partial.isBound === true,       // ground / walls that belong to the scene frame
     lockRotation: partial.lockRotation === true,
@@ -87,6 +88,22 @@ export function fluidData(partial = {}) {
   };
 }
 
+/** A plain-data wind region (target-velocity field). (x, y) is the region
+ *  CENTRE; (vx, vy) is the wind velocity in px/step, matching
+ *  PhysicsEngine.addWind. */
+export function windData(partial = {}) {
+  return {
+    id: typeof partial.id === 'string' && partial.id ? partial.id : nextId('wind'),
+    x: num(partial.x, 640),
+    y: num(partial.y, 300),
+    width: Math.min(4000, Math.max(20, num(partial.width, 760))),
+    height: Math.min(2000, Math.max(10, num(partial.height, 260))),
+    vx: Math.min(16, Math.max(-16, num(partial.vx, 4))),
+    vy: Math.min(16, Math.max(-16, num(partial.vy, 0))),
+    power: Math.min(2, Math.max(0, num(partial.power, 1))),
+  };
+}
+
 export function sceneData(partial = {}) {
   return {
     format: SCENE_FORMAT,
@@ -96,6 +113,7 @@ export function sceneData(partial = {}) {
     bodies: Array.isArray(partial.bodies) ? partial.bodies.map(bodyData) : [],
     constraints: Array.isArray(partial.constraints) ? partial.constraints.map(constraintData).filter((c) => c.bodyB) : [],
     fluids: Array.isArray(partial.fluids) ? partial.fluids.map(fluidData) : [],
+    winds: Array.isArray(partial.winds) ? partial.winds.map(windData) : [],
     updatedAt: typeof partial.updatedAt === 'number' ? partial.updatedAt : Date.now(),
   };
 }
@@ -119,7 +137,7 @@ export function validateScene(raw) {
     for (const k of ['x', 'y']) {
       if (!Number.isFinite(Number(b[k]))) errors.push(`bodies[${i}].${k} 必须是有限数字`);
     }
-    for (const k of ['width', 'height', 'radius', 'density', 'friction', 'restitution']) {
+    for (const k of ['width', 'height', 'radius', 'density', 'friction', 'restitution', 'magnet']) {
       if (b[k] !== undefined && !Number.isFinite(Number(b[k]))) errors.push(`bodies[${i}].${k} 必须是有限数字`);
     }
     if (b.density !== undefined && Number(b.density) < 0) errors.push(`bodies[${i}].density 不能为负`);
@@ -156,6 +174,18 @@ export function validateScene(raw) {
         if (!f || typeof f !== 'object') { errors.push(`fluids[${i}] 不是对象`); return; }
         for (const k of ['x', 'y', 'width', 'height', 'density', 'drag']) {
           if (f[k] !== undefined && !Number.isFinite(Number(f[k]))) errors.push(`fluids[${i}].${k} 必须是有限数字`);
+        }
+      });
+    }
+  }
+  if (raw.winds !== undefined) {
+    if (!Array.isArray(raw.winds)) errors.push('winds 必须是数组');
+    else {
+      if (raw.winds.length > 20) errors.push('风场区域数量超过上限 20');
+      raw.winds.forEach((w, i) => {
+        if (!w || typeof w !== 'object') { errors.push(`winds[${i}] 不是对象`); return; }
+        for (const k of ['x', 'y', 'width', 'height', 'vx', 'vy', 'power']) {
+          if (w[k] !== undefined && !Number.isFinite(Number(w[k]))) errors.push(`winds[${i}].${k} 必须是有限数字`);
         }
       });
     }
@@ -487,6 +517,46 @@ export function presetScenes() {
       scene: sceneData({
         name: '浮力池 Buoyancy Pool', bodies,
         fluids: [fluidData({ x: 640, y: 455, width: 760, height: 170, density: 0.0012, drag: 0.03 })],
+      }),
+    });
+  }
+
+  // Magnet array — two fixed poles (N +90 / S −90) sort loose magnetic
+  // balls by polarity: opposite poles attract, like poles repel, and plain
+  // iron balls are pulled to whichever magnet they fall near.
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ type: 'circle', x: 430, y: 300, radius: 26, isStatic: true, friction: 0.4, magnet: 100, label: 'Magnet N 磁铁' }));
+    bodies.push(bodyData({ type: 'circle', x: 850, y: 300, radius: 26, isStatic: true, friction: 0.4, magnet: -100, label: 'Magnet S 磁铁' }));
+    bodies.push(bodyData({ type: 'circle', x: 548, y: 300, radius: 16, density: 0.0015, friction: 0.4, frictionAir: 0.002, restitution: 0.2, magnet: -80, label: 'S Ball 磁球' }));
+    bodies.push(bodyData({ type: 'circle', x: 732, y: 300, radius: 16, density: 0.0015, friction: 0.4, frictionAir: 0.002, restitution: 0.2, magnet: 80, label: 'N Ball 磁球' }));
+    bodies.push(bodyData({ type: 'circle', x: 430, y: 170, radius: 14, density: 0.003, friction: 0.4, frictionAir: 0.002, restitution: 0.2, label: 'Iron Ball 铁球' }));
+    bodies.push(bodyData({ type: 'circle', x: 850, y: 170, radius: 14, density: 0.003, friction: 0.4, frictionAir: 0.002, restitution: 0.2, label: 'Iron Ball 铁球' }));
+    bodies.push(bodyData({ type: 'circle', x: 500, y: 520, radius: 14, density: 0.003, friction: 0.4, frictionAir: 0.002, restitution: 0.2, label: 'Iron Ball 铁球' }));
+    bodies.push(bodyData({ type: 'circle', x: 780, y: 520, radius: 14, density: 0.003, friction: 0.4, frictionAir: 0.002, restitution: 0.2, label: 'Iron Ball 铁球' }));
+    out.push({ key: 'magnets', name: '磁铁阵列', scene: sceneData({ name: '磁铁阵列 Magnet Array', bodies }) });
+  }
+
+  // Wind tunnel — one wide wind field blows light balls and paper across
+  // the stage while a wood block creeps and an iron block stays put:
+  // the blend rate scales with (reference density / body density).
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ type: 'rectangle', x: 270, y: 486, width: 300, height: 14, isStatic: true, friction: 0.4, label: 'Shelf 平台' }));
+    for (let i = 0; i < 3; i++) {
+      bodies.push(bodyData({ type: 'circle', x: 190 + i * 45, y: 450, radius: 13, density: 0.0003, friction: 0.3, frictionAir: 0.002, restitution: 0.4, label: 'Foam Ball 泡沫球' }));
+    }
+    bodies.push(bodyData({ type: 'rectangle', x: 200, y: 200, width: 34, height: 10, density: 0.0002, friction: 0.3, frictionAir: 0.002, restitution: 0.2, label: 'Paper 纸片' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 260, y: 160, width: 34, height: 10, density: 0.0002, friction: 0.3, frictionAir: 0.002, restitution: 0.2, label: 'Paper 纸片' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 330, y: 505, width: 44, height: 44, density: 0.02, friction: 0.9, frictionAir: 0.002, restitution: 0.1, label: 'Iron 铁块' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 430, y: 505, width: 44, height: 44, density: 0.001, friction: 0.5, frictionAir: 0.002, restitution: 0.1, label: 'Wood 木块' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 700, y: 380, width: 200, height: 14, angle: -0.15, isStatic: true, friction: 0.2, label: 'Ramp 斜坡' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 1000, y: 490, width: 12, height: 100, isStatic: true, friction: 0.4, label: 'Bin Wall 收集墙' }));
+    out.push({
+      key: 'windtunnel', name: '风洞实验',
+      scene: sceneData({
+        name: '风洞实验 Wind Tunnel', bodies,
+        winds: [windData({ x: 640, y: 320, width: 1000, height: 420, vx: 5, vy: 0, power: 1 })],
       }),
     });
   }
