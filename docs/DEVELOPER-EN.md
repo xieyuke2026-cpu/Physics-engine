@@ -16,7 +16,7 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 | Component | Version | Single source of truth |
 |---|---|---|
 | MotionLab (app) | 1.27 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.6.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| PhysicsEngine (2D core) | 1.7.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.6.0'
+  console.log(VERSION); // '1.7.0'
 </script>
 ```
 
@@ -100,6 +100,7 @@ restore the whole world.
 | Fluids (added 1.4.0) | `addFluid({ id?, x, y, width, height, density, drag })`, `removeFluid(id)`, `fluids()`, `fluidById(id)`, `fluidCount` |
 | Magnetism (added 1.5.0) | descriptor field `magnet` (−100..100), `setMagnetism(K, { range, softening })`, `magnetism`, `setMagnet(body, v)`, `magnetOf(body)`, `magnetCount` |
 | Wind fields (added 1.5.0) | `addWind({ id?, x, y, width, height, vx, vy, power })`, `removeWind(id)`, `winds()`, `windById(id)`, `windCount` |
+| Hinges & motors (added 1.7.0) | `addHinge({ id?, bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })`, `removeHinge(id)`, `hingeById(id)`, `describeHinges()`, `hingeCount`, `hingeAnchors()`, `setHingeMotor(id, v)` |
 | Formulas & measurement (added 1.4.0) | `Formulas.*` (pure functions, below), `bodyKineticEnergy(body)`, `totalKineticEnergy()`, `bodyMomentum(body)`, `totalMomentum()`, `centerOfMass()` |
 | Stability (added 1.4.0) | `PhysicsEngine.validateDescriptor(desc)`, `findNonFiniteBodies()`, `{ maxSpeed }` / `setMaxSpeed(v)` |
 
@@ -176,6 +177,26 @@ wind velocity every substep, at a rate ∝ overlap-area fraction × `power`
 dense blocks barely stir — the gaseous counterpart of fluids. Snapshots
 carry a `winds` array.
 
+### Hinges & motors (1.7.0)
+
+`addHinge({ bodyA, bodyB, pointA, pointB, motorSpeed = 0, motorPower = 0.0025 })`
+pins two bodies at one shared point so they can only rotate around it
+(a rigid zero-length constraint, the same mechanism as the Newton's
+cradle rods); with `bodyA: null`, pointA is a fixed world mount.
+`motorSpeed` is the motor's target **relative angular velocity**
+(rad/step, ±0.3, positive = clockwise), approached with a per-step
+acceleration cap of `motorPower`; when both ends are dynamic the
+reaction is split by inverse inertia, so momentum stays honest.
+Motor-driven bodies never fall asleep (sleeping zeroes velocity and
+would fight the drive every step). **Collision groups:** each
+hinge-connected cluster shares a negative Matter collision group —
+parts of one machine never collide with each other and can swing
+through one another, otherwise two end-pinned bars jam on their own
+corners after a few degrees; collisions with everything outside the
+machine are unaffected. Hinges persist in snapshots (a `hinges`
+array) and are cleaned up when a body is removed; `hingeAnchors()`
+returns resolved world pin points for rendering and picking.
+
 ### The Formulas library (1.4.0)
 
 `import { Formulas } from '.../physics-engine.js'` (or
@@ -209,7 +230,7 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
 - `{ maxSpeed }` (or `setMaxSpeed(v)`) caps velocity (px/step, 0 = off). The
   cap runs before the solver, so a runaway impulse can't eject a body from
   the world.
-- `load()` skips non-object entries and returns `{ bodies, constraints, fluids, winds }`
+- `load()` skips non-object entries and returns `{ bodies, constraints, fluids, winds, hinges }`
   load counts.
 
 ### Version history
@@ -238,6 +259,12 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   pair pass ≈40% faster); fluids skip sleeping bodies,
   constraintSegments is pooled, and allocation-free forEachFluid /
   forEachWind iterators were added
+- 1.7.0 — machinery: hinges (addHinge, rotation about a shared pin)
+  and motors (target relative angular velocity, acceleration cap,
+  reaction split by inverse inertia, driven bodies never sleep);
+  hinge clusters share a negative collision group (parts of one
+  machine never collide); hingeAnchors for rendering/picking;
+  hinges persist in snapshots
 
 ---
 

@@ -3,7 +3,8 @@
    drawing in render.js, panel DOM in ui.js, persistence in storage.js. */
 
 import { icon, TOOL_ICONS } from './icons.js';
-import { sceneData, bodyData, constraintData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS } from './scene.js';
+import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS } from './scene.js';
+import { Recorder } from './record.js';
 import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';
 import { PhysicsWorld } from './physics.js';
 import { PhysicsEngine } from './engine/physics-engine.js';
@@ -28,6 +29,7 @@ const canvas = $('world');
 const world = new PhysicsWorld();
 const renderer = new Renderer(canvas);
 const camera = renderer.camera;
+const recorder = new Recorder(canvas); // GIF recording (1.28, record.js)
 
 let settings = { ...DEFAULT_SETTINGS };
 let sceneName = 'Untitled Scene';
@@ -36,11 +38,14 @@ let tool = 'select';
 let selectedId = null;
 let selectedFluidId = null;
 let selectedWindId = null;
+let selectedHingeId = null;
 let initialSnapshot = null;   // for Reset: state at load / last save
 let preview = null;
 let dragPoint = null;
 let springStart = null;   // {bodyId|null, offset:{x,y}, point:{x,y}} first spring endpoint
 let springCur = null;     // current pointer world pos while placing a spring
+let hingeStart = null;    // same shape as springStart: the pin point for a hinge
+let hingeCur = null;      // current pointer world pos while placing a hinge
 
 /* ---------------- toast ---------------- */
 let toastTimer = null;
@@ -58,6 +63,7 @@ function currentScene() {
     settings: { ...settings },
     bodies: world.allBodies().map((b) => world.serializeBody(b)),
     constraints: world.serializeConstraints(),
+    hinges: world.serializeHinges(),
     fluids: world.fluids(),
     winds: world.winds(),
   });
@@ -72,7 +78,9 @@ function loadScene(scene, { markInitial = true } = {}) {
   selectedId = null;
   selectedFluidId = null;
   selectedWindId = null;
+  selectedHingeId = null;
   springStart = null; springCur = null;
+  hingeStart = null; hingeCur = null;
   renderer.clearTrails();
   if (markInitial) initialSnapshot = JSON.stringify(currentScene());
   refreshPanel();
@@ -173,7 +181,7 @@ function addMagnetAt(x, y, radius = 26) {
     density: 0.008, magnet: 100, label: 'Magnet N 磁铁',
   }));
   selectedId = world.dataIdOf(b);
-  selectedFluidId = null; selectedWindId = null;
+  selectedFluidId = null; selectedWindId = null; selectedHingeId = null;
   refreshPanel(); pushHistorySoon(); scheduleAutosave();
   toast(t('msg.magnetAdded'));
   return b;
@@ -213,6 +221,7 @@ const panel = new Panel($('panelBody'), {
     selectedId = id;
     selectedFluidId = null;
     selectedWindId = null;
+    selectedHingeId = null;
     refreshPanel();
   },
   onDeleteBody(id) {
@@ -259,13 +268,13 @@ const panel = new Panel($('panelBody'), {
   },
   onAddFluid() {
     const f = world.addFluid(fluidData({}));
-    selectedFluidId = f.id; selectedId = null; selectedWindId = null;
+    selectedFluidId = f.id; selectedId = null; selectedWindId = null; selectedHingeId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.fluidAdded'));
   },
   onSelectFluid(id) {
     if (!world.fluidById(id)) return;
-    selectedFluidId = id; selectedId = null; selectedWindId = null;
+    selectedFluidId = id; selectedId = null; selectedWindId = null; selectedHingeId = null;
     refreshPanel();
   },
   onDeleteFluid(id) {
@@ -280,13 +289,13 @@ const panel = new Panel($('panelBody'), {
   },
   onAddWind() {
     const w = world.addWind(windData({}));
-    selectedWindId = w.id; selectedId = null; selectedFluidId = null;
+    selectedWindId = w.id; selectedId = null; selectedFluidId = null; selectedHingeId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.windAdded'));
   },
   onSelectWind(id) {
     if (!world.windById(id)) return;
-    selectedWindId = id; selectedId = null; selectedFluidId = null;
+    selectedWindId = id; selectedId = null; selectedFluidId = null; selectedHingeId = null;
     refreshPanel();
   },
   onDeleteWind(id) {
@@ -299,7 +308,17 @@ const panel = new Panel($('panelBody'), {
     world.updateWind(id, { [key]: value });
     pushHistorySoon(); scheduleAutosave();
   },
-  onShowScene() { selectedFluidId = null; selectedWindId = null; refreshPanel(); },
+  onShowScene() { selectedFluidId = null; selectedWindId = null; selectedHingeId = null; refreshPanel(); },
+  onHingeProp(id, key, value) {
+    if (key === 'motorSpeed') world.setHingeMotor(id, value);
+    pushHistorySoon(); scheduleAutosave();
+  },
+  onDeleteHinge(id) {
+    world.removeHinge(id);
+    if (selectedHingeId === id) selectedHingeId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.hingeDeleted'));
+  },
   onAddMagnet() {
     // Centre of the world stage (the camera frames 0..1280 × 0..600).
     setTool('select');
@@ -342,6 +361,15 @@ function pickWind(w) {
 function refreshPanel() {
   const b = selectedBody();
   if (b) { panel.showBody(world.serializeBody(b), liveOf(b)); return; }
+  if (selectedHingeId) {
+    const h = world.hingeById(selectedHingeId);
+    if (h) {
+      const labelOf = (id) => { const bb = world.bodyById(id); return bb ? (world.serializeBody(bb).label || id) : id; };
+      panel.showHinge(h, h.bodyA ? labelOf(h.bodyA) : null, labelOf(h.bodyB));
+      return;
+    }
+    selectedHingeId = null;
+  }
   if (selectedFluidId) {
     const f = world.fluidById(selectedFluidId);
     if (f) { panel.showFluid(f); return; }
@@ -356,6 +384,13 @@ function refreshPanel() {
 }
 
 function deleteSelected() {
+  if (selectedHingeId) {
+    world.removeHinge(selectedHingeId);
+    selectedHingeId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.hingeDeleted'));
+    return;
+  }
   if (!selectedId) return;
   world.removeBody(selectedId);
   selectedId = null;
@@ -419,12 +454,15 @@ function toWorld(e) {
   return camera.screenToWorld(e.clientX - r.left, e.clientY - r.top, renderer.view);
 }
 function hintFor(toolName) {
-  const key = toolName === 'spring' ? (springStart ? 'hint.springNext' : 'hint.springStart') : `hint.${toolName}`;
+  const key = toolName === 'spring' ? (springStart ? 'hint.springNext' : 'hint.springStart')
+    : toolName === 'hinge' ? (hingeStart ? 'hint.hingeNext' : 'hint.hingeStart')
+    : `hint.${toolName}`;
   $('stageHint').textContent = t(key);
 }
 function setTool(t) {
   tool = t;
   if (t !== 'spring') { springStart = null; springCur = null; }
+  if (t !== 'hinge') { hingeStart = null; hingeCur = null; }
   document.querySelectorAll('.tool-btn').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
   hintFor(t);
   canvas.style.cursor = t === 'move' ? 'grab' : t === 'delete' ? 'not-allowed' : 'crosshair';
@@ -476,6 +514,75 @@ function handleSpringTap(w) {
   } else toast(t('msg.springFailed'));
 }
 
+/** World point of a hinge's first endpoint (mirrors springAnchorWorld). */
+function hingeAnchorWorld() {
+  if (!hingeStart) return null;
+  if (!hingeStart.bodyId) return { ...hingeStart.point };
+  const b = world.bodyById(hingeStart.bodyId);
+  if (!b) return null;
+  const c = Math.cos(b.angle), s = Math.sin(b.angle);
+  const o = hingeStart.offset;
+  return { x: b.position.x + o.x * c - o.y * s, y: b.position.y + o.x * s + o.y * c };
+}
+
+/** Two-tap hinge placement: the FIRST tap sets the pin point (on a body,
+ *  or empty space for a fixed mount); the second tap picks the partner
+ *  body, which is pinned at that same world point. */
+function handleHingeTap(w) {
+  const b = world.pick(w.x, w.y);
+  if (!hingeStart) {
+    hingeStart = b
+      ? { bodyId: world.dataIdOf(b), offset: localOffset(b, w), point: { ...w } }
+      : { bodyId: null, offset: { x: 0, y: 0 }, point: { ...w } };
+    hingeCur = { ...w };
+    hintFor('hinge');
+    toast(b ? t('msg.hingeStartBody') : t('msg.hingeStartAnchor'));
+    return;
+  }
+  const start = hingeStart;
+  hingeStart = null; hingeCur = null;
+  hintFor('hinge');
+  if (!b) { toast(t('msg.hingeNeedBody')); return; }
+  if (start.bodyId && world.dataIdOf(b) === start.bodyId) { toast(t('msg.hingeSameBody')); return; }
+  const pin = start.bodyId
+    ? hingeAnchorOf(start)
+    : start.point;
+  const data = hingeData({
+    bodyA: start.bodyId,
+    bodyB: world.dataIdOf(b),
+    pointA: start.bodyId ? start.offset : start.point,
+    pointB: localOffset(b, pin),
+    motorSpeed: 0,
+  });
+  const created = world.addHinge(data);
+  if (created) {
+    selectedHingeId = created.id;
+    selectedId = null; selectedFluidId = null; selectedWindId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.hingeCreated'));
+  } else toast(t('msg.hingeFailed'));
+}
+
+/** Resolve the world pin point from a stored hinge start (body may have moved). */
+function hingeAnchorOf(start) {
+  const b = world.bodyById(start.bodyId);
+  if (!b) return start.point;
+  const c = Math.cos(b.angle), s = Math.sin(b.angle);
+  const o = start.offset;
+  return { x: b.position.x + o.x * c - o.y * s, y: b.position.y + o.x * s + o.y * c };
+}
+
+/** Nearest hinge anchor within tap tolerance of a world point, or null. */
+function pickHinge(wx, wy) {
+  const tol = 14 / camera.zoom;
+  let best = null, bestD = tol;
+  for (const a of world.hingeAnchors()) {
+    const d = Math.hypot(wx - a.x, wy - a.y);
+    if (d < bestD) { bestD = d; best = a; }
+  }
+  return best;
+}
+
 /** Nearest spring segment within tap tolerance of a world point, or null. */
 function pickSpring(wx, wy) {
   const tol = 12 / camera.zoom;
@@ -507,9 +614,19 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   if (tool === 'spring') { handleSpringTap(w); return; }
+  if (tool === 'hinge') { handleHingeTap(w); return; }
   if (tool === 'blast') { applyBlast(w); return; }
   if (tool === 'delete') {
-    // springs first: tapping near a spring line removes the spring, not a body
+    // hinges first: their pin markers are small targets sitting on bodies
+    const hg = pickHinge(w.x, w.y);
+    if (hg) {
+      world.removeHinge(hg.id);
+      if (selectedHingeId === hg.id) selectedHingeId = null;
+      refreshPanel(); pushHistorySoon(); scheduleAutosave();
+      toast(t('msg.hingeDeleted'));
+      return;
+    }
+    // springs next: tapping near a spring line removes the spring, not a body
     const seg = pickSpring(w.x, w.y);
     if (seg) {
       world.removeConstraint(seg.id);
@@ -544,11 +661,24 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   // select / move
+  // hinge pins win over bodies in the select tool: the marker usually
+  // sits ON a body, so it must be checked first or it can never be picked.
+  if (tool === 'select') {
+    const hg = pickHinge(w.x, w.y);
+    if (hg) {
+      selectedHingeId = hg.id;
+      selectedId = null; selectedFluidId = null; selectedWindId = null;
+      refreshPanel();
+      gesture = { kind: 'none' };
+      return;
+    }
+  }
   const b = world.pick(w.x, w.y);
   if (b) {
     selectedId = world.dataIdOf(b);
     selectedFluidId = null;
     selectedWindId = null;
+    selectedHingeId = null;
     refreshPanel();
     if (!b.isStatic) {
       if (running) { world.beginDrag(b, w.x, w.y); dragPoint = { x: w.x, y: w.y, bodyX: b.position.x, bodyY: b.position.y }; }
@@ -566,6 +696,7 @@ canvas.addEventListener('pointerdown', (e) => {
       const wn = pickWind(w);
       const f = wn ? null : pickFluid(w);
       selectedId = null;
+      selectedHingeId = null;
       selectedWindId = wn ? wn.id : null;
       selectedFluidId = f ? f.id : null;
       refreshPanel();
@@ -580,6 +711,7 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (tool === 'spring' && springStart) springCur = toWorld(e);
+  if (tool === 'hinge' && hingeStart) hingeCur = toWorld(e);
   if (!gesture) return;
   if (gesture.kind === 'pinch' && pointers.size === 2) {
     const d = pinchDist(), c = pinchCenter();
@@ -1318,6 +1450,7 @@ function applyChromeLabels() {
   const scenes = $('btnScenes'); if (scenes) scenes.innerHTML = `${icon('folder', 17)} ${t('tb.projects')}`;
   const nw = $('btnNewScene'); if (nw) nw.innerHTML = `${icon('plus', 16)} ${t('tb.newScene')}`;
   const dup = $('btnDuplicateScene'); if (dup) dup.innerHTML = `${icon('copy', 16)} ${t('tb.dupScene')}`;
+  updateRecBtn();
 }
 
 function initChrome() {
@@ -1349,6 +1482,8 @@ function initChrome() {
     const b = selectedBody();
     if (b) panel.refreshBody(liveOf(b));
   });
+  recorder.onAutoStop = () => stopRecording();
+  $('btnRecord').addEventListener('click', () => { recorder.recording ? stopRecording() : startRecording(); });
   $('btnShot').addEventListener('click', () => {
     renderer.draw(world, {
       selectedId, showGrid: settings.showGrid, showVectors: settings.showVectors,
@@ -1431,8 +1566,8 @@ function initChrome() {
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveCurrent(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); }
     else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); setRunning(!running); }
-    else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { deleteSelected(); }
-    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; springStart = null; springCur = null; refreshPanel(); }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedId || selectedHingeId)) { deleteSelected(); }
+    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; springStart = null; springCur = null; hingeStart = null; hingeCur = null; refreshPanel(); }
     else if (selectedId && e.key.startsWith('Arrow')) {
       e.preventDefault();
       const b = selectedBody(); if (!b) return;
@@ -1452,6 +1587,38 @@ function initChrome() {
   });
   window.addEventListener('resize', () => renderer.resize());
   window.addEventListener('beforeunload', () => { try { store.saveAutosave(currentScene()); } catch {} });
+}
+
+/* ---------------- GIF recording (1.28) ---------------- */
+function startRecording() {
+  recorder.start();
+  updateRecBtn();
+  toast(t('msg.recStart'));
+}
+async function stopRecording() {
+  if (!recorder.recording && !recorder.frameCount) return;
+  const frames = recorder.frameCount;
+  const blob = await recorder.stop();
+  updateRecBtn();
+  if (!blob || !frames) { toast(t('msg.recEmpty')); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${(sceneName || 'motionlab').replace(/[\\/:*?"<>|]/g, '_')}.gif`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(t('msg.recDone', { n: frames }));
+}
+function updateRecBtn() {
+  const btn = $('btnRecord');
+  if (!btn) return;
+  if (recorder.recording) {
+    const s = Math.floor(recorder.elapsed);
+    btn.innerHTML = `${icon('stop', 15)}<span>${t('rec.stop')} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</span>`;
+    btn.classList.add('recording');
+  } else {
+    btn.innerHTML = `${icon('record', 15)}<span>${t('rec.label')}</span>`;
+    btn.classList.remove('recording');
+  }
 }
 
 /* ---------------- status + main loop ---------------- */
@@ -1477,27 +1644,33 @@ function loop(now) {
   fpsFrames++;
   if (now - fpsT >= 500) {
     $('stFps').textContent = `FPS ${Math.round(fpsFrames * 1000 / (now - fpsT))}`;
+    if (recorder.recording) updateRecBtn();
     fpsFrames = 0; fpsT = now;
   }
   // Fixed-timestep accumulator lives in the engine core: stable physics at
   // any display refresh rate, with spiral-of-death protection built in.
   if (running) world.advance(dt, settings.speed);
   const anchor = springAnchorWorld();
+  const hAnchor = hingeAnchorWorld();
   renderer.draw(world, {
     selectedId,
     selectedFluidId,
     selectedWindId,
+    selectedHingeId,
+    hinges: world.hingeAnchors(),
     showGrid: settings.showGrid,
     showVectors: settings.showVectors,
     showTrails: settings.showTrails,
     preview,
     dragPoint,
-    springPreview: anchor && springCur ? { a: anchor, b: springCur } : null,
+    springPreview: anchor && springCur ? { a: anchor, b: springCur }
+      : hAnchor && hingeCur ? { a: hAnchor, b: hingeCur } : null,
     blast: blastFx && (now - blastFx.startedAt) < 400
       ? { x: blastFx.x, y: blastFx.y, radius: blastFx.radius, age: (now - blastFx.startedAt) / 1000 }
       : null,
   });
   if (blastFx && now - blastFx.startedAt >= 400) blastFx = null;
+  if (recorder.recording) recorder.capture();
 }
 
 /* ---------------- landing (first visit) ---------------- */

@@ -49,7 +49,7 @@ export class Renderer {
 
   draw(world, opts) {
     const { ctx, view, camera } = this;
-    const { selectedId = null, selectedFluidId = null, selectedWindId = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null } = opts;
+    const { selectedId = null, selectedFluidId = null, selectedWindId = null, selectedHingeId = null, hinges = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null } = opts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = '#fafafa';
     ctx.fillRect(0, 0, view.w, view.h);
@@ -107,6 +107,9 @@ export class Renderer {
       ctx.beginPath(); ctx.arc(springPreview.a.x, springPreview.a.y, 4 / camera.zoom, 0, Math.PI * 2);
       ctx.fillStyle = COLORS.accent; ctx.fill();
     }
+    // hinge pins on top of bodies: a ring + centre dot; motorised hinges
+    // get a second ring so they read as powered at a glance.
+    if (hinges) for (const h of hinges) this._hinge(h, h.id === selectedHingeId);
     if (showVectors) for (const body of bodies) this._vector(body);
     if (dragPoint && world.dragging) {
       ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 1.2 / camera.zoom;
@@ -116,6 +119,42 @@ export class Renderer {
     }
     if (preview) this._preview(preview);
     ctx.restore();
+  }
+
+  /** A hinge pin marker: outer ring (accent when selected), centre dot,
+   *  and a direction tick for motorised hinges showing the spin sense. */
+  _hinge(h, isSel) {
+    const { ctx, camera } = this;
+    const r = 7 / camera.zoom;
+    ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = isSel ? COLORS.accent : '#555f6b';
+    ctx.lineWidth = (isSel ? 2.2 : 1.5) / camera.zoom;
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(h.x, h.y, 2.2 / camera.zoom, 0, Math.PI * 2);
+    ctx.fillStyle = isSel ? COLORS.accent : '#555f6b';
+    ctx.fill();
+    if (h.motorSpeed) {
+      // curved direction tick: a short arc outside the ring + arrowhead,
+      // mirrored for counter-clockwise motors
+      const dir = h.motorSpeed > 0 ? 1 : -1;
+      const rr = r + 3.5 / camera.zoom;
+      const a0 = -Math.PI / 2, a1 = a0 + dir * 1.9;
+      ctx.beginPath(); ctx.arc(h.x, h.y, rr, Math.min(a0, a1), Math.max(a0, a1));
+      ctx.strokeStyle = COLORS.accent;
+      ctx.lineWidth = 1.4 / camera.zoom;
+      ctx.stroke();
+      const ex = h.x + rr * Math.cos(a1), ey = h.y + rr * Math.sin(a1);
+      const tx = -Math.sin(a1) * dir, ty = Math.cos(a1) * dir;
+      ctx.beginPath();
+      ctx.moveTo(ex + tx * 4.5 / camera.zoom, ey + ty * 4.5 / camera.zoom);
+      ctx.lineTo(ex - tx * 4.5 / camera.zoom + (ey - h.y) / rr * 3 / camera.zoom, ey - ty * 4.5 / camera.zoom - (ex - h.x) / rr * 3 / camera.zoom);
+      ctx.lineTo(ex - tx * 4.5 / camera.zoom - (ey - h.y) / rr * 3 / camera.zoom, ey - ty * 4.5 / camera.zoom + (ex - h.x) / rr * 3 / camera.zoom);
+      ctx.closePath();
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+    }
   }
 
   /** A fluid (buoyancy) region: translucent fill, a firm surface line on the

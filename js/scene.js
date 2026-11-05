@@ -74,6 +74,23 @@ function num(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** A plain-data hinge (revolute joint, 1.28). bodyA === null means pointA is a
+ *  fixed world mount; otherwise pointA/pointB are offsets from each body's
+ *  centre. motorSpeed is the motor target in rad/step (0 = plain hinge). */
+export function hingeData(partial = {}) {
+  const pt = (p, fb) => (p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y)))
+    ? { x: Number(p.x), y: Number(p.y) } : fb;
+  return {
+    id: typeof partial.id === 'string' && partial.id ? partial.id : nextId('hinge'),
+    bodyA: typeof partial.bodyA === 'string' && partial.bodyA ? partial.bodyA : null,
+    bodyB: typeof partial.bodyB === 'string' && partial.bodyB ? partial.bodyB : null,
+    pointA: pt(partial.pointA, { x: 0, y: 0 }),
+    pointB: pt(partial.pointB, { x: 0, y: 0 }),
+    motorSpeed: Math.min(0.3, Math.max(-0.3, num(partial.motorSpeed, 0))),
+    motorPower: Math.min(0.05, Math.max(0.0001, num(partial.motorPower, 0.0025))),
+  };
+}
+
 /** A plain-data fluid region (buoyancy). (x, y) is the region CENTRE and its
  *  top edge is the surface, matching PhysicsEngine.addFluid. */
 export function fluidData(partial = {}) {
@@ -112,6 +129,7 @@ export function sceneData(partial = {}) {
     settings: { ...DEFAULT_SETTINGS, ...(partial.settings || {}) },
     bodies: Array.isArray(partial.bodies) ? partial.bodies.map(bodyData) : [],
     constraints: Array.isArray(partial.constraints) ? partial.constraints.map(constraintData).filter((c) => c.bodyB) : [],
+    hinges: Array.isArray(partial.hinges) ? partial.hinges.map(hingeData).filter((h) => h.bodyB) : [],
     fluids: Array.isArray(partial.fluids) ? partial.fluids.map(fluidData) : [],
     winds: Array.isArray(partial.winds) ? partial.winds.map(windData) : [],
     updatedAt: typeof partial.updatedAt === 'number' ? partial.updatedAt : Date.now(),
@@ -161,6 +179,27 @@ export function validateScene(raw) {
           const p = c[pk];
           if (p !== undefined && (!p || !Number.isFinite(Number(p.x)) || !Number.isFinite(Number(p.y)))) {
             errors.push(`constraints[${i}].${pk} 必须是有限坐标`);
+          }
+        }
+      });
+    }
+  }
+  if (raw.hinges !== undefined) {
+    if (!Array.isArray(raw.hinges)) errors.push('hinges 必须是数组');
+    else {
+      if (raw.hinges.length > 500) errors.push('铰链数量超过上限 500');
+      const ids = new Set(raw.bodies.map((b) => b && b.id));
+      raw.hinges.forEach((h, i) => {
+        if (!h || typeof h !== 'object') { errors.push(`hinges[${i}] 不是对象`); return; }
+        if (typeof h.bodyB !== 'string' || !ids.has(h.bodyB)) errors.push(`hinges[${i}].bodyB 必须引用已存在的物体`);
+        if (h.bodyA !== null && h.bodyA !== undefined && !ids.has(h.bodyA)) errors.push(`hinges[${i}].bodyA 必须引用已存在的物体或为 null`);
+        if (h.motorSpeed !== undefined && (!Number.isFinite(Number(h.motorSpeed)) || Math.abs(Number(h.motorSpeed)) > 0.3)) {
+          errors.push(`hinges[${i}].motorSpeed 超出范围 [-0.3, 0.3]`);
+        }
+        for (const pk of ['pointA', 'pointB']) {
+          const p = h[pk];
+          if (p !== undefined && (!p || !Number.isFinite(Number(p.x)) || !Number.isFinite(Number(p.y)))) {
+            errors.push(`hinges[${i}].${pk} 必须是有限坐标`);
           }
         }
       });
@@ -594,6 +633,48 @@ export function presetScenes() {
     bodies.push(bodyData({ type: 'circle', x: 800, y: 372, radius: 26, isStatic: true, friction: 0.4, magnet: 100, label: 'Magnet N 磁铁' }));
     const constraints = [constraintData({ bodyA: null, bodyB: 'swing-ball', pointA: { x: 640, y: 100 }, pointB: { x: 0, y: 0 }, stiffness: 1, damping: 0.02, length: 232 })];
     out.push({ key: 'magnetswing', name: '磁铁秋千', scene: sceneData({ name: '磁铁秋千 Magnet Swing', bodies, constraints }) });
+  }
+
+  // Motor windmill (1.28) — a rotor bar pinned at its centre to a fixed
+  // mount, driven by a hinge motor; ball tips ride the bar ends.
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ type: 'rectangle', x: 640, y: 430, width: 26, height: 300, isStatic: true, friction: 0.5, label: 'Post 支柱' }));
+    bodies.push(bodyData({ type: 'circle', x: 640, y: 280, radius: 15, isStatic: true, friction: 0.4, label: 'Hub 轮毂' }));
+    bodies.push(bodyData({ id: 'wm-rotor', type: 'rectangle', x: 640, y: 280, width: 300, height: 22, density: 0.0015, friction: 0.3, frictionAir: 0.001, label: 'Rotor 转子' }));
+    bodies.push(bodyData({ id: 'wm-tip-l', type: 'circle', x: 490, y: 280, radius: 17, density: 0.002, friction: 0.3, frictionAir: 0.001, label: 'Tip 球' }));
+    bodies.push(bodyData({ id: 'wm-tip-r', type: 'circle', x: 790, y: 280, radius: 17, density: 0.002, friction: 0.3, frictionAir: 0.001, label: 'Tip 球' }));
+    const hinges = [
+      hingeData({ bodyA: null, bodyB: 'wm-rotor', pointA: { x: 640, y: 280 }, pointB: { x: 0, y: 0 }, motorSpeed: 0.05 }),
+      hingeData({ bodyA: 'wm-rotor', bodyB: 'wm-tip-l', pointA: { x: -150, y: 0 }, pointB: { x: 0, y: 0 } }),
+      hingeData({ bodyA: 'wm-rotor', bodyB: 'wm-tip-r', pointA: { x: 150, y: 0 }, pointB: { x: 0, y: 0 } }),
+    ];
+    out.push({ key: 'windmill', name: '马达风车', scene: sceneData({ name: '马达风车 Motor Windmill', bodies, hinges }) });
+  }
+
+  // Ferris wheel (1.28) — two crossed bars on a motor hinge; four cabins
+  // hang from the arm ends on free hinges and stay upright as it turns.
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ type: 'rectangle', x: 575, y: 420, width: 20, height: 300, angle: 0.42, isStatic: true, friction: 0.5, label: 'Leg 支架' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 705, y: 420, width: 20, height: 300, angle: -0.42, isStatic: true, friction: 0.5, label: 'Leg 支架' }));
+    bodies.push(bodyData({ type: 'circle', x: 640, y: 270, radius: 14, isStatic: true, friction: 0.4, label: 'Hub 轮毂' }));
+    bodies.push(bodyData({ id: 'fw-bar-h', type: 'rectangle', x: 640, y: 270, width: 340, height: 16, density: 0.0012, friction: 0.3, frictionAir: 0.001, label: 'Arm 横臂' }));
+    bodies.push(bodyData({ id: 'fw-bar-v', type: 'rectangle', x: 640, y: 270, width: 16, height: 340, density: 0.0012, friction: 0.3, frictionAir: 0.001, label: 'Arm 竖臂' }));
+    const hinges = [
+      hingeData({ bodyA: null, bodyB: 'fw-bar-h', pointA: { x: 640, y: 270 }, pointB: { x: 0, y: 0 }, motorSpeed: 0.012 }),
+      hingeData({ bodyA: null, bodyB: 'fw-bar-v', pointA: { x: 640, y: 270 }, pointB: { x: 0, y: 0 }, motorSpeed: 0.012 }),
+    ];
+    const cabDefs = [
+      ['fw-bar-h', { x: -170, y: 0 }, 470, 270], ['fw-bar-h', { x: 170, y: 0 }, 810, 270],
+      ['fw-bar-v', { x: 0, y: -170 }, 640, 100], ['fw-bar-v', { x: 0, y: 170 }, 640, 440],
+    ];
+    cabDefs.forEach(([arm, pa, cx, cy], i) => {
+      const id = `fw-cab-${i + 1}`;
+      bodies.push(bodyData({ id, type: 'rectangle', x: cx, y: cy + 18, width: 46, height: 32, density: 0.001, friction: 0.4, frictionAir: 0.002, label: 'Cabin 座舱' }));
+      hinges.push(hingeData({ bodyA: arm, bodyB: id, pointA: pa, pointB: { x: 0, y: -16 } }));
+    });
+    out.push({ key: 'ferris', name: '摩天轮', scene: sceneData({ name: '摩天轮 Ferris Wheel', bodies, hinges }) });
   }
 
   return out;

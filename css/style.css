@@ -41,6 +41,12 @@ svg{display:block}
 .tb-btn.primary{background:var(--accent);color:#fff;height:40px;padding:0 16px;font-weight:600;min-width:92px}
 .tb-btn.primary:hover{background:var(--accent-dark);color:#fff}
 .tb-btn.primary.is-running{background:#fff;color:var(--accent);border-color:var(--accent)}
+/* Record button (1.28): calm by default; while recording it turns
+   record-red and its dot pulses so the state reads from across the room. */
+.rec-btn{display:inline-flex;align-items:center;gap:6px}
+.rec-btn.recording{color:#b3271e;border-color:#e5b1ab;background:#fdf1f0;font-variant-numeric:tabular-nums}
+.rec-btn.recording svg{animation:recPulse 1.1s ease-in-out infinite}
+@keyframes recPulse{50%{opacity:.3}}
 
 /* ---------- Main row ---------- */
 #main{flex:1;display:flex;min-height:0;position:relative}
@@ -65,13 +71,18 @@ svg{display:block}
 
 /* ---------- Left tool rail ---------- */
 #toolrail{flex:0 0 var(--rail-w);background:var(--panel);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:4px;z-index:20}
+  display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:4px;z-index:20;overflow-y:auto;overflow-x:hidden}
 .tool-btn{width:44px;height:44px;border:1px solid transparent;background:transparent;border-radius:var(--radius);
   display:flex;align-items:center;justify-content:center;color:var(--text-2)}
 .tool-btn:hover{background:#f0f0f1;color:var(--text)}
 .tool-btn.active{background:var(--accent-soft);color:var(--accent);border-color:#c9dcee}
 .tool-btn.danger.active{background:var(--danger-soft);color:var(--danger);border-color:#ecc9c3}
 .rail-sep{width:26px;height:1px;background:var(--border);margin:5px 0}
+/* Tool-rail group captions (1.28 layout): the rail is grouped into
+   选择 / 创建 / 连接 / 作用 so the growing tool set stays scannable. */
+.rail-cap{font-size:9.5px;font-weight:600;letter-spacing:1.6px;color:var(--muted);
+  margin:9px 0 1px;text-transform:uppercase;user-select:none;-webkit-user-select:none}
+.rail-cap:first-child{margin-top:1px}
 /* Tool-rail hover tips (1.23): a dark bubble to the right of the rail that
    spells out what the tool does and how to operate it. Mouse hover and
    keyboard focus only; touch users get the same text in the stage hint. */
@@ -98,7 +109,8 @@ svg{display:block}
 #panel{flex:0 0 var(--panel-w);background:var(--panel);border-left:1px solid var(--border);overflow-y:auto;z-index:20}
 #panel.hidden-panel{display:none}
 #panelBody{padding:14px 14px 20px}
-.panel-title{font-size:12px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:2px 0 10px;display:flex;align-items:center;gap:7px}
+.panel-title{font-size:12px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:2px 0 10px;display:flex;align-items:center;gap:7px;
+  position:sticky;top:0;background:var(--panel);z-index:5;padding:8px 0 7px}
 .panel-title .dot{width:7px;height:7px;background:var(--accent);flex:0 0 7px}
 .panel-title:not(:first-child){margin-top:20px}
 .field{margin-bottom:9px}

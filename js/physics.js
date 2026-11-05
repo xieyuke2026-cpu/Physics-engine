@@ -3,7 +3,7 @@
    reusable in future projects). This file only translates between MotionLab's
    scene format (scene.js) and the engine's plain descriptors. */
 
-import { bodyData, constraintData } from './scene.js';
+import { bodyData, constraintData, hingeData } from './scene.js';
 import { PhysicsEngine } from './engine/physics-engine.js';
 
 function mlToDesc(d) {
@@ -59,10 +59,21 @@ export class PhysicsWorld {
   constraintSegments(out) { return this.core.constraintSegments(out); }
   serializeConstraints() { return this.core.describeConstraints().map((c) => constraintData(c)); }
 
+  /* ---------- hinges & motors (1.28 / core 1.7.0) ---------- */
+  addHinge(data) { return this.core.addHinge(hingeData(data)); }
+  removeHinge(id) { return this.core.removeHinge(id); }
+  get hingeCount() { return this.core.hingeCount; }
+  hingeById(id) { const h = this.core.hingeById(id); return h ? hingeData(h) : null; }
+  hinges() { return this.core.describeHinges().map((h) => hingeData(h)); }
+  hingeAnchors() { return this.core.hingeAnchors(); }
+  setHingeMotor(id, v) { return this.core.setHingeMotor(id, v); }
+  serializeHinges() { return this.hinges(); }
+
   loadScene(scene) {
     this.core.clear();
     for (const d of scene.bodies) this.addBody(d);
     for (const c of scene.constraints || []) this.addConstraint(c);
+    for (const h of scene.hinges || []) this.addHinge(h);
     for (const f of scene.fluids || []) this.core.addFluid(f);
     for (const w of scene.winds || []) this.core.addWind(w);
     this.applySettings(scene.settings);
@@ -140,6 +151,7 @@ export class PhysicsWorld {
     return {
       bodies: this.allBodies().map((b) => this.serializeBody(b)),
       constraints: this.serializeConstraints(),
+      hinges: this.serializeHinges(),
       fluids: this.core.fluids(),
       winds: this.core.winds(),
     };

@@ -60,7 +60,7 @@ check('boot: state is paused', stState().includes('已暂停'), stState());
 check('boot: scene panel visible', doc.getElementById('panelBody').textContent.includes('场景属性'));
 check('boot: toolbar icons rendered (svg)', doc.querySelectorAll('#topbar svg').length >= 8,
   `svgs=${doc.querySelectorAll('#topbar svg').length}`);
-check('boot: 11 tool buttons with svg icons', doc.querySelectorAll('#toolrail .tool-btn svg').length === 11,
+check('boot: 12 tool buttons with svg icons', doc.querySelectorAll('#toolrail .tool-btn svg').length === 12,
   `svgs=${doc.querySelectorAll('.tool-btn svg').length}`);
 check('renderer is drawing frames', drawCalls > 50, `drawCalls=${drawCalls}`);
 
@@ -141,7 +141,7 @@ check('scenes modal lists saved scene', doc.getElementById('sceneList').textCont
 
 /* --- v1.1/v1.6: presets (cards with overview thumbnails since 1.6) --- */
 const presetBtns = doc.querySelectorAll('#presetList .preset-card');
-check('v1.9: eighteen preset cards rendered', presetBtns.length === 18, `got ${presetBtns.length}`);
+check('v1.9: twenty preset cards rendered', presetBtns.length === 20, `got ${presetBtns.length}`);
 check('v1.6: preset cards carry overview thumbnails', !!presetBtns[0].querySelector('canvas.thumb'));
 click(presetBtns[0].querySelector('.mini-btn')); // Newton's cradle (auto-runs)
 await wait(500);
@@ -198,8 +198,8 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.27')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.6.0')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.28')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.7.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
@@ -237,7 +237,7 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
 {
   const toolBtns = [...doc.querySelectorAll('#toolrail .tool-btn')];
   check('v1.23: every tool-rail button carries a hover tip (data-tip)',
-    toolBtns.length === 11 && toolBtns.every((b) => (b.getAttribute('data-tip') || '').length > 10),
+    toolBtns.length === 12 && toolBtns.every((b) => (b.getAttribute('data-tip') || '').length > 10),
     `buttons=${toolBtns.length}`);
   check('v1.23: scene panel exposes the gravitation entry',
     panelBody.textContent.includes('万有引力 Gravitation G') && !!panelBody.querySelector('input[data-key="gravitation"]'));
@@ -354,6 +354,52 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   const wy1 = Number(panelBody.querySelector('[data-key="wy"]')?.value);
   check('v1.26: dragging a wind region moves its centre',
     wx1 > wx0 + 35 && wy1 > 315, `wx ${wx0} -> ${wx1}, wy -> ${wy1}`);
+}
+
+/* ---- v1.28: layout groups, record button, hinge tool ---- */
+{
+  check('v1.28: tool rail has four group captions',
+    doc.querySelectorAll('#toolrail .rail-cap').length === 4,
+    `caps=${doc.querySelectorAll('#toolrail .rail-cap').length}`);
+  const recBtn = doc.getElementById('btnRecord');
+  check('v1.28: record button exists with a label', !!recBtn && recBtn.textContent.trim().length > 0);
+  click(recBtn);
+  await wait(60);
+  check('v1.28: record button enters recording state', recBtn.classList.contains('recording'));
+  click(recBtn);
+  await wait(200);
+  check('v1.28: record button leaves recording state after stop', !recBtn.classList.contains('recording'));
+
+  // hinge flow on a paused scene: two fresh circles, pin them, drive, delete
+  click(doc.getElementById('btnPause'));
+  click(doc.querySelector('[data-tool="circle"]'));
+  pointer(canvas, 'pointerdown', 300, 300); pointer(canvas, 'pointerup', 300, 300);
+  await wait(60);
+  // creating a shape returns the tool to 'select' — re-arm the circle tool
+  click(doc.querySelector('[data-tool="circle"]'));
+  pointer(canvas, 'pointerdown', 430, 300); pointer(canvas, 'pointerup', 430, 300);
+  await wait(60);
+  click(doc.querySelector('[data-tool="hinge"]'));
+  pointer(canvas, 'pointerdown', 300, 300); pointer(canvas, 'pointerup', 300, 300);
+  await wait(60);
+  pointer(canvas, 'pointerdown', 430, 300); pointer(canvas, 'pointerup', 430, 300);
+  await wait(120);
+  const motor = panelBody.querySelector('[data-key="hmotor"]');
+  check('v1.28: hinge tool creates a hinge and opens its motor editor', !!motor,
+    panelBody.textContent.slice(0, 60));
+  if (motor) {
+    motor.value = '0.1';
+    motor.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await wait(60);
+    check('v1.28: hinge editor keeps the motor slider after input', !!panelBody.querySelector('[data-key="hmotor"]'));
+  }
+  // delete tool removes the hinge by its pin marker
+  click(doc.querySelector('[data-tool="delete"]'));
+  pointer(canvas, 'pointerdown', 300, 300); pointer(canvas, 'pointerup', 300, 300);
+  await wait(120);
+  check('v1.28: delete tool removes the hinge (editor closes)',
+    !panelBody.querySelector('[data-key="hmotor"]'));
+  click(doc.getElementById('btnPlay'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

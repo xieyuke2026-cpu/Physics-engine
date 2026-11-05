@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.6.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.7.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -61,6 +61,12 @@
              anyway) and reuse a scratch force vector;
              constraintSegments pools its segment records;
              new allocation-free forEachFluid / forEachWind iterators
+     1.7.0 — machinery: revolute hinges (addHinge — pin two bodies, or a
+             body to a fixed mount, at a shared point) with optional
+             motors (target relative angular velocity in rad/step,
+             acceleration-capped, reaction split by inverse inertia);
+             hinges ride snapshots/load, are cleaned up with their
+             bodies, and expose hingeAnchors() for rendering/picking
    ========================================================================== */
 
 let _M = null;
@@ -88,7 +94,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.6.0';
+export const VERSION = '1.7.0';
 
 /* ============================================================================
    Formulas — pure physics helpers (no engine state).
@@ -214,6 +220,7 @@ export class PhysicsEngine {
     this._bodiesCache = null;      // cached array view of _byId (invalidated on structure change)
     this._locked = new Set();      // bodies with lockRotation — the per-step lock pass touches only these
     this._cons = new Map();        // id -> {constraint, desc}
+    this._hinges = new Map();      // id -> {constraint, desc} revolute joints (1.7.0)
     this._seq = 1;
     this._drag = null;
     this._pickPt = { x: 0, y: 0 }; // scratch point for pick() — no per-call allocation
@@ -327,6 +334,9 @@ export class PhysicsEngine {
     for (const [cid, rec] of [...this._cons]) {
       if (rec.desc.bodyA === id || rec.desc.bodyB === id) this.removeConstraint(cid, false);
     }
+    for (const [hid, rec] of [...this._hinges]) {
+      if (rec.desc.bodyA === id || rec.desc.bodyB === id) this.removeHinge(hid, false);
+    }
     this.M.Composite.remove(this.world, body);
     this._byId.delete(id);
     this._locked.delete(body);
@@ -338,6 +348,8 @@ export class PhysicsEngine {
   clear() {
     for (const { constraint } of this._cons.values()) this.M.Composite.remove(this.world, constraint);
     this._cons.clear();
+    for (const { constraint } of this._hinges.values()) this.M.Composite.remove(this.world, constraint);
+    this._hinges.clear();
     for (const b of this._byId.values()) this.M.Composite.remove(this.world, b);
     this._byId.clear();
     this._locked.clear();
@@ -527,6 +539,170 @@ export class PhysicsEngine {
     return out;
   }
 
+  /* ---------------- hinges & motors (revolute joints, 1.7.0) ----------------
+     A hinge pins two bodies (or one body to a fixed world mount) at a
+     shared point so they can only ROTATE around it — implemented as a
+     rigid zero-length constraint, the same mechanism the app already
+     trusts for pendulum rods. A hinge may carry a MOTOR: a target
+     relative angular velocity (rad/step, signed) that the step loop
+     drives toward with a per-step acceleration cap, applying the
+     reaction to the other body when it is dynamic (momentum-honest,
+     split by inverse inertia). Motors skip lockRotation bodies, whose
+     inertia is infinite by design. */
+  /**
+   * Add a hinge: { id?, bodyA (id or null = fixed world mount), bodyB,
+   *   pointA, pointB (body-local offsets; world coords when bodyA null),
+   *   motorSpeed = 0 (rad/step, ±0.3), motorPower = 0.0025 (max Δω/step) }.
+   * Returns a copy of the stored descriptor, or null when bodyB (or a
+   * named bodyA) does not exist.
+   */
+  addHinge(partial = {}) {
+    const M = this.M;
+    const bodyB = this._byId.get(partial.bodyB);
+    if (!bodyB) return null;
+    const bodyA = partial.bodyA ? this._byId.get(partial.bodyA) : null;
+    if (partial.bodyA && !bodyA) return null;
+    const pt = (p) => ({ x: num(p && p.x, 0), y: num(p && p.y, 0) });
+    const desc = {
+      id: typeof partial.id === 'string' && partial.id ? partial.id : `hinge-${this._seq++}`,
+      bodyA: bodyA ? this.idOf(bodyA) : null,
+      bodyB: this.idOf(bodyB),
+      pointA: pt(partial.pointA), pointB: pt(partial.pointB),
+      motorSpeed: Math.min(0.3, Math.max(-0.3, num(partial.motorSpeed, 0))),
+      motorPower: Math.min(0.05, Math.max(0.0001, num(partial.motorPower, 0.0025))),
+    };
+    const constraint = M.Constraint.create({
+      bodyA: bodyA || undefined, bodyB,
+      pointA: desc.pointA, pointB: desc.pointB,
+      stiffness: 1, damping: 0, length: 0,
+    });
+    M.Composite.add(this.world, constraint);
+    this._hinges.set(desc.id, { constraint, desc });
+    this._syncHingeCollisionGroups();
+    this._emitChange();
+    return { ...desc, pointA: { ...desc.pointA }, pointB: { ...desc.pointB } };
+  }
+
+  /**
+   * Bodies joined by hinges form a machine: parts of one machine must
+   * be able to swing THROUGH each other around their pins (two bars
+   * pinned end-to-end would otherwise jam on their own corners after a
+   * few degrees). Each connected hinge cluster therefore shares a
+   * negative Matter collision group — cluster members never collide
+   * with each other, but collide normally with everything else.
+   * Recomputed from scratch on every hinge add/remove (hinge counts
+   * are small); bodies outside any cluster return to group 0.
+   */
+  _syncHingeCollisionGroups() {
+    const parent = new Map();
+    const find = (x) => { let r = x; while (parent.get(r) !== r) r = parent.get(r); return r; };
+    const link = (a, b) => {
+      if (!parent.has(a)) parent.set(a, a);
+      if (!parent.has(b)) parent.set(b, b);
+      const ra = find(a), rb = find(b);
+      if (ra !== rb) parent.set(ra, rb);
+    };
+    for (const { desc } of this._hinges.values()) if (desc.bodyA) link(desc.bodyA, desc.bodyB);
+    const clusters = new Map();
+    for (const id of parent.keys()) {
+      const root = find(id);
+      if (!clusters.has(root)) clusters.set(root, []);
+      clusters.get(root).push(id);
+    }
+    const grouped = new Set();
+    let g = 0;
+    for (const ids of clusters.values()) {
+      if (ids.length < 2) continue;
+      g -= 1;
+      for (const id of ids) {
+        const body = this._byId.get(id);
+        if (body) { body.collisionFilter.group = g; grouped.add(id); }
+      }
+    }
+    for (const [id, body] of this._byId) {
+      if (!grouped.has(id) && body.collisionFilter.group < 0) body.collisionFilter.group = 0;
+    }
+  }
+
+  removeHinge(id, emit = true) {
+    const rec = this._hinges.get(id);
+    if (!rec) return false;
+    this.M.Composite.remove(this.world, rec.constraint);
+    this._hinges.delete(id);
+    this._syncHingeCollisionGroups();
+    if (emit) this._emitChange();
+    return true;
+  }
+
+  get hingeCount() { return this._hinges.size; }
+  hingeById(id) {
+    const rec = this._hinges.get(id);
+    return rec ? { ...rec.desc, pointA: { ...rec.desc.pointA }, pointB: { ...rec.desc.pointB } } : null;
+  }
+  describeHinges() {
+    return [...this._hinges.values()].map(({ desc }) => ({ ...desc, pointA: { ...desc.pointA }, pointB: { ...desc.pointB } }));
+  }
+
+  /** Resolved world-space pin points for rendering / picking:
+   *  [{ id, x, y, motorSpeed }]. The two endpoints coincide by
+   *  construction; bodyB's side is reported. */
+  hingeAnchors() {
+    const out = [];
+    for (const { constraint, desc } of this._hinges.values()) {
+      const p = localToWorld(this.M, constraint.bodyB, desc.pointB);
+      out.push({ id: desc.id, x: p.x, y: p.y, motorSpeed: desc.motorSpeed });
+    }
+    return out;
+  }
+
+  /** Set a hinge's motor target speed (rad/step, clamped to ±0.3).
+   *  Non-finite input is ignored; affected bodies are woken. */
+  setHingeMotor(id, speed) {
+    const rec = this._hinges.get(id);
+    if (!rec || !Number.isFinite(Number(speed))) return false;
+    rec.desc.motorSpeed = Math.min(0.3, Math.max(-0.3, Number(speed)));
+    const a = rec.desc.bodyA ? this._byId.get(rec.desc.bodyA) : null;
+    const b = this._byId.get(rec.desc.bodyB);
+    if (a) this.wake(a);
+    if (b) this.wake(b);
+    return true;
+  }
+
+  _applyMotors() {
+    const { Body, Sleeping } = this.M;
+    for (const { desc } of this._hinges.values()) {
+      const target = desc.motorSpeed;
+      if (!target) continue;
+      const b = this._byId.get(desc.bodyB);
+      if (!b || b.isStatic || !Number.isFinite(b.inertia)) continue;
+      const a = desc.bodyA ? this._byId.get(desc.bodyA) : null;
+      const aFree = a && !a.isStatic && Number.isFinite(a.inertia);
+      const rel = b.angularVelocity - (aFree ? a.angularVelocity : 0);
+      const err = target - rel;
+      // A motor-driven body must not doze off: Matter zeroes velocity
+      // when a body falls asleep, which would fight the drive every
+      // step. Holding the sleep counter at zero keeps driven bodies
+      // awake for as long as their motor is on.
+      b.sleepCounter = 0;
+      if (aFree) a.sleepCounter = 0;
+      if (!err) continue;
+      const step = Math.max(-desc.motorPower, Math.min(desc.motorPower, err));
+      if (aFree) {
+        // split the impulse by inverse inertia: Δrel = step exactly,
+        // with the reaction carried by bodyA (momentum conserved)
+        const invB = 1 / b.inertia, invA = 1 / a.inertia;
+        const j = step / (invB + invA);
+        if (b.isSleeping) Sleeping.set(b, false);
+        if (a.isSleeping) Sleeping.set(a, false);
+        Body.setAngularVelocity(b, b.angularVelocity + j * invB);
+        Body.setAngularVelocity(a, a.angularVelocity - j * invA);
+      } else {
+        if (b.isSleeping) Sleeping.set(b, false);
+        Body.setAngularVelocity(b, b.angularVelocity + step);
+      }
+    }
+  }
+
   /* ---------------- bulk load ---------------- */
   /**
    * Replace the world from plain data ({ bodies, constraints, fluids?,
@@ -538,6 +714,8 @@ export class PhysicsEngine {
     let bodies = 0, constraints = 0, fluids = 0, winds = 0;
     for (const d of data.bodies || []) { if (d && typeof d === 'object') { this.addBody(d); bodies++; } }
     for (const c of data.constraints || []) { if (c && typeof c === 'object' && this.addConstraint(c)) constraints++; }
+    let hinges = 0;
+    for (const h of data.hinges || []) { if (h && typeof h === 'object' && this.addHinge(h)) hinges++; }
     for (const f of data.fluids || []) { if (f && typeof f === 'object') { this.addFluid(f); fluids++; } }
     for (const w of data.winds || []) { if (w && typeof w === 'object') { this.addWind(w); winds++; } }
     if (data.gravity) this.setGravity(data.gravity.x, data.gravity.y, data.gravity.enabled !== false);
@@ -547,12 +725,13 @@ export class PhysicsEngine {
       this._seed = num(data.rng.seed, this._seed) >>> 0;
       this._rngState = data.rng.state >>> 0;
     }
-    return { bodies, constraints, fluids, winds };
+    return { bodies, constraints, fluids, winds, hinges };
   }
   snapshot() {
     return {
       bodies: this.allBodies().map((b) => this.describeBody(b)),
       constraints: this.describeConstraints(),
+      hinges: this.describeHinges(),
       fluids: this.fluids(),
       winds: this.winds(),
       rng: { seed: this._seed, state: this._rngState },
@@ -593,6 +772,8 @@ export class PhysicsEngine {
     // fixed step (not per substep), so their strength does not depend on
     // the anti-tunnelling setting.
     if (this._gravitation || (this._magnetism.K > 0 && this._magnets.size)) this._applyPairForces();
+    // Hinge motors likewise drive once per fixed step (1.7.0).
+    if (this._hinges.size) this._applyMotors();
     // Split the fixed step into `substeps` engine updates (anti-tunnelling:
     // a body can move at most fixedDt/substeps worth of travel per update).
     const n = this.substeps;

@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 globalThis.Matter = require('../vendor/matter.min.js');
 
-const { validateScene, defaultScene, sceneData, bodyData, constraintData, fluidData, presetScenes } = await import('../js/scene.js');
+const { validateScene, defaultScene, sceneData, bodyData, constraintData, hingeData, fluidData, presetScenes } = await import('../js/scene.js');
 const { PhysicsWorld } = await import('../js/physics.js');
 
 let pass = 0, fail = 0;
@@ -187,10 +187,47 @@ check('stop motion zeroes velocity', lk.velocity.x === 0 && lk.velocity.y === 0 
 
 /* --- v1.1/v1.6: presets --- */
 const presets = presetScenes();
-check('eighteen presets exist', presets.length === 18, `got ${presets.length}`);
+check('twenty presets exist', presets.length === 20, `got ${presets.length}`);
 for (const p of presets) {
   check(`preset ${p.key} validates`, validateScene(JSON.parse(JSON.stringify(p.scene))).ok);
 }
+/* --- v1.28: hinges in scene data + GIF recording core --- */
+{
+  const hd = hingeData({ bodyB: 'b1', motorSpeed: 9 });
+  check('hingeData clamps motorSpeed to ±0.3', hd.motorSpeed === 0.3 && hd.bodyA === null && hd.motorPower === 0.0025);
+  const sc = sceneData({ name: 'H', bodies: [bodyData({ id: 'b1', type: 'circle', x: 10, y: 10, radius: 5 }), bodyData({ id: 'b2', type: 'circle', x: 60, y: 10, radius: 5 })],
+    hinges: [hingeData({ bodyA: 'b1', bodyB: 'b2', motorSpeed: 0.05 })] });
+  const rt = JSON.parse(JSON.stringify(sc));
+  check('scene roundtrip keeps hinges', rt.hinges.length === 1 && rt.hinges[0].motorSpeed === 0.05);
+  check('validateScene accepts hinged scene', validateScene(rt).ok);
+  const bad = JSON.parse(JSON.stringify(rt)); bad.hinges[0].bodyB = 'ghost';
+  check('validateScene rejects hinge to missing body', !validateScene(bad).ok);
+  const bad2 = JSON.parse(JSON.stringify(rt)); bad2.hinges[0].motorSpeed = 2;
+  check('validateScene rejects out-of-range motorSpeed', !validateScene(bad2).ok);
+  const wl = new PhysicsWorld();
+  wl.loadScene(rt);
+  check('adapter loadScene restores hinges', wl.hingeCount === 1);
+  const ser = wl.serializeScene();
+  check('adapter serializeScene emits hinges', ser.hinges.length === 1 && ser.hinges[0].bodyB === 'b2');
+  wl.setHingeMotor(ser.hinges[0].id, -0.02);
+  check('adapter setHingeMotor applies', Math.abs(wl.hingeById(ser.hinges[0].id).motorSpeed - -0.02) < 1e-9);
+  const anch = wl.hingeAnchors();
+  check('adapter hingeAnchors resolves the pin point', anch.length === 1 && Math.abs(anch[0].x - 60) < 30);
+}
+{
+  const { buildPalette, quantize, encodeGIF } = await import('../js/record.js');
+  const pal = buildPalette();
+  check('GIF palette has 256 RGB entries', pal.length === 768 && pal[0] === 250 && pal[27] === 47 && pal[28] === 109 && pal[29] === 179);
+  const rgba = new Uint8Array([250, 250, 250, 255, 47, 109, 179, 255]);
+  const idx = quantize(rgba, pal);
+  check('quantize maps exact brand colours to their palette slots', idx[0] === 0 && idx[1] === 9);
+  const frame = { indices: new Uint8Array(64 * 48).fill(3), delayCs: 8 };
+  const gif = encodeGIF([frame, frame], 64, 48, pal);
+  const head = String.fromCharCode(...gif.slice(0, 6));
+  const asText = Buffer.from(gif).toString('latin1');
+  check('encodeGIF emits a looping GIF89a stream', head === 'GIF89a' && gif[gif.length - 1] === 0x3b && asText.includes('NETSCAPE2.0') && gif.length > 100);
+}
+
 /* --- v1.23: gravitation / fluids / rename get lab entries (scene level) --- */
 {
   const fd = fluidData({});

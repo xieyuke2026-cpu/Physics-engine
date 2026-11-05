@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.27';
+export const APP_VERSION = '1.28';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -57,12 +57,14 @@ export class Panel {
    *        onBodyAction(action), onSelectBody(id), onDeleteBody(id), onGravityPreset(key),
    *        onBodyRename(name), onAddFluid(), onSelectFluid(id), onDeleteFluid(id),
    *        onFluidProp(id,key,value), onAddWind(), onSelectWind(id), onDeleteWind(id),
-   *        onWindProp(id,key,value), onShowScene(), onAddMagnet(), onMaterialPreset(key) } */
+   *        onWindProp(id,key,value), onShowScene(), onAddMagnet(), onMaterialPreset(key),
+   *        onHingeProp(id,key,value), onDeleteHinge(id) } */
   constructor(root, cb) {
     this.root = root;
     this.cb = cb;
-    this.mode = null;       // 'body' | 'scene'
+    this.mode = null;       // 'body' | 'scene' | 'fluid' | 'wind' | 'hinge'
     this.selectedId = null;
+    this.selectedHingeId = null;
     this.inputs = new Map();
     this.ro = {};
   }
@@ -99,7 +101,7 @@ export class Panel {
     const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',') + '|' + wlist.map((w) => `${w.id}:${w.vx},${w.vy}`).join(',');
     if (this.mode === 'scene' && this.root.childElementCount && this._sceneSig === sig) { this.refreshScene(settings, list.length); return; }
     this._sceneSig = sig;
-    this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null;
+    this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('场景属性 Scene', 'Scene Properties')));
     const ro = el(`<div class="readonly-grid"><span>${L('物体数量', 'Bodies')}</span><b data-ro="count">${list.length}</b>
@@ -203,7 +205,7 @@ export class Panel {
   showBody(data, live) {
     const sameTarget = this.mode === 'body' && this.selectedId === data.id;
     if (sameTarget) { this.refreshBody(live); return; }
-    this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null; this.selectedWindId = null;
+    this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('物体属性 Object', 'Object Properties')));
     const head = el(`<div class="readonly-grid"><span>${L('类型 Type', 'Type')}</span><b>${typeLabel(data.type)}</b>
@@ -311,7 +313,7 @@ export class Panel {
   /** Wind-region editor: geometry + wind velocity/power, wired to onWindProp. */
   showWind(wind) {
     if (this.mode === 'wind' && this.selectedWindId === wind.id && this.root.childElementCount) return;
-    this.mode = 'wind'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = wind.id;
+    this.mode = 'wind'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = wind.id; this.selectedHingeId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('风场区域 Wind · 风', 'Wind Region')));
     r.appendChild(el(`<p class="empty-note">${L('区域内的物体被吹向风速 (vx, vy) 的方向：密度越小吹得越快（按 0.0012 ÷ 物体密度 放大），密实重物几乎不动。负数表示向左/向上吹。强度 Power 整体放大或减弱这个效果。也可以直接在画布上拖动这块区域来移动它。', 'Bodies inside are blended toward the wind velocity (vx, vy): the lower a body\'s density, the faster it goes (scaled by 0.0012 ÷ body density); dense blocks barely stir. Negative values blow left/up. Power scales the whole effect. You can also drag this region on the canvas to move it.')}</p>`));
@@ -338,10 +340,42 @@ export class Panel {
     this._collectInputs();
   }
 
+  /** Hinge editor (1.28): connection summary + motor speed, wired to
+   *  onHingeProp / onDeleteHinge. aLabel is null for a fixed world mount. */
+  showHinge(hinge, aLabel, bLabel) {
+    if (this.mode === 'hinge' && this.selectedHingeId === hinge.id && this.root.childElementCount) return;
+    this.mode = 'hinge'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = hinge.id;
+    this._hingeView = { hinge, aLabel, bLabel };
+    const r = this.root; r.innerHTML = '';
+    r.appendChild(title(L('铰链 Hinge · 马达', 'Hinge · Motor')));
+    r.appendChild(el(`<p class="empty-note">${L('两个物体被钉在同一点上，只能绕这个点相对转动。同一台「机器」里的零件互不碰撞，可以互相穿过——这样折叠、旋转才不会被自己的边角卡住。马达速度为 0 时就是普通铰链；设上速度后，第二个物体会相对第一个匀速转起来（正 = 顺时针）。', 'Two bodies pinned at one point can only rotate around it. Parts of one "machine" never collide with each other, so folding and spinning never jam on their own corners. Motor speed 0 is a plain hinge; set a speed and the second body turns steadily relative to the first (positive = clockwise).')}</p>`));
+    const aName = aLabel === null || aLabel === undefined ? L('固定铰座（世界）', 'Fixed mount (world)') : aLabel;
+    r.appendChild(el(`<p class="empty-note"><strong>${aName}</strong> ⟷ <strong>${bLabel || hinge.bodyB}</strong></p>`));
+    const rpm = Math.abs(hinge.motorSpeed) * 573;
+    r.appendChild(sliderField(L('马达速度 Motor（弧度/步）', 'Motor speed (rad/step)'), 'hmotor', hinge.motorSpeed, -0.15, 0.15, 0.005));
+    r.appendChild(el(`<p class="empty-note">${L(`当前约 ${rpm.toFixed(0)} 转/分（${hinge.motorSpeed > 0 ? '顺时针' : hinge.motorSpeed < 0 ? '逆时针' : '已停转'}）。`, `Currently ≈ ${rpm.toFixed(0)} rpm (${hinge.motorSpeed > 0 ? 'clockwise' : hinge.motorSpeed < 0 ? 'counter-clockwise' : 'stopped'}).`)}</p>`));
+    const rowBtns = el('<div class="btn-row"></div>');
+    const stop = el(`<button class="btn">${L('停转', 'Stop')}</button>`);
+    stop.addEventListener('click', () => { this.cb.onHingeProp(hinge.id, 'motorSpeed', 0); this.mode = null; this.showHinge({ ...hinge, motorSpeed: 0 }, aLabel, bLabel); });
+    const rev = el(`<button class="btn">${L('反转方向', 'Reverse')}</button>`);
+    rev.addEventListener('click', () => { const v = -hinge.motorSpeed || 0.03; this.cb.onHingeProp(hinge.id, 'motorSpeed', v); this.mode = null; this.showHinge({ ...hinge, motorSpeed: v }, aLabel, bLabel); });
+    rowBtns.appendChild(stop); rowBtns.appendChild(rev);
+    r.appendChild(rowBtns);
+    const back = el(`<button class="btn block">${L('返回场景属性', 'Back to Scene Properties')}</button>`);
+    back.addEventListener('click', () => this.cb.onShowScene());
+    const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除铰链', ' Delete Hinge')}</button>`);
+    del.addEventListener('click', () => this.cb.onDeleteHinge(hinge.id));
+    r.appendChild(back); r.appendChild(del);
+    this._wireNumbers(r, (k, v) => {
+      if (k === 'hmotor') this.cb.onHingeProp(hinge.id, 'motorSpeed', v);
+    });
+    this._collectInputs();
+  }
+
   /** Fluid-region editor: geometry + density/drag, wired to onFluidProp. */
   showFluid(fluid) {
     if (this.mode === 'fluid' && this.selectedFluidId === fluid.id && this.root.childElementCount) return;
-    this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id; this.selectedWindId = null;
+    this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id; this.selectedWindId = null; this.selectedHingeId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('流体区域 Fluid · 浮力', 'Fluid Region · Buoyancy')));
     r.appendChild(el(`<p class="empty-note">${L('区域上沿是液面。浮力按「流体密度 ÷ 物体密度 × 浸没比例」计算：物体密度小于流体就浮起，大于就沉底。默认水的密度约 0.0012。也可以直接在画布上拖动这块区域来移动它。', 'The top edge of the region is the surface. Buoyancy = fluid density ÷ body density × submerged fraction: bodies less dense than the fluid float, denser ones sink. Default water density ≈ 0.0012. You can also drag this region on the canvas to move it.')}</p>`));

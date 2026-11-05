@@ -15,7 +15,7 @@
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
 | MotionLab（应用） | 1.27 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.6.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| PhysicsEngine（2D 核心） | 1.7.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -40,7 +40,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.6.0'
+  console.log(VERSION); // '1.7.0'
 </script>
 ```
 
@@ -95,6 +95,7 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 | 流体浮力（1.4.0 新增） | `addFluid({ id?, x, y, width, height, density, drag })`、`removeFluid(id)`、`fluids()`、`fluidById(id)`、`fluidCount` |
 | 磁力（1.5.0 新增） | 描述符字段 `magnet`（−100..100）、`setMagnetism(K, { range, softening })`、`magnetism`、`setMagnet(body, v)`、`magnetOf(body)`、`magnetCount` |
 | 风场（1.5.0 新增） | `addWind({ id?, x, y, width, height, vx, vy, power })`、`removeWind(id)`、`winds()`、`windById(id)`、`windCount` |
+| 铰链与马达（1.7.0 新增） | `addHinge({ id?, bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })`、`removeHinge(id)`、`hingeById(id)`、`describeHinges()`、`hingeCount`、`hingeAnchors()`、`setHingeMotor(id, v)` |
 | 公式与测量（1.4.0 新增） | `Formulas.*`（纯函数，见下）、`bodyKineticEnergy(body)`、`totalKineticEnergy()`、`bodyMomentum(body)`、`totalMomentum()`、`centerOfMass()` |
 | 稳定性（1.4.0 新增） | `PhysicsEngine.validateDescriptor(desc)`、`findNonFiniteBodies()`、`{ maxSpeed }` / `setMaxSpeed(v)` |
 
@@ -156,6 +157,20 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 密度)：轻体迅速被吹到风速，密实体几乎不动——流体的气态对应物（浮力靠
 密度比，这里的混合率同样靠密度比）。快照携带 `winds` 数组。
 
+### 铰链与马达（1.7.0）
+
+`addHinge({ bodyA, bodyB, pointA, pointB, motorSpeed = 0, motorPower = 0.0025 })`：
+把两个物体钉在一个共享点上，只能绕该点相对转动（零长度刚性约束，与
+牛顿摆摆杆同机制）；`bodyA` 传 `null` 时 pointA 是世界坐标里的固定铰座。
+`motorSpeed` 是马达目标**相对角速度**（弧度/步，±0.3，正为顺时针），
+每固定步以 `motorPower` 为上限加速逼近；两端都是动态体时反作用按
+转动惯量反比分配，动量诚实。被马达驱动的物体不会休眠（休眠会把速度
+清零、与驱动打架）。**碰撞分组**：铰链连通的物体簇共享一个负的
+Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，否则两根
+端点铰接的杆折叠几度就会被自己的边角卡死；与机器外物体的碰撞照常。
+铰链随快照保存（`hinges` 数组），删物体自动清理其铰链；
+`hingeAnchors()` 返回解析后的世界铰点坐标，供渲染标记与拾取。
+
 ### Formulas 公式库（1.4.0）
 
 `import { Formulas } from '.../physics-engine.js'`（或
@@ -184,7 +199,7 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
   `findNonFiniteBodies()` 可审计世界健康。
 - `{ maxSpeed }`（或 `setMaxSpeed(v)`）给速度封顶（px/步，0 = 关）：封顶在求解器
   之前执行，失控冲量不会把物体送出世界。
-- `load()` 跳过非对象条目并返回 `{ bodies, constraints, fluids, winds }` 载入计数。
+- `load()` 跳过非对象条目并返回 `{ bodies, constraints, fluids, winds, hinges }` 载入计数。
 
 ### 版本历史
 
@@ -204,6 +219,9 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
   列表/索引缓存、数值键池化网格）；引力拆为动态–动态对称环 + 动态–静态
   单向环，静态–静态配对不再计算（静态多的世界配对通道约快 40%）；流体
   跳过休眠体、约束线段池化；新增零分配迭代 forEachFluid / forEachWind
+- 1.7.0 — 机械：铰链（addHinge，绕共享点转动）与马达（目标相对角速度，
+  加速上限、反作用按转动惯量反比分配、驱动体不休眠）；铰链簇共享负
+  碰撞组（同机零件互不碰撞）；hingeAnchors 供渲染/拾取；快照携带铰链
 
 ---
 

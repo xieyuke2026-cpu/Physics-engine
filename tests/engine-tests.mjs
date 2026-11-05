@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.6.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.7.0');
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
 pe.addBody({ kind: 'rect', x: 100, y: 400, width: 500, height: 20, isStatic: true });
@@ -479,6 +479,62 @@ function galtonBins(seed) {
   for (let s = 0; s < 60; s++) pe2.stepOnce();
   check('1.6.0: gravitation still acts with static masses present', Math.abs(probe.velocity.x) + Math.abs(probe.velocity.y) >= 0 || probe.position.x !== 300,
     `pos=${probe.position.x.toFixed(1)},${probe.position.y.toFixed(1)}`);
+}
+
+/* ---- 1.7.0 hinges & motors ---- */
+{
+  // pendulum on a world hinge: the pinned end stays at the mount
+  const pe = new PhysicsEngine({ enableSleeping: true, seed: 5 });
+  const bar = pe.addBody({ kind: 'rect', x: 400, y: 300, width: 24, height: 200, density: 0.002 });
+  pe.addHinge({ bodyA: null, bodyB: pe.idOf(bar), pointA: { x: 400, y: 200 }, pointB: { x: 0, y: -100 } });
+  globalThis.Matter.Body.setVelocity(bar, { x: 3, y: 0 });
+  let maxDev = 0;
+  for (let s = 0; s < 600; s++) {
+    pe.stepOnce();
+    const c = Math.cos(bar.angle), sn = Math.sin(bar.angle);
+    const top = { x: bar.position.x - (-100) * sn, y: bar.position.y + (-100) * c };
+    maxDev = Math.max(maxDev, Math.hypot(top.x - 400, top.y - 200));
+  }
+  check('1.7.0: world hinge pins the body end to the mount (<2px over 600 steps)', maxDev < 2, `dev=${maxDev.toFixed(2)}`);
+
+  // fixed-mount motor: spins up to target ω and stays there
+  const pe2 = new PhysicsEngine({ enableSleeping: true, seed: 5 });
+  pe2.setGravity(0, 0, false);
+  const rotor = pe2.addBody({ kind: 'rect', x: 400, y: 300, width: 220, height: 26, density: 0.002, frictionAir: 0 });
+  pe2.addHinge({ bodyA: null, bodyB: pe2.idOf(rotor), pointA: { x: 400, y: 300 }, pointB: { x: 0, y: 0 }, motorSpeed: 0.05 });
+  for (let s = 0; s < 300; s++) pe2.stepOnce();
+  check('1.7.0: motor reaches target angular velocity', Math.abs(rotor.angularVelocity - 0.05) < 0.004, `ω=${rotor.angularVelocity.toFixed(4)}`);
+  check('1.7.0: motor rotor accumulates angle (>12 rad in 300 steps)', rotor.angle > 12, `angle=${rotor.angle.toFixed(2)}`);
+
+  // body-pair motor: relative ω reaches target, reaction counter-rotates A
+  const pe3 = new PhysicsEngine({ enableSleeping: true, seed: 5 });
+  pe3.setGravity(0, 0, false);
+  const a = pe3.addBody({ kind: 'rect', x: 340, y: 300, width: 120, height: 24, density: 0.002, frictionAir: 0 });
+  const b = pe3.addBody({ kind: 'rect', x: 460, y: 300, width: 120, height: 24, density: 0.002, frictionAir: 0 });
+  const hg = pe3.addHinge({ bodyA: pe3.idOf(a), bodyB: pe3.idOf(b), pointA: { x: 60, y: 0 }, pointB: { x: -60, y: 0 }, motorSpeed: 0.06 });
+  check('1.7.0: hinged partners share a negative collision group (machine parts pass through)', a.collisionFilter.group < 0 && a.collisionFilter.group === b.collisionFilter.group,
+    `groups=${a.collisionFilter.group},${b.collisionFilter.group}`);
+  for (let s = 0; s < 400; s++) pe3.stepOnce();
+  const rel = b.angularVelocity - a.angularVelocity;
+  check('1.7.0: pair motor reaches target relative ω', Math.abs(rel - 0.06) < 0.006, `rel=${rel.toFixed(4)}`);
+  check('1.7.0: pair motor reaction counter-rotates bodyA', a.angularVelocity < -0.02 && b.angularVelocity > 0.02, `a=${a.angularVelocity.toFixed(3)} b=${b.angularVelocity.toFixed(3)}`);
+  pe3.removeHinge(hg.id);
+  check('1.7.0: removing the last hinge restores collision group 0', a.collisionFilter.group === 0 && b.collisionFilter.group === 0);
+
+  // snapshot round-trip + cleanup on body removal
+  const pe4 = new PhysicsEngine({ seed: 5 });
+  const c1 = pe4.addBody({ kind: 'circle', x: 100, y: 100, radius: 15 });
+  const c2 = pe4.addBody({ kind: 'circle', x: 200, y: 100, radius: 15 });
+  pe4.addHinge({ bodyA: pe4.idOf(c1), bodyB: pe4.idOf(c2), pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 }, motorSpeed: 0.03 });
+  const pe5 = new PhysicsEngine({ seed: 5 });
+  const counts = pe5.load(pe4.snapshot());
+  check('1.7.0: snapshot/load carries hinges with motor speed',
+    counts.hinges === 1 && pe5.hingeCount === 1 && Math.abs(pe5.describeHinges()[0].motorSpeed - 0.03) < 1e-9);
+  pe5.removeBody(pe5.describeHinges()[0].bodyB);
+  check('1.7.0: removing a hinged body removes its hinges', pe5.hingeCount === 0);
+  check('1.7.0: setHingeMotor clamps and validates',
+    pe4.setHingeMotor(pe4.describeHinges()[0].id, 9) && pe4.describeHinges()[0].motorSpeed === 0.3
+    && !pe4.setHingeMotor(pe4.describeHinges()[0].id, NaN));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
