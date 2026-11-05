@@ -45,6 +45,13 @@ export class Renderer {
     this._staticCtx = null;
     this._staticSig = '';
     this._cacheOff = false;    // set when no 2d context is available (test stubs)
+    // Backdrop cache (1.35): the background fill + grid only change
+    // with the camera, yet were redrawn every frame (~240 path calls
+    // on a full view). Same trick as the static layer: bake once,
+    // blit per frame, signature-keyed on camera + view + grid flag.
+    this._backdropCache = null;
+    this._backdropCtx = null;
+    this._backdropSig = '';
   }
 
   clearTrails() { this.trails.clear(); }
@@ -60,9 +67,11 @@ export class Renderer {
     const { ctx, view, camera } = this;
     const { selectedId = null, selectedFluidId = null, selectedWindId = null, selectedHingeId = null, hinges = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null } = opts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.fillStyle = '#fafafa';
-    ctx.fillRect(0, 0, view.w, view.h);
-    if (showGrid) this._grid();
+    if (this._cacheOff || !this._blitBackdrop(showGrid)) {
+      ctx.fillStyle = '#fafafa';
+      ctx.fillRect(0, 0, view.w, view.h);
+      if (showGrid) this._grid();
+    }
     ctx.save();
     ctx.translate(view.w / 2, view.h / 2);
     ctx.scale(camera.zoom, camera.zoom);
@@ -197,6 +206,52 @@ export class Renderer {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(this._staticCache, 0, 0);
+    ctx.restore();
+    return true;
+  }
+
+  /** Signature of everything the backdrop depends on. */
+  _backdropSignature(showGrid) {
+    const { camera, view } = this;
+    let h = 2166136261 >>> 0;
+    const mix = (n) => { h ^= (n | 0); h = Math.imul(h, 16777619) >>> 0; };
+    mix((camera.x * 2) | 0); mix((camera.y * 2) | 0); mix((camera.zoom * 1000) | 0);
+    mix(view.w | 0); mix(view.h | 0); mix((this.dpr * 100) | 0); mix(showGrid ? 1 : 0);
+    return h.toString(36);
+  }
+
+  /** Blit the backdrop (bg fill + grid), re-baking when its signature
+   *  changed. Returns false when caching is unavailable (caller then
+   *  draws the fill + grid inline, exactly as before). */
+  _blitBackdrop(showGrid) {
+    const { ctx, view } = this;
+    const sig = this._backdropSignature(showGrid);
+    if (sig !== this._backdropSig) {
+      if (!this._backdropCache) {
+        try {
+          this._backdropCache = document.createElement('canvas');
+          this._backdropCtx = this._backdropCache.getContext('2d');
+        } catch { this._backdropCache = null; this._backdropCtx = null; }
+        if (!this._backdropCtx) { this._cacheOff = true; return false; }
+      }
+      const c = this._backdropCache;
+      const W = Math.max(1, Math.round(view.w * this.dpr)), H = Math.max(1, Math.round(view.h * this.dpr));
+      if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+      const cc = this._backdropCtx;
+      cc.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      cc.fillStyle = '#fafafa';
+      cc.fillRect(0, 0, view.w, view.h);
+      if (showGrid) {
+        const mainCtx = this.ctx;
+        this.ctx = cc;
+        this._grid();
+        this.ctx = mainCtx;
+      }
+      this._backdropSig = sig;
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this._backdropCache, 0, 0);
     ctx.restore();
     return true;
   }

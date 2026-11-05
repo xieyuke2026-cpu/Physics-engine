@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- MotionLab 1.34 -->
+<!-- MotionLab 1.35 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.34">
+<link rel="stylesheet" href="css/style.css?v=1.35">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -284,6 +284,7 @@
             <li><b>铰链与马达</b>（1.7.0）：<code>addHinge({ bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })</code> 把两个物体（或物体与固定铰座，<code>bodyA: null</code>）钉在同一点上，只能绕点转动；<code>motorSpeed</code> 是马达目标相对角速度（弧度/步，±0.3），加速有上限、反作用按转动惯量反比分配给另一端。同一台机器的零件互不碰撞（铰链簇共享负碰撞组），折叠旋转不卡角；被马达驱动的物体不会休眠。<code>setHingeMotor(id, v)</code> 改转速，<code>hingeAnchors()</code> 给渲染/拾取用的铰点坐标，快照携带铰链</li>
             <li><b>在实验室里直接用</b>（1.23 起，1.25/1.26 扩充）：点画布空白处，右侧「场景属性」面板的「世界效应」一节可调万有引力 G、添加并编辑流体与风场区域；流体/风场区域在画布上可以直接拖动改位置。左侧工具栏的「磁铁」工具（或世界效应一节的按钮）能直接放固定磁铁，点选任意物体后还可改名、在「材质」一节设磁性，或一键套用泡沫/木头/橡胶/冰/铁材质预设；顶部「分享」按钮把整个场景压进一条链接，对方打开即进入该场景；「我的项目」主页工具栏有「导入场景」入口；另有「万有引力轨道」「浮力池」「磁铁阵列」「风洞实验」「材质实验室」「磁铁秋千」「马达风车」「摩天轮」等预设可直接载入体验</li>
             <li><b>机械与录制</b>（1.28）：左侧工具栏新增「铰链」工具——先在第一个物体上点铰接点，再点第二个物体即可铰接（点空白 = 固定铰座）；点选画布上的铰链圆点可设马达转速或删除。顶部「录制」按钮把画布动画录成循环 GIF 导出（最长 20 秒），发帖、做演示素材不用再录屏</li>
+            <li><b>渲染再优化</b>（1.35）：背景网格也进离屏缓存——网格只随相机变化，以前每帧重画约 240 笔；现在和静态层一样烘焙后贴图。高尔顿钉板每帧绘制调用继 1.33 后再降约 46%（535 → 290）</li>
             <li><b>小修</b>（1.34）：「拖动静态物体」开关不再被误点画布空白解除——开关现在属于物体本身，点空一次再抓同一物体照样能拖</li>
             <li><b>渲染优化</b>（1.33）：静态层离屏缓存——钉板这类静态物多的场景，静态物只在场景变化时重绘一次，平时每帧直接贴图；实测高尔顿钉板每帧绘制调用减少约三分之二，画面更跟手</li>
             <li><b>浮力讲条件</b>（1.32）：浮力现在按物体真实的浸没面积算——横着跨在水域边缘的只算浸到的那部分，圆形和斜放的物体按真实形状；浮力作用在浮心上，斜放的浮木会自己回正；而且液体要能进到物体底面之下浮力才成立——贴紧池底的轻块不会再自己浮起来</li>
@@ -366,6 +367,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
             <li><b>Hinges &amp; motors</b> (1.7.0): <code>addHinge({ bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })</code> pins two bodies (or a body to a fixed mount with <code>bodyA: null</code>) at one shared point so they can only rotate around it; <code>motorSpeed</code> is the motor's target relative angular velocity (rad/step, ±0.3), acceleration-capped, with the reaction split by inverse inertia. Parts of one machine never collide with each other (a hinge cluster shares a negative collision group), so folding and spinning never jam; motor-driven bodies never fall asleep. <code>setHingeMotor(id, v)</code> retunes a motor, <code>hingeAnchors()</code> returns pin points for rendering/picking, and hinges persist in snapshots.</li>
             <li><b>Use it right in the lab</b> (1.23, expanded in 1.25/1.26): with nothing selected, the Scene panel's "World Effects" section sets gravitation G and adds/edits fluid and wind regions; fluid and wind regions can be dragged on the canvas to move them. The Magnet tool in the left rail (or the button in World Effects) places a fixed magnet directly; select any body to rename it, set its magnetism in the Material section, or apply a one-tap material preset (foam / wood / rubber / ice / iron). The top-bar Share button packs a whole scene into a link that opens right into that scene, and the My Projects home has its own Import Scene entry. The "Orbital Gravitation", "Buoyancy Pool", "Magnet Array", "Wind Tunnel", "Materials Lab" and "Magnet Swing" and "Motor Windmill" / "Ferris Wheel" presets load ready-made demos.</li>
             <li><b>Machinery &amp; recording</b> (1.28): the left rail gains a Hinge tool — tap the pin point on a first body, then a second body to hinge them (empty space = fixed mount); tap a hinge pin marker on the canvas to set its motor speed or delete it. The top-bar Record button captures the canvas animation as a looping GIF (up to 20 s) — no screen recording needed for posts and demos</li>
+            <li><b>Rendering, round two</b> (1.35): the background grid is cached offscreen too — it only changes with the camera but was redrawn every frame (~240 path calls); Galton-board draw calls per frame drop another ~46% after 1.33 (535 → 290)</li>
             <li><b>Small fix</b> (1.34): the Drag Static Body toggle is no longer disarmed by a stray click on empty canvas — the arm belongs to the body, so re-grabbing the same body still drags it</li>
             <li><b>Rendering optimization</b> (1.33): the static layer is cached offscreen — in static-heavy scenes like the Galton board, statics are repainted only when the scene changes and blitted each frame; measured canvas draw calls per frame drop by about two thirds</li>
             <li><b>Buoyancy obeys its preconditions</b> (1.32): buoyancy now uses the body's true submerged area — a body straddling the water's edge only counts the part that is in, and circles and rotated bodies use their real shape; it acts at the centre of buoyancy, so a tilted floater rights itself; and it needs fluid to reach the underside — a light block sitting flush on the pool floor no longer floats up on its own</li>
@@ -471,6 +473,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.34"></script>
+<script type="module" src="js/app.js?v=1.35"></script>
 </body>
 </html>
