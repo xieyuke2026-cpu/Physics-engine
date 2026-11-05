@@ -198,8 +198,8 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.28')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.7.0')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.29')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.7.1')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
@@ -400,6 +400,40 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   check('v1.28: delete tool removes the hinge (editor closes)',
     !panelBody.querySelector('[data-key="hmotor"]'));
   click(doc.getElementById('btnPlay'));
+}
+
+/* ---- v1.29: static-body drag toggle in the object panel ---- */
+{
+  const panelBody = doc.getElementById('panelBody');
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  await wait(60);
+  // a fresh dynamic circle: its panel must show the toggle DISABLED
+  click(doc.querySelector('[data-tool="circle"]'));
+  pointer(canvas, 'pointerdown', 250, 200); pointer(canvas, 'pointerup', 250, 200);
+  await wait(80);
+  const dynBtn = panelBody.querySelector('[data-drag-static]');
+  check('v1.29: object panel has a static-drag toggle', !!dynBtn);
+  check('v1.29: toggle is disabled for a dynamic body', !!dynBtn && dynBtn.disabled === true);
+  // the ground (static) can be armed and dragged on the canvas
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  await wait(60);
+  click(doc.querySelector('[data-tool="select"]'));
+  pointer(canvas, 'pointerdown', 600, 572); pointer(canvas, 'pointerup', 600, 572);
+  await wait(80);
+  const stBtn = panelBody.querySelector('[data-drag-static]');
+  check('v1.29: toggle is enabled for a static body', !!stBtn && stBtn.disabled === false);
+  const x0 = Number(panelBody.querySelector('[data-key="x"]')?.value);
+  click(stBtn);
+  await wait(60);
+  check('v1.29: toggle shows the armed state', panelBody.querySelector('[data-drag-static]')?.classList.contains('armed') === true);
+  pointer(canvas, 'pointerdown', 600, 572);
+  pointer(canvas, 'pointermove', 645, 572);
+  pointer(canvas, 'pointerup', 645, 572);
+  await wait(80);
+  const x1 = Number(panelBody.querySelector('[data-key="x"]')?.value);
+  check('v1.29: dragging moves the static body on the canvas', x1 > x0 + 30, `x ${x0} -> ${x1}`);
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  await wait(40);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

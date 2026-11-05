@@ -36,6 +36,7 @@ let sceneName = 'Untitled Scene';
 let running = false;
 let tool = 'select';
 let selectedId = null;
+let staticDragId = null; // body id armed for direct static dragging (panel toggle)
 let selectedFluidId = null;
 let selectedWindId = null;
 let selectedHingeId = null;
@@ -202,11 +203,18 @@ const panel = new Panel($('panelBody'), {
       case 'frictionAir': world.setFrictionAir(b, value); break;
       case 'restitution': world.setRestitution(b, value); break;
       case 'magnet': world.setMagnet(b, value); break;
-      case 'isStatic': world.setStatic(b, value); break;
+      case 'isStatic': world.setStatic(b, value); if (!value && staticDragId) { staticDragId = null; panel.staticDragId = null; panel.mode = null; } break;
       case 'lockRotation': world.setLockRotation(b, value); break;
     }
     panel.refreshBody(liveOf(b));
     pushHistorySoon(); scheduleAutosave();
+  },
+  onToggleStaticDrag(id) {
+    staticDragId = staticDragId === id ? null : id;
+    panel.staticDragId = staticDragId;
+    panel.mode = null; // force the body panel to rebuild (armed state styling)
+    refreshPanel();
+    toast(t(staticDragId ? 'msg.staticDragOn' : 'msg.staticDragOff'));
   },
   onBodyAction(action) {
     const b = selectedBody(); if (!b) return;
@@ -359,6 +367,8 @@ function pickWind(w) {
 }
 
 function refreshPanel() {
+  if (staticDragId && staticDragId !== selectedId) staticDragId = null;
+  panel.staticDragId = staticDragId;
   const b = selectedBody();
   if (b) { panel.showBody(world.serializeBody(b), liveOf(b)); return; }
   if (selectedHingeId) {
@@ -680,7 +690,9 @@ canvas.addEventListener('pointerdown', (e) => {
     selectedWindId = null;
     selectedHingeId = null;
     refreshPanel();
-    if (!b.isStatic) {
+    if (b.isStatic && staticDragId === selectedId) {
+      gesture = { kind: 'drag-static', body: b, offX: w.x - b.position.x, offY: w.y - b.position.y, moved: false };
+    } else if (!b.isStatic) {
       if (running) { world.beginDrag(b, w.x, w.y); dragPoint = { x: w.x, y: w.y, bodyX: b.position.x, bodyY: b.position.y }; }
       gesture = { kind: 'drag-body', body: b, offX: w.x - b.position.x, offY: w.y - b.position.y, moved: false };
     } else if (tool === 'move') {
@@ -730,6 +742,10 @@ canvas.addEventListener('pointermove', (e) => {
     if (gesture.regionType === 'wind') world.updateWind(gesture.rec.id, { x: nx, y: ny });
     else world.updateFluid(gesture.rec.id, { x: nx, y: ny });
     gesture.rec.x = nx; gesture.rec.y = ny; // local copy: keep the grab offset stable
+  } else if (gesture.kind === 'drag-static') {
+    gesture.moved = true;
+    world.setPosition(gesture.body, Math.round(w.x - gesture.offX), Math.round(w.y - gesture.offY));
+    panel.refreshBody(liveOf(gesture.body));
   } else if (gesture.kind === 'drag-body') {
     gesture.moved = true;
     if (running && world.dragging) { world.moveDrag(w.x, w.y); dragPoint = { x: w.x, y: w.y, bodyX: gesture.body.position.x, bodyY: gesture.body.position.y }; }
@@ -754,6 +770,7 @@ function endPointer(e) {
     world.endDrag(); dragPoint = null;
     if (gesture.moved) { pushHistorySoon(); scheduleAutosave(); }
   }
+  if (gesture.kind === 'drag-static' && gesture.moved) { pushHistorySoon(); scheduleAutosave(); }
   gesture = null;
 }
 canvas.addEventListener('pointerup', endPointer);
@@ -1567,7 +1584,7 @@ function initChrome() {
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); }
     else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); setRunning(!running); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedId || selectedHingeId)) { deleteSelected(); }
-    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; springStart = null; springCur = null; hingeStart = null; hingeCur = null; refreshPanel(); }
+    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; staticDragId = null; springStart = null; springCur = null; hingeStart = null; hingeCur = null; refreshPanel(); }
     else if (selectedId && e.key.startsWith('Arrow')) {
       e.preventDefault();
       const b = selectedBody(); if (!b) return;

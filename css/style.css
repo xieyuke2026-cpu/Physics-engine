@@ -38,6 +38,8 @@ svg{display:block}
 .tb-btn:hover{background:#f0f0f1;color:var(--text)}
 .tb-btn:active{background:#e7e7e9}
 .tb-btn:disabled{opacity:.32;pointer-events:none}
+.btn.armed{border-color:var(--accent);color:var(--accent);background:#eef4fb}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .tb-btn.primary{background:var(--accent);color:#fff;height:40px;padding:0 16px;font-weight:600;min-width:92px}
 .tb-btn.primary:hover{background:var(--accent-dark);color:#fff}
 .tb-btn.primary.is-running{background:#fff;color:var(--accent);border-color:var(--accent)}

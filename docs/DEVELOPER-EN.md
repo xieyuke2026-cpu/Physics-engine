@@ -16,7 +16,7 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 | Component | Version | Single source of truth |
 |---|---|---|
 | MotionLab (app) | 1.27 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.7.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| PhysicsEngine (2D core) | 1.7.1 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.7.0'
+  console.log(VERSION); // '1.7.1'
 </script>
 ```
 
@@ -265,6 +265,12 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   hinge clusters share a negative collision group (parts of one
   machine never collide); hingeAnchors for rendering/picking;
   hinges persist in snapshots
+- 1.7.1 — solver: default constraintIterations raised 2 -> 4 (override
+  with the `constraintIterations` constructor option). Simultaneous
+  rigid constraints (hinge clusters, triangulated crosses) left
+  multi-pixel anchor errors at 2 iterations (ferris wheel: 28px hub
+  drift, 5.6° cross error); at 4 the same machine holds its hub
+  exactly and its cross angle to <1°
 
 ---
 

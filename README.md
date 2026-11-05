@@ -1,9 +1,9 @@
 # MotionLab — 2D Physics Sandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.7.0-blue.svg)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.7.1-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-433%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-444%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -81,6 +81,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 - **v1.27 / 引擎 1.6.0**：性能优化（行为不变）——引擎两两力通道零分配、引力循环按动态/静态分区（静态多的世界配对通道约快 40%）、渲染逐帧零拷贝
 - **v1.28 新增**：马达风车（马达驱动的转子风车）、摩天轮（十字轮 + 四个自由铰链座舱）
 - **v1.28 / 引擎 1.7.0 机械**：铰链工具把两个物体钉在同一点上相对转动，可加马达匀速驱动（转速面板可调）；同一台机器的零件互不碰撞，折叠旋转不卡角。顶栏新增录制按钮，一键把实验录成循环 GIF
+- **v1.29 修复**：摩天轮十字臂散架/座舱翻转已修复（连杆锁角 + 整机同簇 + 座舱中心铰接，实测 60 秒转满 2466°、十字与座舱偏差 0°）；引擎 1.7.1 把默认约束迭代提到 4，刚性机器的锚点误差从像素级降到 0；选中静态物体时属性面板新增「拖动静态物体」开关，运行中也能直接拖它改位置
 - **v1.10 修复**：过山车回环重做——v1.9 的圆环是封闭的且小球从环下穿过，根本进不去；
   新版改为导杆回环：小球由一根刚性导杆牵引，沿 24 段轨道圆环内侧完整绕行约 1.7 圈后
   逐渐摆动停稳（自由滚动在分段轨道上会因段角卡滞与能量不足无法完成整圈，实测对比后选导杆方案）

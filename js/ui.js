@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.28';
+export const APP_VERSION = '1.29';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -65,6 +65,7 @@ export class Panel {
     this.mode = null;       // 'body' | 'scene' | 'fluid' | 'wind' | 'hinge'
     this.selectedId = null;
     this.selectedHingeId = null;
+    this.staticDragId = null; // body id with static-drag armed (set by the app)
     this.inputs = new Map();
     this.ro = {};
   }
@@ -295,6 +296,16 @@ export class Panel {
       ops.appendChild(mkOp('flip', L('翻转Y', 'Flip Y'), 'flipY'));
       r.appendChild(ops);
     }
+    const sdBtn = el(`<button class="btn block" data-drag-static>${icon('move', 15)} ${L('拖动静态物体', 'Drag Static Body')}</button>`);
+    if (!data.isStatic) {
+      sdBtn.disabled = true;
+      sdBtn.title = L('仅静态物体可用', 'Static bodies only');
+    } else {
+      if (this.staticDragId === data.id) sdBtn.classList.add('armed');
+      sdBtn.addEventListener('click', () => this.cb.onToggleStaticDrag && this.cb.onToggleStaticDrag(data.id));
+    }
+    r.appendChild(sdBtn);
+    r.appendChild(el(`<p class="empty-note">${L('开启后直接在画布上拖动这个静态物体改位置（运行中也可以，拖动的是位置本身、不受物理拖拽影响）。仅静态物体可用；动态物体用物理拖拽或上面的 Position 输入框。', 'When on, drag this static body directly on the canvas to reposition it (works while running; it moves the position itself, not a physics drag). Static bodies only — dynamic bodies use physics dragging or the Position fields above.')}</p>`));
     const dup = el(`<button class="btn block">${icon('copy', 16)}${L(' 复制物体', ' Duplicate Body')}</button>`);
     dup.addEventListener('click', () => this.cb.onDuplicateSelected());
     const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除物体', ' Delete Body')}</button>`);

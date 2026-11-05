@@ -227,6 +227,8 @@ const DICT = {
   'msg.hingeSameBody': ['铰链两端不能是同一个物体', 'A hinge cannot pin a body to itself'],
   'msg.hingeNeedBody': ['铰链至少一端要连接物体', 'At least one side of a hinge must be a body'],
   'msg.hingeCreated': ['铰链已创建：点选铰链圆点可设马达转速', 'Hinge created: tap its pin marker to set a motor speed'],
+  'msg.staticDragOn': ['静态拖动已开启：在画布上直接拖动这个物体改位置', 'Static drag on: drag this body on the canvas to reposition it'],
+  'msg.staticDragOff': ['静态拖动已关闭', 'Static drag off'],
   'msg.hingeFailed': ['铰链创建失败', 'Could not create the hinge'],
   'msg.hingeDeleted': ['铰链已删除', 'Hinge deleted'],
   'msg.recStart': ['开始录制 GIF（最长 20 秒，点「停止」结束）', 'Recording GIF (up to 20s — tap Stop to finish)'],

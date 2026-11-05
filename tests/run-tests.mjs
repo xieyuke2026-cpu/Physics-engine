@@ -228,6 +228,37 @@ for (const p of presets) {
   check('encodeGIF emits a looping GIF89a stream', head === 'GIF89a' && gif[gif.length - 1] === 0x3b && asText.includes('NETSCAPE2.0') && gif.length > 100);
 }
 
+/* --- v1.29: ferris wheel regression (Ryan's video: the cross folded shut) ---
+   The two arms must stay locked at 90°, the wheel must actually revolve
+   (not rock in place), cabins stay upright and the hub stays pinned. */
+{
+  const fw = new PhysicsWorld();
+  fw.loadScene(JSON.parse(JSON.stringify(presets.find((p) => p.key === 'ferris').scene)));
+  const byId = {};
+  for (const b of fw.allBodies()) byId[fw.dataIdOf(b)] = b;
+  const H = byId['fw-bar-h'], V = byId['fw-bar-v'];
+  const a0 = H.angle;
+  let worstDev = 0, worstCab = 0, hubDrift = 0;
+  for (let s = 1; s <= 1800; s++) {
+    fw.advance(1000 / 60);
+    if (s % 30 === 0) {
+      let d = ((V.angle - H.angle) * 180 / Math.PI) % 360; if (d < 0) d += 360;
+      worstDev = Math.max(worstDev, Math.abs(((d + 540) % 360) - 180));
+      hubDrift = Math.max(hubDrift, Math.hypot(H.position.x - 640, H.position.y - 270));
+      for (let i = 1; i <= 4; i++) {
+        let a = ((byId[`fw-cab-${i}`].angle % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+        worstCab = Math.max(worstCab, Math.abs(a * 180 / Math.PI));
+      }
+    }
+  }
+  const turned = (H.angle - a0) * 180 / Math.PI;
+  check('ferris: cross stays locked at 90°', worstDev < 3, `dev ${worstDev.toFixed(1)}°`);
+  check('ferris: wheel actually revolves (>600° in 30 s)', turned > 600, `turned ${turned.toFixed(0)}°`);
+  check('ferris: cabins stay upright', worstCab < 10, `tilt ${worstCab.toFixed(1)}°`);
+  check('ferris: hub stays pinned', hubDrift < 3, `drift ${hubDrift.toFixed(1)}px`);
+  check('ferris: whole machine is one collision cluster', H.collisionFilter.group !== 0 && H.collisionFilter.group === V.collisionFilter.group && byId['fw-cab-3'].collisionFilter.group === H.collisionFilter.group && byId['fw-leg-l'].collisionFilter.group === H.collisionFilter.group);
+}
+
 /* --- v1.23: gravitation / fluids / rename get lab entries (scene level) --- */
 {
   const fd = fluidData({});

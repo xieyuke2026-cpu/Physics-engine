@@ -15,7 +15,7 @@
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
 | MotionLab（应用） | 1.27 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.7.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| PhysicsEngine（2D 核心） | 1.7.1 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -40,7 +40,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.7.0'
+  console.log(VERSION); // '1.7.1'
 </script>
 ```
 
@@ -222,6 +222,11 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
 - 1.7.0 — 机械：铰链（addHinge，绕共享点转动）与马达（目标相对角速度，
   加速上限、反作用按转动惯量反比分配、驱动体不休眠）；铰链簇共享负
   碰撞组（同机零件互不碰撞）；hingeAnchors 供渲染/拾取；快照携带铰链
+- 1.7.1 — 求解器：默认 constraintIterations 2 → 4（可用构造选项
+  `constraintIterations` 覆盖）。多个刚性约束同时生效（铰链簇、三角
+  锁定十字臂）时，2 次迭代会留下数像素级锚点误差（摩天轮实测轮毂
+  漂移 28px、十字夹角误差 5.6°）；提到 4 后同一台机器轮毂精确锁定、
+  夹角误差 <1°
 
 ---
 

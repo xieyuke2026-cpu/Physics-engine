@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.7.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.7.1 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -67,6 +67,12 @@
              acceleration-capped, reaction split by inverse inertia);
              hinges ride snapshots/load, are cleaned up with their
              bodies, and expose hingeAnchors() for rendering/picking
+     1.7.1 — solver: default constraintIterations raised 2 -> 4 (option
+             `constraintIterations` overrides). Simultaneous rigid
+             constraints (hinge clusters, triangulated crosses) left
+             multi-pixel anchor errors at 2 iterations (measured on a
+             ferris wheel: hub drift 28px, cross error 5.6°); at 4 the
+             same machine holds its hub exactly and its cross angle
    ========================================================================== */
 
 let _M = null;
@@ -94,7 +100,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.7.0';
+export const VERSION = '1.7.1';
 
 /* ============================================================================
    Formulas — pure physics helpers (no engine state).
@@ -211,6 +217,13 @@ export class PhysicsEngine {
     this.M = M;
     const { Engine } = M;
     this.engine = Engine.create({ enableSleeping: opts.enableSleeping === true });
+    // Rigid machines (hinge clusters, rod-locked crosses) need more
+    // constraint iterations than Matter's default 2, or simultaneous
+    // rigid constraints leave multi-pixel anchor errors that read as
+    // hub drift and shape wobble (measured on the ferris wheel: hub
+    // drift 28px -> 4px, cross error 5.6° -> 1° at 6 iterations).
+    // 4 is the measured cost/quality balance; overridable per engine.
+    this.engine.constraintIterations = Math.max(1, Math.round(num(opts.constraintIterations, 4)));
     this.world = this.engine.world;
     this.fixedDt = num(opts.fixedDt, 1000 / 60);
     this.maxSteps = Math.max(1, Math.round(num(opts.maxSteps, 5)));
