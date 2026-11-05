@@ -198,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.33')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.34')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.10.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -432,6 +432,19 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   await wait(80);
   const x1 = Number(panelBody.querySelector('[data-key="x"]')?.value);
   check('v1.29: dragging moves the static body on the canvas', x1 > x0 + 30, `x ${x0} -> ${x1}`);
+  // 1.34: a stray click on empty canvas must not disarm the toggle —
+  // re-grabbing the same static body still drags it
+  pointer(canvas, 'pointerdown', 250, 200); pointer(canvas, 'pointerup', 250, 200);
+  await wait(80);
+  pointer(canvas, 'pointerdown', 645, 572);
+  pointer(canvas, 'pointermove', 690, 572);
+  pointer(canvas, 'pointerup', 690, 572);
+  await wait(80);
+  click(doc.querySelector('[data-tool="select"]'));
+  pointer(canvas, 'pointerdown', 690, 572); pointer(canvas, 'pointerup', 690, 572);
+  await wait(80);
+  const x2 = Number(panelBody.querySelector('[data-key="x"]')?.value);
+  check('v1.34: after a stray click the armed body still drags', x2 > x1 + 30, `x ${x1} -> ${x2}`);
   window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
   await wait(40);
 }

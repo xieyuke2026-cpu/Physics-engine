@@ -16,7 +16,7 @@ MotionLab / PhysicsEngine 是一个**纯客户端、纯静态**的项目：
 
 | 版本 | 是否提供安全修复 |
 | --- | --- |
-| MotionLab 1.33.x（当前） | ✅ |
+| MotionLab 1.34.x（当前） | ✅ |
 | PhysicsEngine 1.10.x（当前） | ✅ |
 | 更早版本 | ❌（请升级到最新版） |
 
@@ -29,7 +29,9 @@ MotionLab / PhysicsEngine 是一个**纯客户端、纯静态**的项目：
 2. 优先使用 GitHub 的私密漏洞报告：在本仓库页面点击
    **Security → Report a vulnerability**；
 3. 如果该入口未开启，请开一个标题为 `[security]` 的 Issue，
-   只写一句概述，维护者会通过 GitHub 与你私下联系细节。
+   只写一句概述，维护者会通过 GitHub 与你私下联系细节；
+4. 也可以直接发邮件到项目反馈邮箱 **motionlabphysics@agent.qq.com**
+   （标题注明 `[security]`，由维护者的 AI 助手 Muse 收件并转交）。
 
 报告时请尽量附上：受影响的版本、复现步骤、一个最小化的恶意
 场景 JSON（如适用）以及影响范围。

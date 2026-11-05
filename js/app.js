@@ -367,7 +367,12 @@ function pickWind(w) {
 }
 
 function refreshPanel() {
-  if (staticDragId && staticDragId !== selectedId) staticDragId = null;
+  // The static-drag arm belongs to the BODY, not to the selection:
+  // a stray click on empty canvas (which clears the selection) must
+  // not silently disarm it — found by the 1.33 live verification,
+  // whose agent misclicked the thin ground bar once and lost the
+  // armed state. Disarming happens on toggle-off, Escape, the body
+  // turning dynamic, or deletion (a stale id can never match a grab).
   panel.staticDragId = staticDragId;
   const b = selectedBody();
   if (b) { panel.showBody(world.serializeBody(b), liveOf(b)); return; }
