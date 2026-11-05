@@ -54,3 +54,82 @@
 
 本行为准则改编自《贡献者公约》（Contributor Covenant）第 2.1 版，
 原文见 https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+
+
+---
+
+# Code of Conduct (English)
+
+## Our Pledge
+
+We, the maintainers and contributors, pledge to make participation in
+this project and community a friendly experience for everyone,
+regardless of age, body size, visible or invisible disability,
+ethnicity, sex characteristics, gender identity and expression, level
+of experience, education, socio-economic status, nationality, personal
+appearance, race, religion, or sexual identity and orientation.
+
+We pledge to act and interact in ways that are open, welcoming,
+diverse, inclusive, and healthy.
+
+## Our Standards
+
+Examples of behaviour that contributes to a positive environment:
+
+- Showing empathy and kindness toward other people
+- Being respectful of differing opinions, viewpoints, and experiences
+- Giving and gracefully accepting constructive feedback
+- Accepting responsibility for our mistakes, apologising to those
+  affected, and learning from the experience
+- Focusing on what is best for the community as a whole, not just
+  ourselves
+
+Unacceptable behaviour includes:
+
+- The use of sexualised language or imagery, and sexual attention or
+  harassment of any kind
+- Trolling, insulting or derogatory comments, and personal or
+  political attacks
+- Public or private harassment
+- Publishing others' private information, such as a physical address
+  or email address, without their explicit permission
+- Other conduct which could reasonably be considered inappropriate in
+  a professional setting
+
+## Enforcement Responsibilities
+
+Project maintainers are responsible for clarifying and enforcing the
+standards of acceptable behaviour, and will take appropriate and fair
+corrective action in response to any behaviour they deem
+inappropriate, threatening, offensive, or harmful.
+
+Maintainers have the right and responsibility to remove, edit, or
+reject comments, commits, code, wiki edits, issues, and other
+contributions that are not aligned with this Code of Conduct, and may
+temporarily or permanently remove serious offenders from the
+community.
+
+## Scope
+
+This Code of Conduct applies within all community spaces, and also
+when an individual is officially representing the project or community
+in public spaces.
+
+## Enforcement
+
+Abuse, harassment, or other unacceptable behaviour may be reported to
+the maintainers through this repository's GitHub Issues (for a
+confidential report, mark the title with [Private] and the maintainer
+will switch to an on-site channel), by email to the project inbox
+motionlabphysics@agent.qq.com, or by Reddit DM to
+[u/MotionLab-Physics](https://www.reddit.com/user/MotionLab-Physics).
+All complaints will be reviewed and investigated promptly and fairly.
+
+All maintainers are obligated to respect the privacy and safety of
+the reporter.
+
+## Attribution
+
+This Code of Conduct is adapted from the Contributor Covenant,
+version 2.1, available at
+https://www.contributor-covenant.org/version/2/1/code_of_conduct.html

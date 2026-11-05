@@ -47,3 +47,64 @@ MotionLab / PhysicsEngine 是一个**纯客户端、纯静态**的项目：
   Issue / PR 反馈；
 - 使用者自己把场景保存在不安全的共享设备上造成的数据可见性问题
   （数据只存在本机浏览器中）。
+
+
+---
+
+# Security Policy (English)
+
+## What this project is (read this first)
+
+MotionLab / PhysicsEngine is a **purely client-side, purely static** project:
+
+- No backend server, no database, no account system;
+- It collects and uploads no user data; scenes and settings live only in
+  the user's own browser localStorage;
+- No API keys and no third-party tracking scripts.
+
+Its security surface is therefore mainly about **importing untrusted
+scene JSON files** and **engine files being embedded or loaded in
+unexpected ways on third-party sites**.
+
+## Supported versions
+
+| Version | Security fixes |
+| --- | --- |
+| MotionLab 1.37.x (current) | ✅ |
+| PhysicsEngine 1.10.x (current) | ✅ |
+| Older versions | ❌ (please upgrade to the latest) |
+
+## Reporting a vulnerability
+
+If you find a security problem (for example: a crafted scene JSON that
+makes the page execute arbitrary script or hang/crash the browser, or a
+way to bypass the engine API's input validation):
+
+1. **Please do not open a public Issue** with exploitable details;
+2. Prefer GitHub's private vulnerability reporting: on this repository's
+   page, click **Security → Report a vulnerability**;
+3. If that entry is not enabled, open an Issue titled `[security]` with
+   only a one-line summary; the maintainer will contact you privately
+   through GitHub for details;
+4. Or email the project inbox **motionlabphysics@agent.qq.com**
+   (put `[security]` in the subject; the mail is received by Muse, the
+   maintainer's AI assistant, and forwarded to the maintainer);
+5. Or contact the maintainer by Reddit DM,
+   [u/MotionLab-Physics](https://www.reddit.com/user/MotionLab-Physics),
+   first, and agree on a private channel for the details.
+
+When reporting, please include where possible: the affected version,
+reproduction steps, a minimal malicious scene JSON (if applicable), and
+the impact.
+
+The maintainer will fix confirmed issues as soon as possible and will
+credit the reporter in the fix release (unless you prefer to stay
+anonymous).
+
+## Not vulnerabilities
+
+- **Simulation quality issues** such as imprecise physics results or
+  fast objects tunnelling — please report those as regular
+  Issues / PRs;
+- Data visibility problems caused by users saving scenes on unsafe
+  shared devices (the data only exists in the local browser).
