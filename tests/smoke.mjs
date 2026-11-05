@@ -198,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.36')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.37')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.10.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -465,6 +465,11 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   click(panelBody.querySelector('[data-jitter]'));
   await wait(60);
   check('v1.36: jitter reports through the toast', doc.getElementById('toast').textContent.includes('随机扰动'),
+    doc.getElementById('toast').textContent);
+  check('v1.37: seeded-replay button exists', !!panelBody.querySelector('[data-seed-replay]'));
+  click(panelBody.querySelector('[data-seed-replay]'));
+  await wait(60);
+  check('v1.37: replay reports through the toast', doc.getElementById('toast').textContent.includes('重演'),
     doc.getElementById('toast').textContent);
   window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
   await wait(40);

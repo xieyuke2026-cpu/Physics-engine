@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 globalThis.Matter = require('../vendor/matter.min.js');
 
-const { validateScene, defaultScene, sceneData, bodyData, constraintData, hingeData, fluidData, presetScenes } = await import('../js/scene.js');
+const { validateScene, defaultScene, sceneData, bodyData, constraintData, hingeData, fluidData, presetScenes, jitteredScene } = await import('../js/scene.js');
 const { PhysicsWorld } = await import('../js/physics.js');
 
 let pass = 0, fail = 0;
@@ -36,6 +36,24 @@ check('v1.36: valid seed accepted', validateScene({ format: 'motionlab-scene', v
   check('v1.36: same seed -> same RNG stream', sa.every((v, i) => v === sb[i]), `${sa} vs ${sb}`);
   wa.loadScene(sceneData({ settings: { seed: 42 } }));
   check('v1.36: loadScene applies the scene seed', wa.seed === 42, `seed=${wa.seed}`);
+}
+{
+  const base = sceneData({ bodies: [
+    { type: 'circle', x: 100, y: 100, radius: 10 },
+    { type: 'rectangle', x: 50, y: 50, width: 40, height: 10, isStatic: true },
+  ] });
+  const wA = new PhysicsWorld(); wA.setSeed(7);
+  const j1 = jitteredScene(base, () => wA.random());
+  const wB = new PhysicsWorld(); wB.setSeed(7);
+  const j2 = jitteredScene(base, () => wB.random());
+  const wC = new PhysicsWorld(); wC.setSeed(8);
+  const j3 = jitteredScene(base, () => wC.random());
+  check('v1.37: same seed -> identical jitter', JSON.stringify(j1.bodies) === JSON.stringify(j2.bodies));
+  check('v1.37: different seed -> different jitter', JSON.stringify(j3.bodies) !== JSON.stringify(j1.bodies));
+  check('v1.37: jitter moves dynamic bodies', j1.bodies[0].x !== 100 || j1.bodies[0].y !== 100, `(${j1.bodies[0].x}, ${j1.bodies[0].y})`);
+  check('v1.37: jitter stays within bounds', Math.abs(j1.bodies[0].x - 100) <= 6 && Math.abs(j1.bodies[0].y - 100) <= 3);
+  check('v1.37: static bodies untouched by jitter', j1.bodies[1].x === 50 && j1.bodies[1].y === 50);
+  check('v1.37: jitter does not mutate the input scene', base.bodies[0].x === 100 && base.bodies[0].y === 100);
 }
 check('non-object rejected', !validateScene([1, 2]).ok && !validateScene(null).ok);
 check('speed out of range rejected', !validateScene({ format: 'motionlab-scene', version: 1, bodies: [], settings: { speed: 99 } }).ok);

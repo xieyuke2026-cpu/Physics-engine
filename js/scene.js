@@ -145,6 +145,26 @@ export function sceneData(partial = {}) {
   };
 }
 
+/** Return a copy of the scene whose DYNAMIC bodies are micro-jittered
+ *  by draws from `rand` (a () => [0,1) function — in the app this is
+ *  the engine's seeded RNG). Static bodies, constraints, regions and
+ *  settings pass through untouched; the input scene is not mutated.
+ *  This is what makes a seed visible: same seed -> same jitter -> the
+ *  same run; a new seed re-rolls every starting offset. */
+export function jitteredScene(scene, rand, { dx = 6, dy = 3, da = 0.04 } = {}) {
+  const s = sceneData(scene);
+  s.bodies = s.bodies.map((b) => {
+    if (b.isStatic) return b;
+    return {
+      ...b,
+      x: b.x + (rand() * 2 - 1) * dx,
+      y: b.y + (rand() * 2 - 1) * dy,
+      angle: (b.angle || 0) + (rand() * 2 - 1) * da,
+    };
+  });
+  return s;
+}
+
 /** Validate imported / loaded JSON. Returns {ok, errors[], scene?}. Never throws. */
 export function validateScene(raw) {
   const errors = [];

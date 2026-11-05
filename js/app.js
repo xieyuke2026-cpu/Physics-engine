@@ -3,7 +3,7 @@
    drawing in render.js, panel DOM in ui.js, persistence in storage.js. */
 
 import { icon, TOOL_ICONS } from './icons.js';
-import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS } from './scene.js';
+import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene } from './scene.js';
 import { Recorder } from './record.js';
 import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';
 import { PhysicsWorld } from './physics.js';
@@ -272,7 +272,16 @@ const panel = new Panel($('panelBody'), {
     refreshPanel();
     updateStatus();
     pushHistorySoon(); scheduleAutosave();
-    toast(t('msg.seedRefreshed', { seed: settings.seed }));
+    // Refreshing the seed must be VISIBLE (Ryan, 1.36: he re-ran the
+    // Galton board after a refresh and nothing changed — the falling
+    // balls never drew from the stream). So a refresh immediately
+    // replays the scene baseline with the new seed's jitter applied.
+    if (replayWithSeed()) toast(t('msg.seedRefreshedReplay', { seed: settings.seed }));
+    else toast(t('msg.seedRefreshed', { seed: settings.seed }));
+  },
+  onSeedReplay() {
+    if (replayWithSeed()) toast(t('msg.replayed', { seed: settings.seed }));
+    else toast(t('msg.noBaseline'));
   },
   onRandomJitter() {
     // A visible consumer for the seed: every dynamic body gets a kick
@@ -483,6 +492,26 @@ function resetScene() {
   history.applying = false;
   pushHistory();
   toast(t('msg.sceneReset'));
+}
+
+/** Restore the scene baseline (initialSnapshot) with the dynamic
+ *  bodies' starting positions jittered by the CURRENT seed's RNG
+ *  stream, then run. Same seed -> identical jitter -> identical run;
+ *  this is the seed's headline behaviour (e.g. re-dropping the Galton
+ *  board under a new seed changes the outcome). Current settings are
+ *  kept; only body starting poses come from the jittered baseline. */
+function replayWithSeed() {
+  if (!initialSnapshot) return false;
+  world.setSeed(settings.seed); // restart the stream at the seed
+  const base = JSON.parse(initialSnapshot);
+  const jittered = jitteredScene(base, () => world.random());
+  jittered.settings = { ...jittered.settings, ...settings };
+  history.applying = true;
+  loadScene(jittered, { markInitial: false });
+  history.applying = false;
+  pushHistory();
+  setRunning(true);
+  return true;
 }
 
 /* ---------------- pointer interaction ---------------- */
