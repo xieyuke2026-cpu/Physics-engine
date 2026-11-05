@@ -9,9 +9,9 @@
 
 ## English
 
-**MotionLab** is a browser-based 2D physics sandbox powered by **Matter.js**: create rigid bodies, tune gravity, friction and elasticity, connect springs and rods, add pairwise gravitation and fluid buoyancy, then save experiments as portable JSON scenes. No build step, no backend — open the page and play, on desktop or tablet.
+**MotionLab** is a browser-based 2D physics sandbox powered by **Matter.js**: create rigid bodies, tune gravity, friction and elasticity, connect springs, rods and motorised hinges, add pairwise gravitation, fluid buoyancy, magnetism and wind fields, then save experiments as portable JSON scenes. No build step, no backend — open the page and play, on desktop or tablet.
 
-Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse — copy `js/engine/physics-engine.js` plus `vendor/matter.min.js` into your own project. Features: fixed-timestep simulation with sub-stepping, seeded RNG, named bodies, pairwise gravitation, fluid regions (buoyancy), a formulas library, and spatial queries (region / raycast). A platform-fighter prototype, **PFLab**, is built on the same core.
+Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse — copy `js/engine/physics-engine.js` plus `vendor/matter.min.js` into your own project. Features: fixed-timestep simulation with sub-stepping, seeded RNG, named bodies, pairwise gravitation, fluid regions (buoyancy), magnetism, wind fields, hinges & motors, a formulas library, and spatial queries (region / raycast). A platform-fighter prototype, **PFLab**, is built on the same core.
 
 - **Live demo**: https://xieyuke2026-cpu.github.io/Physics-engine/
 - **Examples**: [Orbital gravitation](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [Fluid buoyancy](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [Seeded Galton board](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html)
@@ -41,7 +41,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 做成一个**任何项目都能直接复用的开源引擎**：
 
 - **PhysicsEngine**（`js/engine/physics-engine.js`）：与应用无关的 2D 物理核心——
-  纯数据描述符、固定步进、种子随机、物体命名、万有引力、流体浮力、磁力、风场、Formulas 公式库。
+  纯数据描述符、固定步进、种子随机、物体命名、万有引力、流体浮力、磁力、风场、铰链与马达、Formulas 公式库。
   复制这一个文件（加 `vendor/matter.min.js`）即可在你自己的项目里用。
 - **在线示例**（GitHub Pages 可直接打开）：
   [万有引力轨道](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) ·
@@ -126,7 +126,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
   更新时间，以及打开 / 重命名 / 复制 / 导出 / 删除操作；可按名称搜索。
   在实验室里点顶部「我的项目」或左上角 Logo 随时回首页；窄屏时侧边栏自动变为顶部横条
 - 新建 / 保存 / 加载 / 重命名 / 复制 / 删除场景（场景库存于 localStorage）
-- 导出 / 导入 JSON（格式 `motionlab-scene` v2，含 `constraints`；v1 文件可继续导入，导入时完整校验，错误会逐条提示）；**主页工具栏也有「导入场景」入口**，不必先进实验室
+- 导出 / 导入 JSON（格式 `motionlab-scene` v2，含 `constraints` / `fluids` / `winds` / `hinges`；v1 文件可继续导入，导入时完整校验，错误会逐条提示）；**主页工具栏也有「导入场景」入口**，不必先进实验室
 - **分享链接（v1.25）**：点顶部或场景卡上的「分享」，整个场景被压缩编码进链接（`#s=` 哈希，无后端），对方打开链接直接进入这个场景
 - 自动保存：刷新页面后恢复上次场景
 
@@ -158,6 +158,7 @@ js/engine/physics-engine.js  通用可复用物理核心（v1.2 抽出）：固�
                       独立包在 ~/workspace/physics-engine/，新项目可直接调用
 js/physics.js         薄适配层：MotionLab 场景格式 ⇄ 通用引擎描述符的翻译
 js/render.js          Canvas 渲染器 + 相机（网格、选中高亮、速度向量、创建预览、视口裁剪）
+js/record.js          录制导出 GIF（零依赖 GIF89a 编码器，v1.28）
 js/ui.js              右侧属性面板与设置弹窗的 DOM 构建
 js/storage.js         localStorage：场景库、自动保存、UI 设置（损坏数据自动回退）
 js/app.js             应用装配：工具与指针交互、历史记录、场景管理、主循环

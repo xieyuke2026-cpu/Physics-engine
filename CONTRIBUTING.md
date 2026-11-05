@@ -12,7 +12,7 @@
 | `js/engine/physics-engine.js` | **PhysicsEngine 2D 核心**（与宿主无关，可单独复用） |
 | `js/engine/physics-engine-3d.js` | PhysicsEngine3D 核心（cannon-es） |
 | `js/pf/` | PF 引擎 / PFLab 平台格斗模块（只依赖 PhysicsEngine 公开 API） |
-| `docs/DEVELOPER.md` | 引擎与 PF 引擎的完整调用文档 |
+| `docs/DEVELOPER.md` / `docs/DEVELOPER-EN.md` | 引擎与 PF 引擎的完整调用文档（中 / 英） |
 | `examples/` | 三个独立示例页（轨道 / 浮力 / 种子钉板），可直接打开 |
 | `tests/` | Node 自动化测试（见下） |
 | `vendor/` | 第三方库原文件（matter.min.js 等），**不要手改** |
@@ -38,7 +38,10 @@ node engine3d-tests.mjs    # 3D 核心单测
 node run-tests.mjs         # MotionLab 场景/适配层逻辑
 node pf-smoke.mjs          # PF 引擎逻辑
 node smoke.mjs             # 应用冒烟（含样式表完整性守卫）
-node nav-smoke.mjs landing-smoke.mjs pf-ui-smoke.mjs lab3d-smoke.mjs
+node nav-smoke.mjs         # 首页导航冒烟
+node landing-smoke.mjs     # 落地页冒烟
+node pf-ui-smoke.mjs       # PFLab 界面冒烟
+node lab3d-smoke.mjs       # 3D 实验室冒烟（当前隐藏，代码保留）
 ```
 
 改动引擎后，**全部测试必须通过**。新增引擎能力请同时补测试；
@@ -59,8 +62,10 @@ node nav-smoke.mjs landing-smoke.mjs pf-ui-smoke.mjs lab3d-smoke.mjs
 - 代码风格：ES 模块、2 空格缩进、无分号以外的花哨语法；注释解释「为什么」，
   与既有代码保持一致。
 - 版本号：应用版本在 `js/ui.js` 的 `APP_VERSION`，引擎版本在
-  `physics-engine.js` 的 `VERSION`——改版本时同步 `docs/DEVELOPER.md` 与
-  `CHANGELOG.md`。
+  `physics-engine.js` 的 `VERSION`——改版本时一并同步 `version.json`、
+  `index.html` 的 `?v=` 戳、README 徽章、`SECURITY.md` 的支持版本、
+  `docs/DEVELOPER.md`（及英文版）与 `CHANGELOG.md`，并在
+  `TEST-REPORT.md` 补当版测试记录。
 
 ## 提交流程
 
