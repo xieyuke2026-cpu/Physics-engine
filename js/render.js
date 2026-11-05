@@ -36,6 +36,15 @@ export class Renderer {
     this._segs = [];           // reusable constraint-segment buffer (no per-frame alloc)
     this._alive = new Set();   // reusable set for trail bookkeeping
     this._frameBodies = [];    // reusable per-frame body list (no copy-out per frame)
+    // Static-layer offscreen cache (1.33): static bodies are baked
+    // into a viewport-sized canvas once and blitted per frame; the
+    // bake is keyed by a signature of camera + view + every static
+    // body's pose/appearance, so ANY change (scene edit, undo, import,
+    // a static drag in progress) re-bakes automatically.
+    this._staticCache = null;  // HTMLCanvasElement | null
+    this._staticCtx = null;
+    this._staticSig = '';
+    this._cacheOff = false;    // set when no 2d context is available (test stubs)
   }
 
   clearTrails() { this.trails.clear(); }
@@ -86,9 +95,14 @@ export class Renderer {
     const tl = camera.screenToWorld(0, 0, view);
     const br = camera.screenToWorld(view.w, view.h, view);
     const pad = 40;
+    // static layer: blit the baked cache (re-baked only when its
+    // signature changes); the SELECTED static is drawn live on top so
+    // its accent stroke is exact.
+    const useCache = !this._cacheOff && this._blitStatics(world, bodies, tl, br, pad);
     for (const body of bodies) {
       const b = body.bounds;
       if (b.max.x < tl.x - pad || b.min.x > br.x + pad || b.max.y < tl.y - pad || b.min.y > br.y + pad) continue;
+      if (body.isStatic && useCache && world.dataIdOf(body) !== selectedId) continue;
       this._body(body, world, selectedId);
     }
     if (blast) {
@@ -120,6 +134,71 @@ export class Renderer {
     }
     if (preview) this._preview(preview);
     ctx.restore();
+  }
+
+  /** Signature of everything the static cache depends on: camera,
+   *  view, and each static body's id, pose, type, magnet and bound
+   *  flag — accumulated as a cheap numeric hash (FNV-style). */
+  _staticSignature(world, bodies) {
+    const { camera, view } = this;
+    let h = 2166136261 >>> 0;
+    const mix = (n) => { h ^= (n | 0); h = Math.imul(h, 16777619) >>> 0; };
+    mix((camera.x * 2) | 0); mix((camera.y * 2) | 0); mix((camera.zoom * 1000) | 0);
+    mix(view.w | 0); mix(view.h | 0); mix((this.dpr * 100) | 0);
+    for (const b of bodies) {
+      if (!b.isStatic) continue;
+      const id = String(world.dataIdOf(b));
+      for (let i = 0; i < id.length; i++) mix(id.charCodeAt(i));
+      mix((b.position.x * 2) | 0); mix((b.position.y * 2) | 0); mix((b.angle * 1000) | 0);
+      const t = String(world.typeOf(b));
+      for (let i = 0; i < t.length; i++) mix(t.charCodeAt(i));
+      mix(typeof world.magnetOf === 'function' ? world.magnetOf(b) : 0);
+      mix(typeof world.isBound === 'function' && world.isBound(b) ? 1 : 0);
+    }
+    return h.toString(36);
+  }
+
+  /** Blit the static layer, re-baking when the signature changed.
+   *  Returns false when caching is unavailable (caller then draws
+   *  statics inline, exactly as before). */
+  _blitStatics(world, bodies, tl, br, pad) {
+    const { ctx, view, camera } = this;
+    const sig = this._staticSignature(world, bodies);
+    if (sig !== this._staticSig) {
+      if (!this._staticCache) {
+        try {
+          this._staticCache = document.createElement('canvas');
+          this._staticCtx = this._staticCache.getContext('2d');
+        } catch { this._staticCache = null; this._staticCtx = null; }
+        if (!this._staticCtx) { this._cacheOff = true; return false; }
+      }
+      const c = this._staticCache;
+      const W = Math.max(1, Math.round(view.w * this.dpr)), H = Math.max(1, Math.round(view.h * this.dpr));
+      if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+      const cc = this._staticCtx;
+      cc.setTransform(1, 0, 0, 1, 0, 0);
+      cc.clearRect(0, 0, W, H);
+      cc.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      cc.translate(view.w / 2, view.h / 2);
+      cc.scale(camera.zoom, camera.zoom);
+      cc.translate(-camera.x, -camera.y);
+      cc.lineJoin = 'round';
+      const mainCtx = this.ctx;
+      this.ctx = cc;
+      for (const body of bodies) {
+        if (!body.isStatic) continue;
+        const b = body.bounds;
+        if (b.max.x < tl.x - pad || b.min.x > br.x + pad || b.max.y < tl.y - pad || b.min.y > br.y + pad) continue;
+        this._body(body, world, null);
+      }
+      this.ctx = mainCtx;
+      this._staticSig = sig;
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this._staticCache, 0, 0);
+    ctx.restore();
+    return true;
   }
 
   /** A hinge pin marker: outer ring (accent when selected), centre dot,
