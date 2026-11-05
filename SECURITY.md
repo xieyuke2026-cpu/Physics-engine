@@ -31,7 +31,9 @@ MotionLab / PhysicsEngine 是一个**纯客户端、纯静态**的项目：
 3. 如果该入口未开启，请开一个标题为 `[security]` 的 Issue，
    只写一句概述，维护者会通过 GitHub 与你私下联系细节；
 4. 也可以直接发邮件到项目反馈邮箱 **motionlabphysics@agent.qq.com**
-   （标题注明 `[security]`，由维护者的 AI 助手 Muse 收件并转交）。
+   （标题注明 `[security]`，由维护者的 AI 助手 Muse 收件并转交）；
+5. 或通过 Reddit 私信维护者 [u/MotionLab-Physics](https://www.reddit.com/user/MotionLab-Physics)
+   先取得联系，再另行约定私密渠道交换细节。
 
 报告时请尽量附上：受影响的版本、复现步骤、一个最小化的恶意
 场景 JSON（如适用）以及影响范围。

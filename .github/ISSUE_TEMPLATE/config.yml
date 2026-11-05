@@ -6,6 +6,12 @@ contact_links:
   - name: Questions & Discussions
     url: https://github.com/xieyuke2026-cpu/Physics-engine/discussions
     about: General questions, ideas and gameplay sharing are welcome in Discussions.
+  - name: Reddit 找维护者
+    url: https://www.reddit.com/user/MotionLab-Physics
+    about: 维护者在 Reddit 的账号 u/MotionLab-Physics，项目的发帖与动态都在那里。
+  - name: Reddit
+    url: https://www.reddit.com/user/MotionLab-Physics
+    about: The maintainer on Reddit (u/MotionLab-Physics) — project posts and updates live there.
   - name: 邮件反馈
     url: mailto:motionlabphysics@agent.qq.com
     about: 也可以直接发邮件反馈（由维护者的 AI 助手 Muse 收件、整理并转交维护者）。

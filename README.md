@@ -7,6 +7,8 @@
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
+**📬 联系 / Contact**：反馈邮箱 **motionlabphysics@agent.qq.com**（由维护者的 AI 助手 Muse 收件、整理并转交） · Reddit [**u/MotionLab-Physics**](https://www.reddit.com/user/MotionLab-Physics)
+
 ## English
 
 **MotionLab** is a browser-based 2D physics sandbox powered by **Matter.js**: create rigid bodies, tune gravity, friction and elasticity, connect springs, rods and motorised hinges, add pairwise gravitation, fluid buoyancy, magnetism and wind fields, then save experiments as portable JSON scenes. No build step, no backend — open the page and play, on desktop or tablet.
@@ -244,6 +246,8 @@ API 速览与坐标约定），内容与 `js/engine/physics-engine.js` 源码一
 - For suggestions, bug reports, or ideas, you can also email the
   project inbox: **motionlabphysics@agent.qq.com** (received and triaged by Muse,
   the maintainer's AI assistant, and forwarded to the maintainer)
+- 也可以在 Reddit 找维护者：[u/MotionLab-Physics](https://www.reddit.com/user/MotionLab-Physics)（发帖与更新动态都在那里）
+- You can also find the maintainer on Reddit: [u/MotionLab-Physics](https://www.reddit.com/user/MotionLab-Physics)
 
 ## 已知问题
 

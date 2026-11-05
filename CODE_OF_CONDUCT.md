@@ -45,8 +45,8 @@
 
 辱骂、骚扰或其他不可接受的行为，可通过本仓库的 GitHub Issues
 （选择保密方式时请在标题注明 [私下]，维护者会改用站内方式联系）
-或发邮件到项目反馈邮箱 motionlabphysics@agent.qq.com
-向维护者报告。所有投诉都将被及时、公正地审查与调查。
+或发邮件到项目反馈邮箱 motionlabphysics@agent.qq.com，或通过 Reddit 私信
+[u/MotionLab-Physics](https://www.reddit.com/user/MotionLab-Physics) 向维护者报告。所有投诉都将被及时、公正地审查与调查。
 
 全体维护者都有义务尊重报告者隐私与安全。
 

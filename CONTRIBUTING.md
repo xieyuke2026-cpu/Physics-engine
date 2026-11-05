@@ -4,6 +4,8 @@
 **可被任何项目复用的物理引擎核心**（PhysicsEngine）。无论你想修 bug、加预设、
 还是给引擎加新能力，这份指南说明如何把改动跑起来、测好、提上来。
 
+**联系维护者**：反馈邮箱 **motionlabphysics@agent.qq.com**（由维护者的 AI 助手 Muse 收件、整理并转交） · Reddit [u/MotionLab-Physics](https://www.reddit.com/user/MotionLab-Physics)
+
 ## 项目结构
 
 | 路径 | 内容 |
