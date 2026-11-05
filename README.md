@@ -1,9 +1,9 @@
 # MotionLab — 2D Physics Sandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.8.0-blue.svg)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.9.0-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-453%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-460%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -83,6 +83,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 - **v1.28 / 引擎 1.7.0 机械**：铰链工具把两个物体钉在同一点上相对转动，可加马达匀速驱动（转速面板可调）；同一台机器的零件互不碰撞，折叠旋转不卡角。顶栏新增录制按钮，一键把实验录成循环 GIF
 - **v1.29 修复**：摩天轮十字臂散架/座舱翻转已修复（连杆锁角 + 整机同簇 + 座舱中心铰接，实测 60 秒转满 2466°、十字与座舱偏差 0°）；引擎 1.7.1 把默认约束迭代提到 4，刚性机器的锚点误差从像素级降到 0；选中静态物体时属性面板新增「拖动静态物体」开关，运行中也能直接拖它改位置
 - **v1.30 新增**：预设「风车」——没有任何马达，纯靠一块只盖住轮子上半部的风场区域驱动（帆叶划过顶部被风推走、绕回底部无风区，整圈循环），引擎 1.8.0 的风场「阵风」让它忽快忽慢（实测转速在约 6.5–10 秒/圈之间呼吸）；风场编辑器多了阵风与周期两个滑杆
+- **v1.31 联动**：引擎 1.9.0 让模块互相影响——流体阻尼同时刹旋转（风车加默认水慢约 23%，此前几乎无感）、流体可设流速顺流漂物、风吹过水面带出约风速四成的水流（水下物体被带着走，水里能看到流向箭头）；流体阻力不再被零重力关掉
 - **v1.10 修复**：过山车回环重做——v1.9 的圆环是封闭的且小球从环下穿过，根本进不去；
   新版改为导杆回环：小球由一根刚性导杆牵引，沿 24 段轨道圆环内侧完整绕行约 1.7 圈后
   逐渐摆动停稳（自由滚动在分段轨道上会因段角卡滞与能量不足无法完成整圈，实测对比后选导杆方案）

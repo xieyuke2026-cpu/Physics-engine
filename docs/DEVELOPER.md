@@ -15,7 +15,7 @@
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
 | MotionLab（应用） | 1.27 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.8.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| PhysicsEngine（2D 核心） | 1.9.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -40,7 +40,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.8.0'
+  console.log(VERSION); // '1.9.0'
 </script>
 ```
 
@@ -92,7 +92,7 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 | 随机种子（1.3.0 新增） | `new PhysicsEngine({ seed })`、`pe.seed`（读回种子）、`setSeed(n)`、`random()`、`randomRange(min, max)`、`randomInt(min, max)`、`choice(arr)`、`shuffle(arr)` |
 | 命名（1.4.0 新增） | 描述符 `name` 字段、`nameOf(body)`、`getBodyByName(name)`、`getBodiesByName(name)`、`renameBody(bodyOrId, name)` |
 | 万有引力（1.4.0 新增） | `setGravitation(G, { softening })`、`gravitation`（读配置）、`setGravitation(0)` 关闭 |
-| 流体浮力（1.4.0 新增） | `addFluid({ id?, x, y, width, height, density, drag })`、`removeFluid(id)`、`fluids()`、`fluidById(id)`、`fluidCount` |
+| 流体浮力（1.4.0 新增；1.9.0 联动） | `addFluid({ id?, x, y, width, height, density, drag, vx, vy })`、`removeFluid(id)`、`fluids()`、`fluidById(id)`、`fluidCount`、`fluidFlow(id)` |
 | 磁力（1.5.0 新增） | 描述符字段 `magnet`（−100..100）、`setMagnetism(K, { range, softening })`、`magnetism`、`setMagnet(body, v)`、`magnetOf(body)`、`magnetCount` |
 | 风场（1.5.0 新增；1.8.0 阵风） | `addWind({ id?, x, y, width, height, vx, vy, power, gust, gustPeriod })`、`removeWind(id)`、`winds()`、`windById(id)`、`windCount`、`simTime` |
 | 铰链与马达（1.7.0 新增） | `addHinge({ id?, bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })`、`removeHinge(id)`、`hingeById(id)`、`describeHinges()`、`hingeCount`、`hingeAnchors()`、`setHingeMotor(id, v)` |
@@ -132,11 +132,15 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 
 ### 流体区域与浮力（1.4.0）
 
-`addFluid({ x, y, width, height, density = 0.0012, drag = 0.02 })`：
+`addFluid({ x, y, width, height, density = 0.0012, drag = 0.02, vx = 0, vy = 0 })`：
 (x, y) 为区域**中心**，上沿即液面。动态体与区域重叠时，浮力经 Matter 的
 力通道施加，大小与世界重力镜像、按 `(流体密度 / 物体密度) × 浸没比例`
 缩放——全浸且密度相等时恰好中性悬浮；`drag` 为浸没时每子步的速度保留
-衰减。浮力只在世界重力非零时生效。快照携带 `fluids` 数组。
+衰减。浮力只在世界重力非零时生效。快照携带 `fluids` 数组。1.9.0 起：
+`drag` 改为把速度向**有效流速**混合（流体自带流速 `vx/vy` + 风场重叠
+时带入的表面水流，约风速四成 × 功率 × 水平重叠比例），并以 2.5 倍
+系数衰减角速度——转子、桨叶在水里会被真实刹住；阻尼与水流在零重力
+世界同样生效（只有浮力需要重力）。`fluidFlow(id)` 读回当前有效流速。
 
 ### 磁力（1.5.0）
 
@@ -234,6 +238,11 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
   有效风速按 (1 + gust × sin(2π × t ÷ 周期)) 呼吸；t 为引擎模拟时钟，
   全部区域同相（同一片天气），时钟随快照 simMs 保存、读档相位不跳变；
   gust = 0 时与旧行为逐位一致
+- 1.9.0 — 模块联动：流体阻尼同时衰减角速度（2.5 倍系数，转子/桨叶
+  在水里被刹住；风车加默认水实测慢约 23%，此前约 11% 且被阵风掩盖）；
+  流体新增流速 vx/vy，阻尼向有效流速混合；风场与流体重叠时带入表面
+  水流（阵风修正风速 × 40% × 功率 × 水平重叠），fluidFlow(id) 可读；
+  流体阻尼/水流不再被零重力整体关掉（只有浮力需要重力）
 
 ---
 

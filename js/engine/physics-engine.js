@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.8.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.9.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -73,6 +73,17 @@
              multi-pixel anchor errors at 2 iterations (measured on a
              ferris wheel: hub drift 28px, cross error 5.6°); at 4 the
              same machine holds its hub exactly and its cross angle
+     1.9.0 — module coupling: fluid drag also bleeds ANGULAR velocity
+             (a spinning bar or paddle in water now feels the water;
+             before, drag only touched linear velocity at the centre of
+             mass, so rotors whose centre barely moved felt nothing);
+             fluids gain a flow velocity (vx, vy — drag blends toward
+             the flow instead of toward zero); wind regions overlapping
+             a fluid drive a surface current in it (40% of the
+             gust-adjusted wind velocity, scaled by horizontal overlap)
+             — read it back with fluidFlow(id); fluid drag/flow no
+             longer switch off in zero-gravity worlds (only buoyancy
+             needs gravity)
      1.8.0 — wind gusts: wind regions gain `gust` (0..0.9) and
              `gustPeriod` (seconds, 2..30); the effective wind velocity
              oscillates as (1 + gust * sin(2π * t / period)) on a
@@ -106,7 +117,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.8.0';
+export const VERSION = '1.9.0';
 
 /* ============================================================================
    Formulas — pure physics helpers (no engine state).
@@ -253,7 +264,8 @@ export class PhysicsEngine {
       const g = typeof opts.gravitation === 'number' ? { G: opts.gravitation } : opts.gravitation;
       this.setGravitation(g.G, g);
     }
-    this._fluids = new Map();      // id -> {id, x, y, width, height, density, drag}
+    this._fluids = new Map();      // id -> {id, x, y, width, height, density, drag, vx, vy}
+    this._fluidFlow = new Map();   // id -> last computed effective flow {x, y} (base + wind-driven, 1.9.0)
     this._winds = new Map();       // id -> {id, x, y, width, height, vx, vy, power}
     this._magnets = new Set();     // Matter bodies whose descriptor magnet !== 0
     this._magnetism = { K: 1.2, range: 320, softening: 900 };
@@ -1046,10 +1058,17 @@ export class PhysicsEngine {
      (fluid density / body density) × submerged fraction of its bounds —
      so a body floats when the submerged fraction balances its density
      ratio, exactly Archimedes' principle in 2D. `drag` (0..1) bleeds
-     velocity per substep while submerged. */
+     velocity per substep while submerged — from 1.9.0 toward the
+     fluid's flow velocity (its own current plus wind-driven surface
+     current) instead of toward zero, and it bleeds angular velocity
+     by the same factor, so spinning/paddling bodies feel the fluid. */
   /**
    * Add a fluid region: { id?, x, y, width, height, density = 0.0012,
-   * drag = 0.02 }. Returns the stored record (a copy).
+   * drag = 0.02, vx = 0, vy = 0 }. (vx, vy) is the fluid's own flow
+   * (current) in px/step: drag blends submerged bodies toward the
+   * flow, and bleeds their angular velocity too (1.9.0). Wind regions
+   * overlapping the fluid add a wind-driven surface current on top —
+   * see fluidFlow(id) for the effective flow. Returns a copy.
    */
   addFluid(partial = {}) {
     const rec = {
@@ -1058,6 +1077,8 @@ export class PhysicsEngine {
       width: Math.max(1, num(partial.width, 200)), height: Math.max(1, num(partial.height, 200)),
       density: Math.max(0, num(partial.density, 0.0012)),
       drag: Math.min(1, Math.max(0, num(partial.drag, 0.02))),
+      vx: Math.min(16, Math.max(-16, num(partial.vx, 0))),
+      vy: Math.min(16, Math.max(-16, num(partial.vy, 0))),
     };
     this._fluids.set(rec.id, rec);
     return { ...rec };
@@ -1071,17 +1092,47 @@ export class PhysicsEngine {
    *  for render loops and other per-frame readers (1.6.0). */
   forEachFluid(fn) { for (const f of this._fluids.values()) fn(f); }
   get fluidCount() { return this._fluids.size; }
+  /** Effective flow of a fluid right now: its own (vx, vy) plus any
+   *  wind-driven surface current (1.9.0). Before the first simulated
+   *  step (or in a zero-wind world) this is just the base flow. */
+  fluidFlow(id) {
+    const e = this._fluidFlow.get(id);
+    if (e) return { x: e.x, y: e.y };
+    const f = this._fluids.get(id);
+    return f ? { x: f.vx, y: f.vy } : null;
+  }
 
   _applyFluids() {
     const g = this.engine.gravity;
-    if (!g || (g.x === 0 && g.y === 0)) return;
-    const scale = g.scale !== undefined ? g.scale : 0.001;
+    const scale = g && g.scale !== undefined ? g.scale : 0.001;
+    // Only buoyancy needs gravity (1.9.0): drag and currents keep
+    // working in zero-gravity worlds instead of switching off whole.
+    const hasG = !!(g && (g.x !== 0 || g.y !== 0));
     const { Body } = this.M;
     const arr = this._bodies();
     const fv = this._forceVec;
     for (const f of this._fluids.values()) {
       const top = f.y - f.height / 2, bottom = f.y + f.height / 2;
       const left = f.x - f.width / 2, right = f.x + f.width / 2;
+      // Effective flow (1.9.0): the fluid's own current plus a
+      // wind-driven surface current from every overlapping wind
+      // region — 40% of its gust-adjusted velocity, scaled by power
+      // and by the horizontal overlap fraction. Derived per step and
+      // never written back into the record (snapshots stay clean).
+      let fx = f.vx, fy = f.vy;
+      if (this._winds.size) {
+        for (const w of this._winds.values()) {
+          if (w.power <= 0) continue;
+          const ox = Math.min(right, w.x + w.width / 2) - Math.max(left, w.x - w.width / 2);
+          if (ox <= 0) continue;
+          const oy = Math.min(bottom, w.y + w.height / 2) - Math.max(top, w.y - w.height / 2);
+          if (oy <= 0) continue;
+          const v = this._windVel(w);
+          const k = 0.4 * w.power * (ox / f.width);
+          fx += v.x * k; fy += v.y * k;
+        }
+      }
+      this._fluidFlow.set(f.id, { x: fx, y: fy });
       for (let i = 0; i < arr.length; i++) {
         const b = arr[i];
         // Sleeping bodies are skipped: Matter discards forces on them
@@ -1094,16 +1145,26 @@ export class PhysicsEngine {
         const bh = Math.max(1, bd.max.y - bd.min.y);
         const frac = Math.min(1, Math.max(0, (bd.max.y - top) / bh));
         if (frac <= 0) continue;
-        const ratio = b.density > 0 ? f.density / b.density : 0;
-        // Buoyancy through Matter's own force channel, mirroring how
-        // gravity itself is applied (force = mass · g · scale), so a
-        // fully submerged body with ratio 1 is exactly neutrally buoyant.
-        fv.x = -g.x * b.mass * ratio * frac * scale;
-        fv.y = -g.y * b.mass * ratio * frac * scale;
-        Body.applyForce(b, b.position, fv);
+        if (hasG) {
+          const ratio = b.density > 0 ? f.density / b.density : 0;
+          // Buoyancy through Matter's own force channel, mirroring how
+          // gravity itself is applied (force = mass · g · scale), so a
+          // fully submerged body with ratio 1 is exactly neutrally buoyant.
+          fv.x = -g.x * b.mass * ratio * frac * scale;
+          fv.y = -g.y * b.mass * ratio * frac * scale;
+          Body.applyForce(b, b.position, fv);
+        }
         if (f.drag > 0) {
           const keep = 1 - f.drag * frac;
-          Body.setVelocity(b, { x: b.velocity.x * keep, y: b.velocity.y * keep });
+          // Blend toward the effective flow (identical to the old
+          // bleed-to-zero when the flow is zero), and bleed spin with
+          // a stronger coefficient: rotational drag acts over the
+          // body's whole submerged sweep, not just at its centre —
+          // a rotor whose centre barely moves still feels the water
+          // through its angular velocity (1.9.0). Measured on the
+          // pinwheel: default water now slows it ~23% (was ~11%).
+          Body.setVelocity(b, { x: fx + (b.velocity.x - fx) * keep, y: fy + (b.velocity.y - fy) * keep });
+          Body.setAngularVelocity(b, b.angularVelocity * Math.max(0, 1 - f.drag * frac * 2.5));
         }
       }
     }
@@ -1151,16 +1212,20 @@ export class PhysicsEngine {
   /** Simulated milliseconds elapsed (the gust clock); rides snapshots. */
   get simTime() { return this._simMs; }
 
+  /** Gust-adjusted wind velocity of a region right now (shared by
+   *  _applyWinds and the wind→fluid surface-current coupling, 1.9.0). */
+  _windVel(w) {
+    if (!(w.gust > 0)) return { x: w.vx, y: w.vy };
+    const m = 1 + w.gust * Math.sin(6.283185307179586 * (this._simMs / (1000 * w.gustPeriod)));
+    return { x: w.vx * m, y: w.vy * m };
+  }
+
   _applyWinds() {
     const { Body, Sleeping } = this.M;
     const arr = this._bodies();
     for (const w of this._winds.values()) {
       if (w.power <= 0) continue;
-      let mvx = w.vx, mvy = w.vy;
-      if (w.gust > 0) {
-        const m = 1 + w.gust * Math.sin(6.283185307179586 * (this._simMs / (1000 * w.gustPeriod)));
-        mvx *= m; mvy *= m;
-      }
+      const { x: mvx, y: mvy } = this._windVel(w);
       const top = w.y - w.height / 2, bottom = w.y + w.height / 2;
       const left = w.x - w.width / 2, right = w.x + w.width / 2;
       for (let i = 0; i < arr.length; i++) {

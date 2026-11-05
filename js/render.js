@@ -61,10 +61,11 @@ export class Renderer {
     ctx.lineJoin = 'round';
 
     // fluid regions sit behind everything else (drawn first, under bodies)
+    const flowOf = typeof world.fluidFlow === 'function' ? (f) => world.fluidFlow(f.id) : () => null;
     if (typeof world.forEachFluid === 'function') {
-      world.forEachFluid((f) => this._fluid(f, f.id === selectedFluidId));
+      world.forEachFluid((f) => this._fluid(f, f.id === selectedFluidId, flowOf(f)));
     } else if (typeof world.fluids === 'function') {
-      for (const f of world.fluids()) this._fluid(f, f.id === selectedFluidId);
+      for (const f of world.fluids()) this._fluid(f, f.id === selectedFluidId, flowOf(f));
     }
     // wind regions share the back layer (above fluids, still under bodies)
     if (typeof world.forEachWind === 'function') {
@@ -159,7 +160,7 @@ export class Renderer {
 
   /** A fluid (buoyancy) region: translucent fill, a firm surface line on the
    *  top edge, and a small caption so the region reads as water, not a box. */
-  _fluid(f, isSel) {
+  _fluid(f, isSel, flow) {
     const { ctx, camera } = this;
     const x = f.x - f.width / 2, y = f.y - f.height / 2;
     ctx.fillStyle = 'rgba(47,109,179,0.10)';
@@ -174,6 +175,29 @@ export class Renderer {
     ctx.fillStyle = 'rgba(47,109,179,0.75)';
     ctx.font = `${12 / camera.zoom}px sans-serif`;
     ctx.fillText(getLang() === 'en' ? 'Fluid · Buoyancy' : '流体 Fluid · 浮力', x + 8 / camera.zoom, y + 16 / camera.zoom);
+    // flow arrows (1.31): the EFFECTIVE flow — the region's own current
+    // plus any wind-driven surface current — so wind blowing over
+    // water is visible in the water itself.
+    const ef = flow || { x: f.vx || 0, y: f.vy || 0 };
+    const sp = Math.hypot(ef.x, ef.y);
+    if (sp > 0.05) {
+      const ux = ef.x / sp, uy = ef.y / sp;
+      const len = Math.min(40, 12 + sp * 7);
+      const cols = Math.max(1, Math.min(10, Math.floor(f.width / 130)));
+      const rows = Math.max(1, Math.min(6, Math.floor(f.height / 70)));
+      ctx.strokeStyle = 'rgba(47,109,179,0.5)';
+      ctx.lineWidth = 1.3 / Math.sqrt(camera.zoom);
+      ctx.beginPath();
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const cx2 = x + (c + 0.5) * (f.width / cols), cy2 = y + (r + 0.5) * (f.height / rows);
+        const x1 = cx2 - ux * len / 2, y1 = cy2 - uy * len / 2;
+        const x2 = cx2 + ux * len / 2, y2 = cy2 + uy * len / 2;
+        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+        ctx.moveTo(x2, y2); ctx.lineTo(x2 - (ux * 0.8 - uy * 0.45) * len * 0.32, y2 - (uy * 0.8 + ux * 0.45) * len * 0.32);
+        ctx.moveTo(x2, y2); ctx.lineTo(x2 - (ux * 0.8 + uy * 0.45) * len * 0.32, y2 - (uy * 0.8 - ux * 0.45) * len * 0.32);
+      }
+      ctx.stroke();
+    }
   }
 
   /** A wind region: pale slate fill, dashed outline, and flow arrows along

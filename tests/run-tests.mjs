@@ -287,6 +287,28 @@ for (const p of presets) {
   check('pinwheel: hub stays pinned', hubDrift < 3, `drift ${hubDrift.toFixed(1)}px`);
 }
 
+/* --- v1.31: pinwheel + water (Ryan: added water to the pinwheel and
+   nothing happened — with engine 1.9.0's angular drag the default
+   added water must measurably brake the wheel) --- */
+{
+  const base = presets.find((p) => p.key === 'pinwheel').scene;
+  const runWheel = (scene) => {
+    const w = new PhysicsWorld();
+    w.loadScene(JSON.parse(JSON.stringify(scene)));
+    const H = w.allBodies().find((b) => w.dataIdOf(b) === 'pw-bar-h');
+    for (let s = 0; s < 1800; s++) w.advance(1000 / 60);
+    return Math.abs(H.angle) * 180 / Math.PI;
+  };
+  const dryTurn = runWheel(base);
+  const wetScene = JSON.parse(JSON.stringify(base));
+  wetScene.fluids = [fluidData({})]; // exactly what the app's Add Fluid button creates
+  const wetTurn = runWheel(wetScene);
+  check('pinwheel+water: default added water brakes the wheel by >=18%',
+    wetTurn < dryTurn * 0.82, `dry ${dryTurn.toFixed(0)}° wet ${wetTurn.toFixed(0)}°`);
+  check('fluid flow: fluidData keeps vx/vy and validation accepts them',
+    fluidData({ vx: 2 }).vx === 2 && validateScene(sceneData({ fluids: [fluidData({ vx: 1.5, vy: -1 })] })).ok);
+}
+
 /* --- v1.23: gravitation / fluids / rename get lab entries (scene level) --- */
 {
   const fd = fluidData({});

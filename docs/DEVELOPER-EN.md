@@ -16,7 +16,7 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 | Component | Version | Single source of truth |
 |---|---|---|
 | MotionLab (app) | 1.27 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.8.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| PhysicsEngine (2D core) | 1.9.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.8.0'
+  console.log(VERSION); // '1.9.0'
 </script>
 ```
 
@@ -97,7 +97,7 @@ restore the whole world.
 | Seeded RNG (added 1.3.0) | `new PhysicsEngine({ seed })`, `pe.seed` (read the seed back), `setSeed(n)`, `random()`, `randomRange(min, max)`, `randomInt(min, max)`, `choice(arr)`, `shuffle(arr)` |
 | Naming (added 1.4.0) | descriptor `name` field, `nameOf(body)`, `getBodyByName(name)`, `getBodiesByName(name)`, `renameBody(bodyOrId, name)` |
 | Gravitation (added 1.4.0) | `setGravitation(G, { softening })`, `gravitation` (read the config), `setGravitation(0)` to disable |
-| Fluids (added 1.4.0) | `addFluid({ id?, x, y, width, height, density, drag })`, `removeFluid(id)`, `fluids()`, `fluidById(id)`, `fluidCount` |
+| Fluids (added 1.4.0; coupling 1.9.0) | `addFluid({ id?, x, y, width, height, density, drag, vx, vy })`, `removeFluid(id)`, `fluids()`, `fluidById(id)`, `fluidCount`, `fluidFlow(id)` |
 | Magnetism (added 1.5.0) | descriptor field `magnet` (−100..100), `setMagnetism(K, { range, softening })`, `magnetism`, `setMagnet(body, v)`, `magnetOf(body)`, `magnetCount` |
 | Wind fields (added 1.5.0; gusts 1.8.0) | `addWind({ id?, x, y, width, height, vx, vy, power, gust, gustPeriod })`, `removeWind(id)`, `winds()`, `windById(id)`, `windCount`, `simTime` |
 | Hinges & motors (added 1.7.0) | `addHinge({ id?, bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })`, `removeHinge(id)`, `hingeById(id)`, `describeHinges()`, `hingeCount`, `hingeAnchors()`, `setHingeMotor(id, v)` |
@@ -143,7 +143,7 @@ starting orbit (see `examples/orbit.html`).
 
 ### Fluid regions & buoyancy (1.4.0)
 
-`addFluid({ x, y, width, height, density = 0.0012, drag = 0.02 })`:
+`addFluid({ x, y, width, height, density = 0.0012, drag = 0.02, vx = 0, vy = 0 })`:
 (x, y) is the region's **center**; its top edge is the surface. When a dynamic
 body overlaps the region, buoyancy is applied through Matter's force channel,
 mirroring world gravity and scaled by
@@ -277,6 +277,15 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   clock — all regions in phase, like one weather system. The clock
   rides snapshots (simMs), so the gust phase survives load();
   gust = 0 is bit-identical to the old behaviour
+- 1.9.0 — module coupling: fluid drag also bleeds angular velocity
+  (2.5x coefficient — rotors and paddles are genuinely braked by
+  water; the pinwheel with default added water slows ~23%, vs ~11%
+  before, where the gust cycle masked it); fluids gain a flow
+  velocity (vx, vy) and drag blends toward the effective flow; a
+  wind region overlapping a fluid drives a surface current
+  (gust-adjusted wind x 40% x power x horizontal overlap), readable
+  via fluidFlow(id); fluid drag/flow no longer switch off in
+  zero-gravity worlds (only buoyancy needs gravity)
 
 ---
 

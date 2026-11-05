@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.30';
+export const APP_VERSION = '1.31';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -403,13 +403,16 @@ export class Panel {
     ));
     r.appendChild(numField(L('Density 流体密度', 'Fluid Density'), 'fdensity', fluid.density, { step: 0.0002, min: 0.00005, max: 0.05 }));
     r.appendChild(sliderField(L('Drag 水中阻尼', 'In-fluid Drag'), 'fdrag', fluid.drag, 0, 0.2, 0.005));
+    r.appendChild(sliderField(L('流速 X Flow X', 'Flow X'), 'fvx', fluid.vx || 0, -8, 8, 0.25));
+    r.appendChild(sliderField(L('流速 Y Flow Y', 'Flow Y'), 'fvy', fluid.vy || 0, -8, 8, 0.25));
+    r.appendChild(el(`<p class="empty-note">${L('水中的阻尼同时作用于平移和旋转——转动的桨叶、风车臂在水里会被明显拖慢。有流速时物体会顺流漂。风场吹过水面还会带出表面水流（约风速的四成），不用连线，区域重叠就生效。', 'In-fluid drag acts on rotation as well as translation — spinning paddles and windmill arms slow down noticeably in water. A flow carries bodies downstream. Wind blowing over the surface also drives a surface current (about 40% of the wind speed) — no wiring needed, overlapping regions are enough.')}</p>`));
     const back = el(`<button class="btn block">${L('返回场景属性', 'Back to Scene Properties')}</button>`);
     back.addEventListener('click', () => this.cb.onShowScene());
     const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除流体区域', ' Delete Fluid Region')}</button>`);
     del.addEventListener('click', () => this.cb.onDeleteFluid(fluid.id));
     r.appendChild(back); r.appendChild(del);
     this._wireNumbers(r, (k, v) => {
-      const map = { fx: 'x', fy: 'y', fwidth: 'width', fheight: 'height', fdensity: 'density', fdrag: 'drag' };
+      const map = { fx: 'x', fy: 'y', fwidth: 'width', fheight: 'height', fdensity: 'density', fdrag: 'drag', fvx: 'vx', fvy: 'vy' };
       if (map[k]) this.cb.onFluidProp(fluid.id, map[k], v);
     });
     this._collectInputs();

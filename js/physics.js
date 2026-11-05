@@ -105,6 +105,9 @@ export class PhysicsWorld {
   winds() { return this.core.winds(); }
   get windCount() { return this.core.windCount; }
   /** Replace a wind's fields (the engine has no in-place update). */
+  /** Effective fluid flow (base current + wind-driven, engine 1.9.0). */
+  fluidFlow(id) { return this.core.fluidFlow(id); }
+  /** Replace a wind's fields (the engine has no in-place update). */
   updateWind(id, patch) {
     const w = this.core.windById(id);
     if (!w) return null;

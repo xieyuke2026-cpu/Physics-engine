@@ -102,6 +102,8 @@ export function fluidData(partial = {}) {
     height: Math.min(2000, Math.max(10, num(partial.height, 170))),
     density: Math.min(0.05, Math.max(0.00005, num(partial.density, 0.0012))),
     drag: Math.min(1, Math.max(0, num(partial.drag, 0.02))),
+    vx: Math.min(16, Math.max(-16, num(partial.vx, 0))),
+    vy: Math.min(16, Math.max(-16, num(partial.vy, 0))),
   };
 }
 
@@ -213,7 +215,7 @@ export function validateScene(raw) {
       if (raw.fluids.length > 20) errors.push('流体区域数量超过上限 20');
       raw.fluids.forEach((f, i) => {
         if (!f || typeof f !== 'object') { errors.push(`fluids[${i}] 不是对象`); return; }
-        for (const k of ['x', 'y', 'width', 'height', 'density', 'drag']) {
+        for (const k of ['x', 'y', 'width', 'height', 'density', 'drag', 'vx', 'vy']) {
           if (f[k] !== undefined && !Number.isFinite(Number(f[k]))) errors.push(`fluids[${i}].${k} 必须是有限数字`);
         }
       });

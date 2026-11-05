@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.8.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.9.0');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -356,6 +356,58 @@ function galtonBins(seed) {
   pe.removeFluid('water');
   for (let s = 0; s < 240; s++) pe.stepOnce();
   check('fluids: removing the fluid lets the floater sink', wood.position.y > 500, `y=${wood.position.y.toFixed(1)}`);
+}
+
+/* --- v1.9.0: module coupling — angular fluid drag, currents, wind→water --- */
+{
+  // Angular drag: a bar spinning in zero gravity inside water loses
+  // its spin; without the fluid it keeps it. Running this in zero-g
+  // also proves fluid drag no longer switches off with gravity (only
+  // buoyancy needs gravity).
+  const mkSpin = (withWater) => {
+    // sleeping off: a lone spinning bar has too little "motion" for
+    // Matter's sleep counter and would be put to sleep in BOTH worlds
+    const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 }, enableSleeping: false });
+    if (withWater) pe.addFluid({ id: 'tank', x: 400, y: 300, width: 500, height: 400, density: 0.0012, drag: 0.05 });
+    const bar = pe.addBody({ kind: 'rect', x: 400, y: 300, width: 160, height: 16, density: 0.001, frictionAir: 0 });
+    // Body.setAngularVelocity, not a raw property write: Matter derives
+    // angular velocity from angle vs anglePrev each update, so a plain
+    // assignment is overwritten on the first step
+    Matter.Body.setAngularVelocity(bar, 0.08);
+    return { pe, bar };
+  };
+  const wetSpin = mkSpin(true), drySpin = mkSpin(false);
+  for (let s = 0; s < 120; s++) { wetSpin.pe.stepOnce(); drySpin.pe.stepOnce(); }
+  check('coupling: fluid drag bleeds angular velocity (spin dies in water, not in air)',
+    Math.abs(wetSpin.bar.angularVelocity) < Math.abs(drySpin.bar.angularVelocity) * 0.5,
+    `wet w=${wetSpin.bar.angularVelocity.toFixed(4)} dry w=${drySpin.bar.angularVelocity.toFixed(4)}`);
+  // Flow: a submerged body is carried by the fluid's own current.
+  const peF = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  peF.addFluid({ id: 'river', x: 400, y: 300, width: 700, height: 300, density: 0.0012, drag: 0.05, vx: 2 });
+  const leaf = peF.addBody({ kind: 'circle', x: 200, y: 300, radius: 12, density: 0.001, frictionAir: 0 });
+  for (let s = 0; s < 120; s++) peF.stepOnce();
+  check('coupling: fluid flow carries submerged bodies downstream',
+    leaf.velocity.x > 1.2 && leaf.position.x > 260, `vx=${leaf.velocity.x.toFixed(2)} x=${leaf.position.x.toFixed(0)}`);
+  check('coupling: fluid flow fields ride snapshots; fluidFlow reads back',
+    peF.snapshot().fluids[0].vx === 2 && peF.fluidFlow('river').x === 2);
+  // Wind over water: a fully submerged body OUTSIDE the wind band
+  // still drifts, carried by the wind-driven surface current.
+  const mkTank = (withWind) => {
+    const pe = new PhysicsEngine({});
+    pe.addFluid({ id: 'sea', x: 640, y: 455, width: 760, height: 170, density: 0.0012, drag: 0.05 });
+    pe.addBody({ kind: 'rect', x: 640, y: 570, width: 900, height: 20, isStatic: true });
+    if (withWind) pe.addWind({ id: 'breeze', x: 640, y: 355, width: 760, height: 70, vx: 6, vy: 0, power: 1 });
+    const sunk = pe.addBody({ kind: 'rect', x: 400, y: 490, width: 26, height: 26, density: 0.004, frictionAir: 0 });
+    return { pe, sunk };
+  };
+  const windy = mkTank(true), calm = mkTank(false);
+  for (let s = 0; s < 240; s++) { windy.pe.stepOnce(); calm.pe.stepOnce(); }
+  check('coupling: wind over water drives a current that carries submerged bodies',
+    windy.sunk.position.x > calm.sunk.position.x + 60,
+    `windy x=${windy.sunk.position.x.toFixed(0)} calm x=${calm.sunk.position.x.toFixed(0)}`);
+  check('coupling: fluidFlow() reports the wind-driven current',
+    windy.pe.fluidFlow('sea').x > 1.5 && calm.pe.fluidFlow('sea').x === 0,
+    `windy flow=${windy.pe.fluidFlow('sea').x.toFixed(2)}`);
 }
 
 /* --- v1.5.0: magnetism --- */
