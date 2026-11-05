@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.9.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.10.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -73,6 +73,19 @@
              multi-pixel anchor errors at 2 iterations (measured on a
              ferris wheel: hub drift 28px, cross error 5.6°); at 4 the
              same machine holds its hub exactly and its cross angle
+     1.10.0 — buoyancy obeys its preconditions: the displaced volume
+             is the body's TRUE submerged area (part polygons clipped
+             to the fluid rectangle — circles and rotated bodies get
+             their real submerged fraction, and horizontal straddling
+             counts), the force is applied at the centre of buoyancy
+             (the submerged centroid — tilted floaters right or capsize
+             physically), and the underside-seal condition is checked:
+             if the body's underside is sealed against another body
+             (flush on the tank floor), fluid pressure cannot act
+             upward there, so buoyancy fades with the sealed fraction
+             and a submerged top face is pressed down by the fluid
+             column above it (the bridge-pier case). Fluid drag/flow
+             now scale with the same true submerged fraction
      1.9.0 — module coupling: fluid drag also bleeds ANGULAR velocity
              (a spinning bar or paddle in water now feels the water;
              before, drag only touched linear velocity at the centre of
@@ -117,7 +130,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.9.0';
+export const VERSION = '1.10.0';
 
 /* ============================================================================
    Formulas — pure physics helpers (no engine state).
@@ -1142,17 +1155,41 @@ export class PhysicsEngine {
         if (b.isStatic || b.isSleeping) continue;
         const bd = b.bounds;
         if (bd.max.x < left || bd.min.x > right || bd.max.y < top || bd.min.y > bottom) continue;
-        const bh = Math.max(1, bd.max.y - bd.min.y);
-        const frac = Math.min(1, Math.max(0, (bd.max.y - top) / bh));
+        // True submerged geometry (1.10.0): clip every part polygon
+        // to the fluid rectangle — the clipped area is the displaced
+        // volume (in 2D), its centroid is the centre of buoyancy.
+        // This replaces the old bounding-box depth fraction, which
+        // ignored horizontal straddling entirely and over-credited
+        // rotated shapes.
+        const sub = this._submerged(b, left, top, right, bottom);
+        if (!sub) continue;
+        const frac = Math.min(1, sub.area / Math.max(1, b.area));
         if (frac <= 0) continue;
         if (hasG) {
           const ratio = b.density > 0 ? f.density / b.density : 0;
-          // Buoyancy through Matter's own force channel, mirroring how
-          // gravity itself is applied (force = mass · g · scale), so a
-          // fully submerged body with ratio 1 is exactly neutrally buoyant.
-          fv.x = -g.x * b.mass * ratio * frac * scale;
-          fv.y = -g.y * b.mass * ratio * frac * scale;
-          Body.applyForce(b, b.position, fv);
+          // Archimedes has a precondition most models skip: fluid
+          // pressure can only push the body up where fluid can reach
+          // the underside. A body sealed flush against the tank floor
+          // (or another body) has no upward pressure there — buoyancy
+          // fades with the sealed fraction, and if its top face is
+          // submerged, the fluid column above presses it DOWN
+          // (the bridge-pier / suction case).
+          const seal = this._undersideSeal(b, arr, left, right);
+          fv.x = -g.x * b.mass * ratio * frac * (1 - seal) * scale;
+          fv.y = -g.y * b.mass * ratio * frac * (1 - seal) * scale;
+          if (seal > 0) {
+            const bh = Math.max(1, bd.max.y - bd.min.y);
+            const topDepth = Math.min(1, Math.max(0, (bd.min.y - top) / bh));
+            fv.x += g.x * b.mass * ratio * seal * topDepth * scale;
+            fv.y += g.y * b.mass * ratio * seal * topDepth * scale;
+          }
+          // Buoyancy through Matter's own force channel, mirroring
+          // how gravity itself is applied (force = mass · g · scale),
+          // so a fully submerged unsealed body with ratio 1 is exactly
+          // neutrally buoyant — but applied at the CENTRE OF BUOYANCY
+          // (the submerged centroid), not the centre of mass, which
+          // is what makes tilted floaters right themselves or capsize.
+          Body.applyForce(b, sub, fv);
         }
         if (f.drag > 0) {
           const keep = 1 - f.drag * frac;
@@ -1161,8 +1198,7 @@ export class PhysicsEngine {
           // a stronger coefficient: rotational drag acts over the
           // body's whole submerged sweep, not just at its centre —
           // a rotor whose centre barely moves still feels the water
-          // through its angular velocity (1.9.0). Measured on the
-          // pinwheel: default water now slows it ~23% (was ~11%).
+          // through its angular velocity (1.9.0).
           Body.setVelocity(b, { x: fx + (b.velocity.x - fx) * keep, y: fy + (b.velocity.y - fy) * keep });
           Body.setAngularVelocity(b, b.angularVelocity * Math.max(0, 1 - f.drag * frac * 2.5));
         }
@@ -1211,6 +1247,96 @@ export class PhysicsEngine {
   get windCount() { return this._winds.size; }
   /** Simulated milliseconds elapsed (the gust clock); rides snapshots. */
   get simTime() { return this._simMs; }
+
+  /** Clip a polygon to the fluid rectangle (Sutherland–Hodgman). */
+  _clipRect(poly, left, top, right, bottom) {
+    const clip = (pts, inside, cross) => {
+      if (!pts.length) return pts;
+      const out = [];
+      for (let j = 0; j < pts.length; j++) {
+        const cur = pts[j], prv = pts[(j + pts.length - 1) % pts.length];
+        const ci = inside(cur), pi = inside(prv);
+        if (ci) { if (!pi) out.push(cross(prv, cur)); out.push(cur); }
+        else if (pi) out.push(cross(prv, cur));
+      }
+      return out;
+    };
+    const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    // Skip the edges the polygon's bounds never cross — most bodies
+    // in a fluid only cross the surface line, so typically one of
+    // the four passes actually runs.
+    let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
+    for (const p of poly) { if (p.x < mnx) mnx = p.x; if (p.x > mxx) mxx = p.x; if (p.y < mny) mny = p.y; if (p.y > mxy) mxy = p.y; }
+    if (mnx < left) poly = clip(poly, (p) => p.x >= left, (a, b) => lerp(a, b, (left - a.x) / ((b.x - a.x) || 1e-12)));
+    if (mxx > right) poly = clip(poly, (p) => p.x <= right, (a, b) => lerp(a, b, (right - a.x) / ((b.x - a.x) || 1e-12)));
+    if (mny < top) poly = clip(poly, (p) => p.y >= top, (a, b) => lerp(a, b, (top - a.y) / ((b.y - a.y) || 1e-12)));
+    if (mxy > bottom) poly = clip(poly, (p) => p.y <= bottom, (a, b) => lerp(a, b, (bottom - a.y) / ((b.y - a.y) || 1e-12)));
+    return poly;
+  }
+
+  /** The body's submerged geometry inside a fluid rectangle: total
+   *  clipped area and its centroid (the centre of buoyancy), or null
+   *  when nothing is submerged. Compound bodies clip per part. */
+  _submerged(b, left, top, right, bottom) {
+    const bd = b.bounds;
+    // Fast path: fully inside — the whole body is the submerged part.
+    if (bd.min.x >= left && bd.max.x <= right && bd.min.y >= top && bd.max.y <= bottom) {
+      return { x: b.position.x, y: b.position.y, area: b.area };
+    }
+    let area = 0, cx = 0, cy = 0;
+    const parts = b.parts.length > 1 ? b.parts.slice(1) : b.parts;
+    for (const part of parts) {
+      const poly = this._clipRect(part.vertices, left, top, right, bottom);
+      if (poly.length < 3) continue;
+      let a2 = 0, sx = 0, sy = 0;
+      for (let j = 0; j < poly.length; j++) {
+        const p = poly[j], q = poly[(j + 1) % poly.length];
+        const cr = p.x * q.y - q.x * p.y;
+        a2 += cr; sx += (p.x + q.x) * cr; sy += (p.y + q.y) * cr;
+      }
+      if (Math.abs(a2) < 1e-9) continue;
+      const a = a2 / 2, wgt = Math.abs(a);
+      cx += (sx / (6 * a)) * wgt; cy += (sy / (6 * a)) * wgt; area += wgt;
+    }
+    return area > 0 ? { x: cx / area, y: cy / area, area } : null;
+  }
+
+  /** Fraction of the body's underside (within the fluid's horizontal
+   *  span) that is sealed against another body — sampled at three
+   *  points just below the body's bounds. 0 = fluid reaches the whole
+   *  underside, 1 = fully sealed (flush on the floor). */
+  _undersideSeal(b, arr, left, right) {
+    const bd = b.bounds;
+    const x0 = Math.max(bd.min.x, left), x1 = Math.min(bd.max.x, right);
+    if (x1 <= x0) return 0;
+    // Cheap gate first: another body's bounds must reach into the
+    // thin probe slab under the underside before any point test
+    // runs — a body falling through open water skips the seal check
+    // entirely (three full Query.point scans per body per substep
+    // measurably slowed dense fluid scenes).
+    let candidates = null;
+    const yTop = bd.max.y - 1, yBot = bd.max.y + 3;
+    for (let j = 0; j < arr.length; j++) {
+      const o = arr[j];
+      if (o === b) continue;
+      const ob = o.bounds;
+      if (ob.max.x < x0 || ob.min.x > x1 || ob.max.y < yTop || ob.min.y > yBot) continue;
+      (candidates || (candidates = [])).push(o);
+    }
+    if (!candidates) return 0;
+    const y = bd.max.y + 1.5;
+    let blocked = 0;
+    for (const t of [0.25, 0.5, 0.75]) {
+      const pt = { x: x0 + (x1 - x0) * t, y };
+      for (const o of candidates) {
+        const parts = o.parts.length > 1 ? o.parts.slice(1) : o.parts;
+        let hit = false;
+        for (const part of parts) if (this.M.Vertices.contains(part.vertices, pt)) { hit = true; break; }
+        if (hit) { blocked++; break; }
+      }
+    }
+    return blocked / 3;
+  }
 
   /** Gust-adjusted wind velocity of a region right now (shared by
    *  _applyWinds and the wind→fluid surface-current coupling, 1.9.0). */

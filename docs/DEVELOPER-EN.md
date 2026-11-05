@@ -16,7 +16,7 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 | Component | Version | Single source of truth |
 |---|---|---|
 | MotionLab (app) | 1.27 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.9.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| PhysicsEngine (2D core) | 1.10.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.9.0'
+  console.log(VERSION); // '1.10.0'
 </script>
 ```
 
@@ -97,7 +97,7 @@ restore the whole world.
 | Seeded RNG (added 1.3.0) | `new PhysicsEngine({ seed })`, `pe.seed` (read the seed back), `setSeed(n)`, `random()`, `randomRange(min, max)`, `randomInt(min, max)`, `choice(arr)`, `shuffle(arr)` |
 | Naming (added 1.4.0) | descriptor `name` field, `nameOf(body)`, `getBodyByName(name)`, `getBodiesByName(name)`, `renameBody(bodyOrId, name)` |
 | Gravitation (added 1.4.0) | `setGravitation(G, { softening })`, `gravitation` (read the config), `setGravitation(0)` to disable |
-| Fluids (added 1.4.0; coupling 1.9.0) | `addFluid({ id?, x, y, width, height, density, drag, vx, vy })`, `removeFluid(id)`, `fluids()`, `fluidById(id)`, `fluidCount`, `fluidFlow(id)` |
+| Fluids (added 1.4.0; coupling 1.9.0; preconditions 1.10.0) | `addFluid({ id?, x, y, width, height, density, drag, vx, vy })`, `removeFluid(id)`, `fluids()`, `fluidById(id)`, `fluidCount`, `fluidFlow(id)` |
 | Magnetism (added 1.5.0) | descriptor field `magnet` (−100..100), `setMagnetism(K, { range, softening })`, `magnetism`, `setMagnet(body, v)`, `magnetOf(body)`, `magnetCount` |
 | Wind fields (added 1.5.0; gusts 1.8.0) | `addWind({ id?, x, y, width, height, vx, vy, power, gust, gustPeriod })`, `removeWind(id)`, `winds()`, `windById(id)`, `windCount`, `simTime` |
 | Hinges & motors (added 1.7.0) | `addHinge({ id?, bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })`, `removeHinge(id)`, `hingeById(id)`, `describeHinges()`, `hingeCount`, `hingeAnchors()`, `setHingeMotor(id, v)` |
@@ -150,7 +150,15 @@ mirroring world gravity and scaled by
 `(fluid density / body density) × submerged fraction` — fully submerged at
 equal density means neutral buoyancy. `drag` is the per-substep velocity
 retention decay while submerged. Buoyancy only applies while world gravity
-is non-zero. Snapshots carry a `fluids` array.
+is non-zero. Snapshots carry a `fluids` array. Since 1.10.0, buoyancy
+obeys its preconditions: the submerged fraction is the TRUE clipped
+area (part polygons clipped to the fluid rectangle — straddling counts
+only what is in; circles and rotated bodies use their real shape), the
+force acts at the centre of buoyancy (the submerged centroid — tilted
+floaters right themselves or capsize), and an underside sealed against
+another body (three-point sampling) fades buoyancy out and, with the
+top face submerged, adds the fluid column's downward pressure — a
+light block flush on the tank floor does not float up on its own.
 
 ### Magnetism (1.5.0)
 
@@ -277,6 +285,10 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   clock — all regions in phase, like one weather system. The clock
   rides snapshots (simMs), so the gust phase survives load();
   gust = 0 is bit-identical to the old behaviour
+- 1.10.0 — buoyancy preconditions: true submerged area (polygon
+  clipping), force applied at the centre of buoyancy, underside-seal
+  detection (buoyancy fades with the sealed fraction, plus the fluid
+  column's downward pressure); drag scales with the true area
 - 1.9.0 — module coupling: fluid drag also bleeds angular velocity
   (2.5x coefficient — rotors and paddles are genuinely braked by
   water; the pinwheel with default added water slows ~23%, vs ~11%

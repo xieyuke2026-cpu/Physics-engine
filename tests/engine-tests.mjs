@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.9.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.10.0');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -394,7 +394,10 @@ function galtonBins(seed) {
   // still drifts, carried by the wind-driven surface current.
   const mkTank = (withWind) => {
     const pe = new PhysicsEngine({});
-    pe.addFluid({ id: 'sea', x: 640, y: 455, width: 760, height: 170, density: 0.0012, drag: 0.05 });
+    // Fluid bottom meets the tank floor (560) so the resting sunk
+    // block is genuinely submerged; with the bounds-era model its
+    // carry was inflated by drag acting after it left the water.
+    pe.addFluid({ id: 'sea', x: 640, y: 455, width: 760, height: 210, density: 0.0012, drag: 0.05 });
     pe.addBody({ kind: 'rect', x: 640, y: 570, width: 900, height: 20, isStatic: true });
     if (withWind) pe.addWind({ id: 'breeze', x: 640, y: 355, width: 760, height: 70, vx: 6, vy: 0, power: 1 });
     const sunk = pe.addBody({ kind: 'rect', x: 400, y: 490, width: 26, height: 26, density: 0.004, frictionAir: 0 });
@@ -408,6 +411,45 @@ function galtonBins(seed) {
   check('coupling: fluidFlow() reports the wind-driven current',
     windy.pe.fluidFlow('sea').x > 1.5 && calm.pe.fluidFlow('sea').x === 0,
     `windy flow=${windy.pe.fluidFlow('sea').x.toFixed(2)}`);
+}
+
+/* --- v1.10.0: buoyancy preconditions — true submerged area, centre of buoyancy, underside seal --- */
+{
+  const mkWater = (x, w) => {
+    const pe = new PhysicsEngine({ enableSleeping: false });
+    pe.addFluid({ id: 'w', x: 640, y: 455, width: 760, height: 170, density: 0.0012, drag: 0 });
+    return { pe, b: pe.addBody({ kind: 'rect', x, y: 500, width: w, height: 40, density: 0.0006, frictionAir: 0 }) };
+  };
+  const inside = mkWater(640, 60);
+  const straddle = mkWater(210, 200); // only 25% of its width is over the water
+  for (let s = 0; s < 30; s++) { inside.pe.stepOnce(); straddle.pe.stepOnce(); }
+  check('buoyancy: scales with the TRUE submerged area (horizontal straddle)',
+    inside.b.velocity.y < -5 && straddle.b.velocity.y > 2.5 && straddle.b.velocity.y < 6.5,
+    `inside vy=${inside.b.velocity.y.toFixed(2)} straddle vy=${straddle.b.velocity.y.toFixed(2)}`);
+}
+{
+  const mk = (withFloor) => {
+    const pe = new PhysicsEngine({ enableSleeping: false });
+    pe.addFluid({ id: 'w', x: 640, y: 455, width: 760, height: 170, density: 0.0012, drag: 0.05 });
+    if (withFloor) pe.addBody({ kind: 'rect', x: 640, y: 550, width: 900, height: 20, isStatic: true });
+    const b = pe.addBody({ kind: 'rect', x: 640, y: withFloor ? 519 : 460, width: 60, height: 40, density: 0.0011, frictionAir: 0 });
+    return { pe, b };
+  };
+  const sealed = mk(true), free = mk(false);
+  for (let s = 0; s < 600; s++) { sealed.pe.stepOnce(); free.pe.stepOnce(); }
+  check('buoyancy: a sealed underside gets none (block lighter than water stays on the floor)',
+    sealed.b.position.y > 510, `sealed y=${sealed.b.position.y.toFixed(1)}`);
+  check('buoyancy: the same block unsealed floats up',
+    free.b.position.y < 420, `free y=${free.b.position.y.toFixed(1)}`);
+}
+{
+  const pe = new PhysicsEngine({ enableSleeping: false });
+  pe.addFluid({ id: 'pool', x: 640, y: 455, width: 760, height: 170, density: 0.0012, drag: 0.05 });
+  const p = pe.addBody({ kind: 'rect', x: 640, y: 372, width: 140, height: 14, density: 0.0006, angle: 0.4 });
+  for (let s = 0; s < 1800; s++) pe.stepOnce();
+  check('buoyancy: applied at the centre of buoyancy — a tilted floater rights itself',
+    Math.abs(p.angle) < 0.05 && p.position.y > 355 && p.position.y < 385,
+    `angle=${p.angle.toFixed(3)} y=${p.position.y.toFixed(1)}`);
 }
 
 /* --- v1.5.0: magnetism --- */
