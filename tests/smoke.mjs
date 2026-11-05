@@ -198,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.35')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.36')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.10.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -445,6 +445,27 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   await wait(80);
   const x2 = Number(panelBody.querySelector('[data-key="x"]')?.value);
   check('v1.34: after a stray click the armed body still drags', x2 > x1 + 30, `x ${x1} -> ${x2}`);
+  // v1.36: seed lives in the scene panel — refresh re-rolls it, the
+  // jitter action runs off the seeded stream
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  await wait(80);
+  const seedInput = panelBody.querySelector('[data-key="seed"]');
+  check('v1.36: scene panel has a seed field', !!seedInput);
+  check('v1.36: refresh-seed and jitter buttons exist',
+    !!panelBody.querySelector('[data-refresh-seed]') && !!panelBody.querySelector('[data-jitter]'));
+  const s0 = seedInput.value;
+  click(panelBody.querySelector('[data-refresh-seed]'));
+  await wait(80);
+  const seedInput2 = panelBody.querySelector('[data-key="seed"]');
+  check('v1.36: refresh changes the seed', !!seedInput2 && seedInput2.value !== s0 && Number.isInteger(Number(seedInput2.value)),
+    `${s0} -> ${seedInput2 && seedInput2.value}`);
+  seedInput2.value = '7';
+  seedInput2.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(60);
+  click(panelBody.querySelector('[data-jitter]'));
+  await wait(60);
+  check('v1.36: jitter reports through the toast', doc.getElementById('toast').textContent.includes('随机扰动'),
+    doc.getElementById('toast').textContent);
   window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
   await wait(40);
 }

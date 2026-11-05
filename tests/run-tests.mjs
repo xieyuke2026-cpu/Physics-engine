@@ -23,6 +23,20 @@ check('bad format rejected', !validateScene({ format: 'x', version: 1, bodies: [
 check('bad body type rejected', !validateScene({ format: 'motionlab-scene', version: 1, bodies: [{ type: 'star', x: 0, y: 0 }] }).ok);
 check('NaN position rejected', !validateScene({ format: 'motionlab-scene', version: 1, bodies: [{ type: 'circle', x: 'NaN', y: 0 }] }).ok);
 check('restitution > 2 rejected', !validateScene({ format: 'motionlab-scene', version: 1, bodies: [{ type: 'circle', x: 0, y: 0, restitution: 9 }] }).ok);
+check('v1.36: default scene carries seed 1', sceneData({}).settings.seed === 1);
+check('v1.36: scene seed round-trips (uint32 max)', sceneData({ settings: { seed: 4294967295 } }).settings.seed === 4294967295);
+check('v1.36: negative seed rejected', !validateScene({ format: 'motionlab-scene', version: 2, bodies: [], settings: { seed: -3 } }).ok);
+check('v1.36: fractional seed rejected', !validateScene({ format: 'motionlab-scene', version: 2, bodies: [], settings: { seed: 1.5 } }).ok);
+check('v1.36: valid seed accepted', validateScene({ format: 'motionlab-scene', version: 2, bodies: [], settings: { seed: 42 } }).ok);
+{
+  const wa = new PhysicsWorld(); const wb = new PhysicsWorld();
+  wa.setSeed(7); wb.setSeed(7);
+  const sa = [wa.random(), wa.random(), wa.random()];
+  const sb = [wb.random(), wb.random(), wb.random()];
+  check('v1.36: same seed -> same RNG stream', sa.every((v, i) => v === sb[i]), `${sa} vs ${sb}`);
+  wa.loadScene(sceneData({ settings: { seed: 42 } }));
+  check('v1.36: loadScene applies the scene seed', wa.seed === 42, `seed=${wa.seed}`);
+}
 check('non-object rejected', !validateScene([1, 2]).ok && !validateScene(null).ok);
 check('speed out of range rejected', !validateScene({ format: 'motionlab-scene', version: 1, bodies: [], settings: { speed: 99 } }).ok);
 

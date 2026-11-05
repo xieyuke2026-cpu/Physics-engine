@@ -259,10 +259,35 @@ const panel = new Panel($('panelBody'), {
     pushHistorySoon(); scheduleAutosave();
   },
   onSceneProp(key, value) {
+    if (key === 'seed') value = Math.min(4294967295, Math.max(0, Math.floor(Number(value) || 0)));
     settings[key] = value;
     world.applySettings(settings);
     updateStatus();
     pushHistorySoon(); scheduleAutosave();
+  },
+  onRefreshSeed() {
+    settings.seed = (Math.random() * 4294967296) >>> 0;
+    world.setSeed(settings.seed);
+    panel.mode = null; // rebuild the scene panel so the field shows the new seed
+    refreshPanel();
+    updateStatus();
+    pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.seedRefreshed', { seed: settings.seed }));
+  },
+  onRandomJitter() {
+    // A visible consumer for the seed: every dynamic body gets a kick
+    // whose direction/magnitude come from the engine's seeded RNG
+    // stream — same seed, same kicks, exactly replayable.
+    let n = 0;
+    for (const b of world.allBodies()) {
+      if (b.isStatic || world.isBound(b)) continue;
+      const a = world.random() * Math.PI * 2;
+      const m = 2.5 + world.random() * 3.5;
+      world.setVelocity(b, b.velocity.x + Math.cos(a) * m, b.velocity.y + Math.sin(a) * m);
+      n++;
+    }
+    if (n) { pushHistorySoon(); scheduleAutosave(); }
+    toast(t('msg.jittered', { n }));
   },
   onDeleteSelected() { deleteSelected(); },
   onDuplicateSelected() { duplicateSelected(); },

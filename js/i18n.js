@@ -216,6 +216,8 @@ const DICT = {
   'msg.shareOpened': ['已打开分享的场景「{name}」', 'Opened shared scene "{name}"'],
   'msg.shareInvalid': ['分享链接无效或已损坏', 'This share link is invalid or corrupted'],
   'msg.blast': ['冲击波推开了 {n} 个物体', 'Blast pushed {n} bodies'],
+  'msg.seedRefreshed': ['新种子：{seed}（随机过程已重置）', 'New seed: {seed} (random stream reset)'],
+  'msg.jittered': ['已按当前种子随机扰动 {n} 个物体', 'Randomly jittered {n} bodies with the current seed'],
   'msg.springStartBody': ['已选起点，再点第二个物体或空白锚点', 'Start set — tap a second body or an empty-space anchor'],
   'msg.springStartAnchor': ['已放置固定锚点，再点一个物体', 'Fixed anchor placed — now tap a body'],
   'msg.springSameBody': ['弹簧两端不能是同一个物体', 'A spring cannot connect a body to itself'],

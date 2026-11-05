@@ -16,6 +16,11 @@ export const DEFAULT_SETTINGS = {
   // Pairwise Newtonian gravitation (PhysicsEngine.setGravitation). 0 = off.
   gravitation: 0,
   gravitationSoftening: 100,
+  // Seed for the engine's RNG stream (PhysicsEngine.setSeed). Every
+  // random process in the app (the Random Jitter action, future random
+  // features) draws from this stream, so a scene + its seed replays
+  // the exact same random outcomes. Refresh it in the scene panel.
+  seed: 1,
 };
 
 let _uid = 1;
@@ -237,9 +242,10 @@ export function validateScene(raw) {
   if (s !== undefined) {
     if (!s || typeof s !== 'object') errors.push('settings 必须是对象');
     else {
-      for (const k of ['gravityX', 'gravityY', 'speed', 'gravitation', 'gravitationSoftening']) {
+      for (const k of ['gravityX', 'gravityY', 'speed', 'gravitation', 'gravitationSoftening', 'seed']) {
         if (s[k] !== undefined && !Number.isFinite(Number(s[k]))) errors.push(`settings.${k} 必须是有限数字`);
       }
+      if (s.seed !== undefined && (Number(s.seed) < 0 || Number(s.seed) > 4294967295 || !Number.isInteger(Number(s.seed)))) errors.push('settings.seed 必须是 0..4294967295 的整数');
       if (s.speed !== undefined && (Number(s.speed) <= 0 || Number(s.speed) > 4)) errors.push('settings.speed 超出范围 (0, 4]');
       if (s.gravitation !== undefined && Number(s.gravitation) < 0) errors.push('settings.gravitation 不能为负');
     }

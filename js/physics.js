@@ -43,7 +43,13 @@ export class PhysicsWorld {
   applySettings(s) {
     this.core.setGravity(s.gravityX, s.gravityY, s.gravityEnabled);
     this.core.setGravitation(Number(s.gravitation) || 0, { softening: s.gravitationSoftening });
+    if (s.seed !== undefined && Number.isFinite(Number(s.seed))) this.core.setSeed(Number(s.seed) >>> 0);
   }
+  /** The engine RNG stream's seed (see PhysicsEngine.setSeed). */
+  get seed() { return this.core.seed; }
+  setSeed(n) { this.core.setSeed(n); }
+  /** Next value from the engine's seeded RNG stream, in [0, 1). */
+  random() { return this.core.random(); }
   step(dtMs, speed = 1) { this.core.step(dtMs, speed); }
   advance(elapsedMs, speed = 1) { return this.core.advance(elapsedMs, speed); }
   stepOnce() { this.core.stepOnce(); }

@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.35';
+export const APP_VERSION = '1.36';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -99,7 +99,7 @@ export class Panel {
     const list = Array.isArray(bodies) ? bodies : [];
     const flist = Array.isArray(fluids) ? fluids : [];
     const wlist = Array.isArray(winds) ? winds : [];
-    const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',') + '|' + wlist.map((w) => `${w.id}:${w.vx},${w.vy}`).join(',');
+    const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',') + '|' + wlist.map((w) => `${w.id}:${w.vx},${w.vy}`).join(',') + '|seed:' + (settings.seed ?? '');
     if (this.mode === 'scene' && this.root.childElementCount && this._sceneSig === sig) { this.refreshScene(settings, list.length); return; }
     this._sceneSig = sig;
     this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null;
@@ -124,6 +124,16 @@ export class Panel {
     r.appendChild(row(gx, gy));
     r.appendChild(sliderField('Simulation Speed', 'speed', settings.speed, 0.1, 2, 0.1));
     r.appendChild(switchRow(L('启用重力 Enable Gravity', 'Enable Gravity'), 'gravityEnabled', settings.gravityEnabled));
+    r.appendChild(title(L('随机种子 Random Seed', 'Random Seed')));
+    r.appendChild(el(`<p class="empty-note">${L('种子决定本场景一切随机过程的走向：同一个种子，「随机扰动」的结果可以一模一样地重演；刷新换个种子，花样就全变。种子会随场景一起保存和分享。', 'The seed drives every random process in this scene: with the same seed, Random Jitter replays exactly; refresh it and all random outcomes change. The seed is saved and shared with the scene.')}</p>`));
+    r.appendChild(numField(L('种子 Seed', 'Seed'), 'seed', settings.seed ?? 1, { step: 1, min: 0, max: 4294967295 }));
+    const seedRow = el('<div class="field-row"></div>');
+    const btnSeed = el(`<button class="btn block" data-refresh-seed>${L('刷新种子', 'Refresh Seed')}</button>`);
+    btnSeed.addEventListener('click', () => this.cb.onRefreshSeed());
+    const btnJitter = el(`<button class="btn block" data-jitter>${L('随机扰动', 'Random Jitter')}</button>`);
+    btnJitter.addEventListener('click', () => this.cb.onRandomJitter());
+    seedRow.appendChild(btnSeed); seedRow.appendChild(btnJitter);
+    r.appendChild(seedRow);
     r.appendChild(title(L('世界效应 · 引力、浮力与风场', 'World Effects · Gravitation, Fluids & Wind')));
     r.appendChild(el(`<p class="empty-note">${L('万有引力让所有物体两两相吸（牛顿公式，连地面和墙壁也会参与），适合行星轨道类实验；建议同时关掉上面的普通重力，或直接载入「万有引力轨道」预设。G = 0 即关闭。', 'Pairwise gravitation pulls every body toward every other (Newton\'s law — floors and walls join in), ideal for planetary orbits. Turn regular gravity off above, or load the "Orbital Gravitation" preset. G = 0 disables it.')}</p>`));
     r.appendChild(sliderField(L('万有引力 Gravitation G', 'Gravitation G'), 'gravitation', settings.gravitation || 0, 0, 60, 1));
