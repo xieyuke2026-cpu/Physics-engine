@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.7.1');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.8.0');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -446,6 +446,42 @@ function galtonBins(seed) {
   check('wind: removeWind works', pe2.windCount === 0);
 }
 
+
+/* --- v1.8.0: wind gusts on the simulated-time clock --- */
+{
+  const rec = new PhysicsEngine({}).addWind({ id: 'gx', x: 0, y: 0, width: 10, height: 10, gust: 2, gustPeriod: 99 });
+  const def = new PhysicsEngine({}).addWind({ id: 'gd', x: 0, y: 0, width: 10, height: 10 });
+  check('gust: fields clamp (0..0.9, 2..30 s) and default to steady wind',
+    rec.gust === 0.9 && rec.gustPeriod === 30 && def.gust === 0 && def.gustPeriod === 6);
+  const mk = (gust) => {
+    const pe = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+    pe.addWind({ id: 'g', x: 400, y: 300, width: 700, height: 300, vx: 6, vy: 0, power: 1, gust, gustPeriod: 2 });
+    return pe;
+  };
+  const peak = mk(0.9), steady = mk(0), trough = mk(0.9);
+  for (let s = 0; s < 30; s++) { peak.stepOnce(); steady.stepOnce(); }
+  for (let s = 0; s < 90; s++) trough.stepOnce();
+  const lp = peak.addBody({ kind: 'circle', x: 250, y: 300, radius: 14, density: 0.0003, frictionAir: 0 });
+  const ls = steady.addBody({ kind: 'circle', x: 250, y: 300, radius: 14, density: 0.0003, frictionAir: 0 });
+  const lt = trough.addBody({ kind: 'circle', x: 250, y: 300, radius: 14, density: 0.0003, frictionAir: 0 });
+  peak.stepOnce(); steady.stepOnce(); trough.stepOnce();
+  check('gust: near the quarter-period peak the push is ~1.9x steady wind',
+    lp.velocity.x > ls.velocity.x * 1.7 && lp.velocity.x < ls.velocity.x * 2.1,
+    `peak ${lp.velocity.x.toFixed(2)} vs steady ${ls.velocity.x.toFixed(2)}`);
+  check('gust: near the three-quarter trough the push nearly dies',
+    lt.velocity.x < ls.velocity.x * 0.35, `trough ${lt.velocity.x.toFixed(2)} vs steady ${ls.velocity.x.toFixed(2)}`);
+  const A = mk(0.9);
+  const bodyA = A.addBody({ kind: 'circle', x: 250, y: 300, radius: 14, density: 0.0003, frictionAir: 0 });
+  for (let s = 0; s < 45; s++) A.stepOnce();
+  const snap = A.snapshot();
+  const B = new PhysicsEngine({ gravity: { x: 0, y: 0 } });
+  B.load(snap);
+  const bodyB = B.allBodies()[0];
+  for (let s = 0; s < 15; s++) { A.stepOnce(); B.stepOnce(); }
+  check('gust: simMs rides snapshots — gust phase survives load()',
+    Math.abs(snap.simMs - 750) < 0.01 && Math.abs(bodyA.position.x - bodyB.position.x) < 1e-9 && Math.abs(bodyA.velocity.x - bodyB.velocity.x) < 1e-9,
+    `simMs ${snap.simMs}, dx ${Math.abs(bodyA.position.x - bodyB.position.x)}`);
+}
 
 /* ---------- 1.6.0: allocation-free iterators + pooled segments ---------- */
 {

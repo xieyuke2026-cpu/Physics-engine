@@ -16,7 +16,7 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 | Component | Version | Single source of truth |
 |---|---|---|
 | MotionLab (app) | 1.27 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.7.1 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| PhysicsEngine (2D core) | 1.8.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.7.1'
+  console.log(VERSION); // '1.8.0'
 </script>
 ```
 
@@ -99,7 +99,7 @@ restore the whole world.
 | Gravitation (added 1.4.0) | `setGravitation(G, { softening })`, `gravitation` (read the config), `setGravitation(0)` to disable |
 | Fluids (added 1.4.0) | `addFluid({ id?, x, y, width, height, density, drag })`, `removeFluid(id)`, `fluids()`, `fluidById(id)`, `fluidCount` |
 | Magnetism (added 1.5.0) | descriptor field `magnet` (−100..100), `setMagnetism(K, { range, softening })`, `magnetism`, `setMagnet(body, v)`, `magnetOf(body)`, `magnetCount` |
-| Wind fields (added 1.5.0) | `addWind({ id?, x, y, width, height, vx, vy, power })`, `removeWind(id)`, `winds()`, `windById(id)`, `windCount` |
+| Wind fields (added 1.5.0; gusts 1.8.0) | `addWind({ id?, x, y, width, height, vx, vy, power, gust, gustPeriod })`, `removeWind(id)`, `winds()`, `windById(id)`, `windCount`, `simTime` |
 | Hinges & motors (added 1.7.0) | `addHinge({ id?, bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })`, `removeHinge(id)`, `hingeById(id)`, `describeHinges()`, `hingeCount`, `hingeAnchors()`, `setHingeMotor(id, v)` |
 | Formulas & measurement (added 1.4.0) | `Formulas.*` (pure functions, below), `bodyKineticEnergy(body)`, `totalKineticEnergy()`, `bodyMomentum(body)`, `totalMomentum()`, `centerOfMass()` |
 | Stability (added 1.4.0) | `PhysicsEngine.validateDescriptor(desc)`, `findNonFiniteBodies()`, `{ maxSpeed }` / `setMaxSpeed(v)` |
@@ -271,6 +271,12 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   multi-pixel anchor errors at 2 iterations (ferris wheel: 28px hub
   drift, 5.6° cross error); at 4 the same machine holds its hub
   exactly and its cross angle to <1°
+- 1.8.0 — wind gusts: regions gain gust (0..0.9) and gustPeriod
+  (2..30 s); the effective velocity breathes as
+  (1 + gust * sin(2π * t / period)) on the engine's simulated-time
+  clock — all regions in phase, like one weather system. The clock
+  rides snapshots (simMs), so the gust phase survives load();
+  gust = 0 is bit-identical to the old behaviour
 
 ---
 

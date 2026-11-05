@@ -118,6 +118,8 @@ export function windData(partial = {}) {
     vx: Math.min(16, Math.max(-16, num(partial.vx, 4))),
     vy: Math.min(16, Math.max(-16, num(partial.vy, 0))),
     power: Math.min(2, Math.max(0, num(partial.power, 1))),
+    gust: Math.min(0.9, Math.max(0, num(partial.gust, 0))),
+    gustPeriod: Math.min(30, Math.max(2, num(partial.gustPeriod, 6))),
   };
 }
 
@@ -223,7 +225,7 @@ export function validateScene(raw) {
       if (raw.winds.length > 20) errors.push('风场区域数量超过上限 20');
       raw.winds.forEach((w, i) => {
         if (!w || typeof w !== 'object') { errors.push(`winds[${i}] 不是对象`); return; }
-        for (const k of ['x', 'y', 'width', 'height', 'vx', 'vy', 'power']) {
+        for (const k of ['x', 'y', 'width', 'height', 'vx', 'vy', 'power', 'gust', 'gustPeriod']) {
           if (w[k] !== undefined && !Number.isFinite(Number(w[k]))) errors.push(`winds[${i}].${k} 必须是有限数字`);
         }
       });
@@ -706,6 +708,50 @@ export function presetScenes() {
       hinges.push(hingeData({ bodyA: arm, bodyB: id, pointA: pa, pointB: { x: 0, y: 0 } }));
     });
     out.push({ key: 'ferris', name: '摩天轮', scene: sceneData({ name: '摩天轮 Ferris Wheel', bodies, hinges, constraints }) });
+  }
+
+  // Pinwheel (1.30) — a windmill driven ONLY by a wind region (no motor):
+  // the wind band covers just the top half of the rotor, so each sail is
+  // pushed sideways as it crosses the top and coasts around the bottom —
+  // an undershot-wheel drive that works with the wind model's
+  // centre-of-mass blending (a symmetric rotor in a uniform full field
+  // would see its torques cancel). Structure reuses the ferris lessons:
+  // triangulating rods lock the cross, and post/arms/sails form one
+  // hinge cluster. The region gusts (engine 1.8.0), so the wheel
+  // visibly surges and settles: measured ω ≈ 0.013 rad/step steady
+  // (≈8 s/rev), breathing 0.010–0.016 with gust 0.5 / 8 s.
+  {
+    const bodies = frameBodies();
+    bodies.push(bodyData({ id: 'pw-post', type: 'rectangle', x: 640, y: 395, width: 24, height: 290, isStatic: true, friction: 0.5, label: 'Post 支柱' }));
+    bodies.push(bodyData({ id: 'pw-bar-h', type: 'rectangle', x: 640, y: 250, width: 400, height: 14, density: 0.0012, friction: 0.3, frictionAir: 0.002, label: 'Arm 横臂' }));
+    bodies.push(bodyData({ id: 'pw-bar-v', type: 'rectangle', x: 640, y: 250, width: 14, height: 400, density: 0.0012, friction: 0.3, frictionAir: 0.002, label: 'Arm 竖臂' }));
+    const hinges = [
+      hingeData({ bodyA: null, bodyB: 'pw-bar-h', pointA: { x: 640, y: 250 }, pointB: { x: 0, y: 0 }, motorSpeed: 0 }),
+      hingeData({ bodyA: null, bodyB: 'pw-bar-v', pointA: { x: 640, y: 250 }, pointB: { x: 0, y: 0 }, motorSpeed: 0 }),
+      hingeData({ bodyA: 'pw-bar-h', bodyB: 'pw-bar-v', pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } }),
+      hingeData({ bodyA: 'pw-post', bodyB: 'pw-bar-h', pointA: { x: 0, y: -145 }, pointB: { x: 0, y: 0 } }),
+    ];
+    const rodLen = Math.hypot(140, 140);
+    const constraints = [
+      constraintData({ bodyA: 'pw-bar-h', bodyB: 'pw-bar-v', pointA: { x: 140, y: 0 }, pointB: { x: 0, y: 140 }, stiffness: 1, damping: 0.1, length: rodLen }),
+      constraintData({ bodyA: 'pw-bar-h', bodyB: 'pw-bar-v', pointA: { x: -140, y: 0 }, pointB: { x: 0, y: -140 }, stiffness: 1, damping: 0.1, length: rodLen }),
+    ];
+    const tilt = 0.61; // sails pitched ~35°, classic pinwheel look
+    const sailDefs = [
+      ['pw-bar-h', { x: 200, y: 0 }, 840, 250, tilt],
+      ['pw-bar-v', { x: 0, y: 200 }, 640, 450, tilt + Math.PI / 2],
+      ['pw-bar-h', { x: -200, y: 0 }, 440, 250, tilt + Math.PI],
+      ['pw-bar-v', { x: 0, y: -200 }, 640, 50, tilt - Math.PI / 2],
+    ];
+    sailDefs.forEach(([arm, pa, cx, cy, ang], i) => {
+      const id = `pw-sail-${i + 1}`;
+      bodies.push(bodyData({ id, type: 'rectangle', x: cx, y: cy, width: 76, height: 50, angle: ang, density: 0.0006, friction: 0.3, frictionAir: 0.004, label: 'Sail 帆叶' }));
+      hinges.push(hingeData({ bodyA: arm, bodyB: id, pointA: pa, pointB: { x: 0, y: 0 } }));
+    });
+    out.push({ key: 'pinwheel', name: '风车', scene: sceneData({
+      name: '风车 Pinwheel', bodies, hinges, constraints,
+      winds: [windData({ x: 640, y: 148, width: 780, height: 204, vx: 5, vy: 0, power: 1, gust: 0.5, gustPeriod: 8 })],
+    }) });
   }
 
   return out;

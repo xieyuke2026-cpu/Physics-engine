@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.7.1 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.8.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -73,6 +73,12 @@
              multi-pixel anchor errors at 2 iterations (measured on a
              ferris wheel: hub drift 28px, cross error 5.6°); at 4 the
              same machine holds its hub exactly and its cross angle
+     1.8.0 — wind gusts: wind regions gain `gust` (0..0.9) and
+             `gustPeriod` (seconds, 2..30); the effective wind velocity
+             oscillates as (1 + gust * sin(2π * t / period)) on a
+             simulated-time clock that rides snapshots (simMs), so all
+             regions breathe together like weather and a loaded world
+             keeps its gust phase. Steady wind is unchanged (gust = 0)
    ========================================================================== */
 
 let _M = null;
@@ -100,7 +106,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.7.1';
+export const VERSION = '1.8.0';
 
 /* ============================================================================
    Formulas — pure physics helpers (no engine state).
@@ -229,6 +235,7 @@ export class PhysicsEngine {
     this.maxSteps = Math.max(1, Math.round(num(opts.maxSteps, 5)));
     this.substeps = Math.max(1, Math.min(8, Math.round(num(opts.substeps, 1))));
     this._acc = 0;
+    this._simMs = 0;               // simulated ms elapsed — the wind-gust clock (1.8.0); rides snapshots
     this._byId = new Map();        // id -> Matter body
     this._bodiesCache = null;      // cached array view of _byId (invalidated on structure change)
     this._locked = new Set();      // bodies with lockRotation — the per-step lock pass touches only these
@@ -738,6 +745,7 @@ export class PhysicsEngine {
       this._seed = num(data.rng.seed, this._seed) >>> 0;
       this._rngState = data.rng.state >>> 0;
     }
+    if (Number.isFinite(data.simMs)) this._simMs = Math.max(0, data.simMs);
     return { bodies, constraints, fluids, winds, hinges };
   }
   snapshot() {
@@ -748,6 +756,7 @@ export class PhysicsEngine {
       fluids: this.fluids(),
       winds: this.winds(),
       rng: { seed: this._seed, state: this._rngState },
+      simMs: this._simMs,
     };
   }
 
@@ -781,6 +790,7 @@ export class PhysicsEngine {
   }
 
   _stepOnce() {
+    this._simMs += this.fixedDt;
     // Pairwise forces (gravitation + magnetism) kick velocities once per
     // fixed step (not per substep), so their strength does not depend on
     // the anti-tunnelling setting.
@@ -1109,7 +1119,11 @@ export class PhysicsEngine {
      (0..2, default 1) scales the effect per region. */
   /**
    * Add a wind region: { id?, x, y, width, height, vx = 3, vy = 0,
-   * power = 1 }. Returns the stored record (a copy).
+   * power = 1, gust = 0, gustPeriod = 6 }. `gust` (0..0.9) makes the
+   * wind breathe: the effective velocity is multiplied by
+   * (1 + gust * sin(2π * simTime / gustPeriod)) — all regions share
+   * the engine's simulated-time clock, like one weather system.
+   * Returns the stored record (a copy).
    */
   addWind(partial = {}) {
     const rec = {
@@ -1119,6 +1133,8 @@ export class PhysicsEngine {
       vx: Math.min(16, Math.max(-16, num(partial.vx, 3))),
       vy: Math.min(16, Math.max(-16, num(partial.vy, 0))),
       power: Math.min(2, Math.max(0, num(partial.power, 1))),
+      gust: Math.min(0.9, Math.max(0, num(partial.gust, 0))),
+      gustPeriod: Math.min(30, Math.max(2, num(partial.gustPeriod, 6))),
     };
     this._winds.set(rec.id, rec);
     return { ...rec };
@@ -1132,12 +1148,19 @@ export class PhysicsEngine {
    *  for render loops and other per-frame readers (1.6.0). */
   forEachWind(fn) { for (const w of this._winds.values()) fn(w); }
   get windCount() { return this._winds.size; }
+  /** Simulated milliseconds elapsed (the gust clock); rides snapshots. */
+  get simTime() { return this._simMs; }
 
   _applyWinds() {
     const { Body, Sleeping } = this.M;
     const arr = this._bodies();
     for (const w of this._winds.values()) {
       if (w.power <= 0) continue;
+      let mvx = w.vx, mvy = w.vy;
+      if (w.gust > 0) {
+        const m = 1 + w.gust * Math.sin(6.283185307179586 * (this._simMs / (1000 * w.gustPeriod)));
+        mvx *= m; mvy *= m;
+      }
       const top = w.y - w.height / 2, bottom = w.y + w.height / 2;
       const left = w.x - w.width / 2, right = w.x + w.width / 2;
       for (let i = 0; i < arr.length; i++) {
@@ -1154,8 +1177,8 @@ export class PhysicsEngine {
         if (rate <= 0.001) continue;
         if (b.isSleeping) Sleeping.set(b, false);
         Body.setVelocity(b, {
-          x: b.velocity.x + (w.vx - b.velocity.x) * rate,
-          y: b.velocity.y + (w.vy - b.velocity.y) * rate,
+          x: b.velocity.x + (mvx - b.velocity.x) * rate,
+          y: b.velocity.y + (mvy - b.velocity.y) * rate,
         });
       }
     }

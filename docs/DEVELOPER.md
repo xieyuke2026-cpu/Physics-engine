@@ -15,7 +15,7 @@
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
 | MotionLab（应用） | 1.27 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.7.1 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| PhysicsEngine（2D 核心） | 1.8.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -40,7 +40,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.7.1'
+  console.log(VERSION); // '1.8.0'
 </script>
 ```
 
@@ -94,7 +94,7 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 | 万有引力（1.4.0 新增） | `setGravitation(G, { softening })`、`gravitation`（读配置）、`setGravitation(0)` 关闭 |
 | 流体浮力（1.4.0 新增） | `addFluid({ id?, x, y, width, height, density, drag })`、`removeFluid(id)`、`fluids()`、`fluidById(id)`、`fluidCount` |
 | 磁力（1.5.0 新增） | 描述符字段 `magnet`（−100..100）、`setMagnetism(K, { range, softening })`、`magnetism`、`setMagnet(body, v)`、`magnetOf(body)`、`magnetCount` |
-| 风场（1.5.0 新增） | `addWind({ id?, x, y, width, height, vx, vy, power })`、`removeWind(id)`、`winds()`、`windById(id)`、`windCount` |
+| 风场（1.5.0 新增；1.8.0 阵风） | `addWind({ id?, x, y, width, height, vx, vy, power, gust, gustPeriod })`、`removeWind(id)`、`winds()`、`windById(id)`、`windCount`、`simTime` |
 | 铰链与马达（1.7.0 新增） | `addHinge({ id?, bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })`、`removeHinge(id)`、`hingeById(id)`、`describeHinges()`、`hingeCount`、`hingeAnchors()`、`setHingeMotor(id, v)` |
 | 公式与测量（1.4.0 新增） | `Formulas.*`（纯函数，见下）、`bodyKineticEnergy(body)`、`totalKineticEnergy()`、`bodyMomentum(body)`、`totalMomentum()`、`centerOfMass()` |
 | 稳定性（1.4.0 新增） | `PhysicsEngine.validateDescriptor(desc)`、`findNonFiniteBodies()`、`{ maxSpeed }` / `setMaxSpeed(v)` |
@@ -151,11 +151,14 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 
 ### 风场区域（1.5.0）
 
-`addWind({ x, y, width, height, vx = 3, vy = 0, power = 1 })`：(x, y) 为
+`addWind({ x, y, width, height, vx = 3, vy = 0, power = 1, gust = 0, gustPeriod = 6 })`：(x, y) 为
 区域**中心**，(vx, vy) 是风速（px/步）。动态体与区域重叠时，其速度每子步
 按比例混合趋向风速，混合率 ∝ 重叠面积比例 × `power` × (0.0012 ÷ 物体
 密度)：轻体迅速被吹到风速，密实体几乎不动——流体的气态对应物（浮力靠
-密度比，这里的混合率同样靠密度比）。快照携带 `winds` 数组。
+密度比，这里的混合率同样靠密度比）。快照携带 `winds` 数组。`gust`
+（0..0.9，1.8.0）让风速按 (1 + gust × sin(2π × t ÷ gustPeriod)) 呼吸，
+t 是引擎模拟时钟（全部区域同节奏，像一片天气系统）；时钟随快照
+（`simMs`）保存，读档后阵风相位不跳变。
 
 ### 铰链与马达（1.7.0）
 
@@ -227,6 +230,10 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
   锁定十字臂）时，2 次迭代会留下数像素级锚点误差（摩天轮实测轮毂
   漂移 28px、十字夹角误差 5.6°）；提到 4 后同一台机器轮毂精确锁定、
   夹角误差 <1°
+- 1.8.0 — 风场阵风：区域新增 gust（0..0.9）与 gustPeriod（2..30 秒），
+  有效风速按 (1 + gust × sin(2π × t ÷ 周期)) 呼吸；t 为引擎模拟时钟，
+  全部区域同相（同一片天气），时钟随快照 simMs 保存、读档相位不跳变；
+  gust = 0 时与旧行为逐位一致
 
 ---
 

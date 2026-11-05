@@ -187,7 +187,7 @@ check('stop motion zeroes velocity', lk.velocity.x === 0 && lk.velocity.y === 0 
 
 /* --- v1.1/v1.6: presets --- */
 const presets = presetScenes();
-check('twenty presets exist', presets.length === 20, `got ${presets.length}`);
+check('twenty-one presets exist', presets.length === 21, `got ${presets.length}`);
 for (const p of presets) {
   check(`preset ${p.key} validates`, validateScene(JSON.parse(JSON.stringify(p.scene))).ok);
 }
@@ -257,6 +257,34 @@ for (const p of presets) {
   check('ferris: cabins stay upright', worstCab < 10, `tilt ${worstCab.toFixed(1)}°`);
   check('ferris: hub stays pinned', hubDrift < 3, `drift ${hubDrift.toFixed(1)}px`);
   check('ferris: whole machine is one collision cluster', H.collisionFilter.group !== 0 && H.collisionFilter.group === V.collisionFilter.group && byId['fw-cab-3'].collisionFilter.group === H.collisionFilter.group && byId['fw-leg-l'].collisionFilter.group === H.collisionFilter.group);
+}
+
+/* --- v1.30: pinwheel is driven by wind alone (no motor anywhere) and
+   the cross/hub hold like the ferris structure it reuses --- */
+{
+  const sc = presets.find((p) => p.key === 'pinwheel').scene;
+  check('pinwheel: one gusty wind region and no motor drive',
+    sc.winds.length === 1 && sc.winds[0].gust === 0.5 && sc.hinges.every((h) => (h.motorSpeed || 0) === 0),
+    `winds ${sc.winds.length}, motors ${sc.hinges.map((h) => h.motorSpeed || 0).join('/')}`);
+  const pw = new PhysicsWorld();
+  pw.loadScene(JSON.parse(JSON.stringify(sc)));
+  const byId = {};
+  for (const b of pw.allBodies()) byId[pw.dataIdOf(b)] = b;
+  const H = byId['pw-bar-h'], V = byId['pw-bar-v'];
+  const a0 = H.angle;
+  let worstDev = 0, hubDrift = 0;
+  for (let s = 1; s <= 1800; s++) {
+    pw.advance(1000 / 60);
+    if (s % 30 === 0) {
+      let d = ((V.angle - H.angle) * 180 / Math.PI) % 360; if (d < 0) d += 360;
+      worstDev = Math.max(worstDev, Math.abs(((d + 540) % 360) - 180));
+      hubDrift = Math.max(hubDrift, Math.hypot(H.position.x - 640, H.position.y - 250));
+    }
+  }
+  const turned = (H.angle - a0) * 180 / Math.PI;
+  check('pinwheel: wind alone revolves the wheel (>500° in 30 s)', turned > 500, `turned ${turned.toFixed(0)}°`);
+  check('pinwheel: cross stays locked at 90°', worstDev < 3, `dev ${worstDev.toFixed(1)}°`);
+  check('pinwheel: hub stays pinned', hubDrift < 3, `drift ${hubDrift.toFixed(1)}px`);
 }
 
 /* --- v1.23: gravitation / fluids / rename get lab entries (scene level) --- */

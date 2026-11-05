@@ -82,9 +82,9 @@ check('hidden: no 3D scene cards rendered', doc.querySelectorAll('#sceneList3d .
 check('hidden: no 3D entry card in current section',
   ![...doc.querySelectorAll('#navCurrent .scene-card-name')].some((n) => n.textContent.includes('3D 实验室')));
 check('hidden: sidebar counts are 2D-only',
-  doc.getElementById('countPresets').textContent === '20' && doc.getElementById('countLibrary').textContent === '0',
+  doc.getElementById('countPresets').textContent === '21' && doc.getElementById('countLibrary').textContent === '0',
   `${doc.getElementById('countPresets').textContent}/${doc.getElementById('countLibrary').textContent}`);
-check('hidden: 2D presets still listed', doc.querySelectorAll('#presetList .preset-card').length === 20);
+check('hidden: 2D presets still listed', doc.querySelectorAll('#presetList .preset-card').length === 21);
 
 /* --- but nothing was deleted --- */
 const lib3 = JSON.parse(window.localStorage.getItem('motionlab.scenes3d.v1') || '{}');

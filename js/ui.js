@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.29';
+export const APP_VERSION = '1.30';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -339,13 +339,16 @@ export class Panel {
     r.appendChild(sliderField(L('风速 X Wind X', 'Wind X'), 'wvx', wind.vx, -12, 12, 0.5));
     r.appendChild(sliderField(L('风速 Y Wind Y', 'Wind Y'), 'wvy', wind.vy, -12, 12, 0.5));
     r.appendChild(sliderField(L('强度 Power', 'Power'), 'wpower', wind.power, 0, 2, 0.1));
+    r.appendChild(sliderField(L('阵风 Gust', 'Gust'), 'wgust', wind.gust || 0, 0, 0.9, 0.05));
+    r.appendChild(sliderField(L('阵风周期 Gust Period (s)', 'Gust Period (s)'), 'wgustPeriod', wind.gustPeriod || 6, 2, 30, 1));
+    r.appendChild(el(`<p class="empty-note">${L('阵风让风速按正弦呼吸：一阵强、一阵弱（全部风场同节奏，像真实天气）。阵风 0 = 恒定风。风车预设就靠它忽快忽慢。', 'Gusts make the wind breathe on a sine cycle — stronger, then weaker (all regions share one rhythm, like real weather). Gust 0 = steady wind. The Pinwheel preset uses it to surge and settle.')}</p>`));
     const back = el(`<button class="btn block">${L('返回场景属性', 'Back to Scene Properties')}</button>`);
     back.addEventListener('click', () => this.cb.onShowScene());
     const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除风场区域', ' Delete Wind Region')}</button>`);
     del.addEventListener('click', () => this.cb.onDeleteWind(wind.id));
     r.appendChild(back); r.appendChild(del);
     this._wireNumbers(r, (k, v) => {
-      const map = { wx: 'x', wy: 'y', wwidth: 'width', wheight: 'height', wvx: 'vx', wvy: 'vy', wpower: 'power' };
+      const map = { wx: 'x', wy: 'y', wwidth: 'width', wheight: 'height', wvx: 'vx', wvy: 'vy', wpower: 'power', wgust: 'gust', wgustPeriod: 'gustPeriod' };
       if (map[k]) this.cb.onWindProp(wind.id, map[k], v);
     });
     this._collectInputs();

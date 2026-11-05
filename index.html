@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- MotionLab 1.29 -->
+<!-- MotionLab 1.30 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.29">
+<link rel="stylesheet" href="css/style.css?v=1.30">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -284,6 +284,7 @@
             <li><b>铰链与马达</b>（1.7.0）：<code>addHinge({ bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })</code> 把两个物体（或物体与固定铰座，<code>bodyA: null</code>）钉在同一点上，只能绕点转动；<code>motorSpeed</code> 是马达目标相对角速度（弧度/步，±0.3），加速有上限、反作用按转动惯量反比分配给另一端。同一台机器的零件互不碰撞（铰链簇共享负碰撞组），折叠旋转不卡角；被马达驱动的物体不会休眠。<code>setHingeMotor(id, v)</code> 改转速，<code>hingeAnchors()</code> 给渲染/拾取用的铰点坐标，快照携带铰链</li>
             <li><b>在实验室里直接用</b>（1.23 起，1.25/1.26 扩充）：点画布空白处，右侧「场景属性」面板的「世界效应」一节可调万有引力 G、添加并编辑流体与风场区域；流体/风场区域在画布上可以直接拖动改位置。左侧工具栏的「磁铁」工具（或世界效应一节的按钮）能直接放固定磁铁，点选任意物体后还可改名、在「材质」一节设磁性，或一键套用泡沫/木头/橡胶/冰/铁材质预设；顶部「分享」按钮把整个场景压进一条链接，对方打开即进入该场景；「我的项目」主页工具栏有「导入场景」入口；另有「万有引力轨道」「浮力池」「磁铁阵列」「风洞实验」「材质实验室」「磁铁秋千」「马达风车」「摩天轮」等预设可直接载入体验</li>
             <li><b>机械与录制</b>（1.28）：左侧工具栏新增「铰链」工具——先在第一个物体上点铰接点，再点第二个物体即可铰接（点空白 = 固定铰座）；点选画布上的铰链圆点可设马达转速或删除。顶部「录制」按钮把画布动画录成循环 GIF 导出（最长 20 秒），发帖、做演示素材不用再录屏</li>
+            <li><b>风车与阵风</b>（1.30）：新预设「风车」没有马达——一块只盖住轮子上半部的风场把帆叶逐片吹过顶部，轮子就转起来了；风场新增「阵风」：风速一阵强一阵弱（编辑器里可调强度与周期），风车会跟着忽快忽慢</li>
             <li><b>修复与静态拖动</b>（1.29）：摩天轮的十字臂不再散架、座舱保持直立、轮子匀速转动；选中静态物体时，属性面板新增「拖动静态物体」开关，开启后运行中也能直接在画布上拖动它改位置（动态物体仍用物理拖拽）</li>
             <li><b>公式库</b>（1.4.0）：<code>Formulas</code> 是纯函数集：动能、动量、冲量、万有引力、轨道/逃逸速度、胡克定律、单摆周期、浮力、阻力、摩擦、抛射程、向心加速度等；引擎实例还有现成的 <code>bodyKineticEnergy()</code> / <code>totalMomentum()</code> / <code>centerOfMass()</code> 量活世界</li>
             <li><b>稳定性</b>（1.4.0）：<code>PhysicsEngine.validateDescriptor(desc)</code> 静态校验描述符并列出问题；位置/速度等 setter 忽略 NaN 等非法输入，不让一个坏值毒化整个世界；构造选项 <code>maxSpeed</code> 给速度封顶，防单次失控冲量把场景炸穿</li>
@@ -361,6 +362,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
             <li><b>Hinges &amp; motors</b> (1.7.0): <code>addHinge({ bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })</code> pins two bodies (or a body to a fixed mount with <code>bodyA: null</code>) at one shared point so they can only rotate around it; <code>motorSpeed</code> is the motor's target relative angular velocity (rad/step, ±0.3), acceleration-capped, with the reaction split by inverse inertia. Parts of one machine never collide with each other (a hinge cluster shares a negative collision group), so folding and spinning never jam; motor-driven bodies never fall asleep. <code>setHingeMotor(id, v)</code> retunes a motor, <code>hingeAnchors()</code> returns pin points for rendering/picking, and hinges persist in snapshots.</li>
             <li><b>Use it right in the lab</b> (1.23, expanded in 1.25/1.26): with nothing selected, the Scene panel's "World Effects" section sets gravitation G and adds/edits fluid and wind regions; fluid and wind regions can be dragged on the canvas to move them. The Magnet tool in the left rail (or the button in World Effects) places a fixed magnet directly; select any body to rename it, set its magnetism in the Material section, or apply a one-tap material preset (foam / wood / rubber / ice / iron). The top-bar Share button packs a whole scene into a link that opens right into that scene, and the My Projects home has its own Import Scene entry. The "Orbital Gravitation", "Buoyancy Pool", "Magnet Array", "Wind Tunnel", "Materials Lab" and "Magnet Swing" and "Motor Windmill" / "Ferris Wheel" presets load ready-made demos.</li>
             <li><b>Machinery &amp; recording</b> (1.28): the left rail gains a Hinge tool — tap the pin point on a first body, then a second body to hinge them (empty space = fixed mount); tap a hinge pin marker on the canvas to set its motor speed or delete it. The top-bar Record button captures the canvas animation as a looping GIF (up to 20 s) — no screen recording needed for posts and demos</li>
+            <li><b>Pinwheel &amp; gusts</b> (1.30): the new Pinwheel preset has no motor — a wind region covering only the top half of the wheel blows each sail across the top, and the wheel turns. Wind regions gain gusts: the wind breathes stronger and weaker on a cycle (strength and period adjustable in the editor), and the pinwheel surges and settles with it</li>
             <li><b>Ferris fix &amp; static dragging</b> (1.29): the Ferris wheel's cross no longer folds, its cabins stay upright and the wheel turns at a steady speed. With a static body selected, the properties panel gains a Drag Static Body toggle — when on, you can drag that body directly on the canvas to reposition it, even while running (dynamic bodies still use physics dragging)</li>
             <li><b>Formulas</b> (1.4.0): <code>Formulas</code> is a set of pure functions — kinetic energy, momentum, impulse, gravitational force, orbital/escape velocity, Hooke's law, pendulum period, buoyancy, drag, friction, projectile range, centripetal acceleration — plus live measurements on the instance: <code>bodyKineticEnergy()</code> / <code>totalMomentum()</code> / <code>centerOfMass()</code>.</li>
             <li><b>Stability</b> (1.4.0): <code>PhysicsEngine.validateDescriptor(desc)</code> checks a descriptor and lists problems; position/velocity setters ignore NaN and other non-finite input so one bad value can't poison the world; the <code>maxSpeed</code> option caps velocity so a single wild impulse can't blow the scene apart.</li>
@@ -461,6 +463,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.29"></script>
+<script type="module" src="js/app.js?v=1.30"></script>
 </body>
 </html>
