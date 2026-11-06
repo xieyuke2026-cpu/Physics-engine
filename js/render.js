@@ -52,6 +52,15 @@ export class Renderer {
     this._backdropCache = null;
     this._backdropCtx = null;
     this._backdropSig = '';
+    // Gesture-aware caching (1.38): each cache remembers the camera
+    // it was baked with. While the camera is still moving, the baked
+    // bitmap is drawn with a corrective screen-space transform
+    // instead of re-baking every frame (a pinch used to cost MORE
+    // than no cache at all: full rebake + blit per frame). The exact
+    // bake happens on the first frame the camera holds still.
+    this._staticBake = null;   // {x, y, zoom, w, h, dpr, sig}
+    this._backdropBake = null; // {x, y, zoom, w, h, dpr, sig}
+    this._lastCam = null;      // previous frame's camera {x, y, zoom}
   }
 
   clearTrails() { this.trails.clear(); }
@@ -143,17 +152,53 @@ export class Renderer {
     }
     if (preview) this._preview(preview);
     ctx.restore();
+    this._lastCam = { x: camera.x, y: camera.y, zoom: camera.zoom };
   }
 
-  /** Signature of everything the static cache depends on: camera,
-   *  view, and each static body's id, pose, type, magnet and bound
-   *  flag — accumulated as a cheap numeric hash (FNV-style). */
+  /** Is the camera in a different place than last frame? */
+  _camMoving() {
+    const l = this._lastCam, c = this.camera;
+    return !!l && (l.x !== c.x || l.y !== c.y || l.zoom !== c.zoom);
+  }
+
+  /** Draw a baked cache bitmap so it lines up with the CURRENT
+   *  camera, given the camera it was baked with. The mapping between
+   *  the two screen spaces is a uniform scale + translate:
+   *  S1 = a*S0 + t with a = z1/z0 and t = z1*(c0 - c1) + (v/2)*(1 - a)
+   *  per axis. Slight magnification blur while zooming is the price;
+   *  the exact rebake lands when the camera settles. */
+  _blitTransformed(cache, bake) {
+    const { ctx, view, camera } = this;
+    const a = camera.zoom / bake.zoom;
+    const tx = camera.zoom * (bake.x - camera.x) + (view.w / 2) * (1 - a);
+    const ty = camera.zoom * (bake.y - camera.y) + (view.h / 2) * (1 - a);
+    ctx.save();
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.translate(tx, ty);
+    ctx.scale(a, a);
+    ctx.drawImage(cache, 0, 0, view.w, view.h);
+    ctx.restore();
+  }
+
+  /** Can `bake` be reused (possibly transformed) for this frame? */
+  _bakeReusable(bake, sig) {
+    return !!bake && bake.sig === sig
+      && bake.w === this.view.w && bake.h === this.view.h && bake.dpr === this.dpr;
+  }
+
+  _camMatchesBake(bake) {
+    const c = this.camera;
+    return bake.x === c.x && bake.y === c.y && bake.zoom === c.zoom;
+  }
+
+  /** Content signature of the static layer: each static body's id,
+   *  pose, type, magnet and bound flag — accumulated as a cheap
+   *  numeric hash (FNV-style). Camera/view/dpr are tracked separately
+   *  in the bake record (1.38), so camera motion alone no longer
+   *  invalidates the content. */
   _staticSignature(world, bodies) {
-    const { camera, view } = this;
     let h = 2166136261 >>> 0;
     const mix = (n) => { h ^= (n | 0); h = Math.imul(h, 16777619) >>> 0; };
-    mix((camera.x * 2) | 0); mix((camera.y * 2) | 0); mix((camera.zoom * 1000) | 0);
-    mix(view.w | 0); mix(view.h | 0); mix((this.dpr * 100) | 0);
     for (const b of bodies) {
       if (!b.isStatic) continue;
       const id = String(world.dataIdOf(b));
@@ -173,7 +218,24 @@ export class Renderer {
   _blitStatics(world, bodies, tl, br, pad) {
     const { ctx, view, camera } = this;
     const sig = this._staticSignature(world, bodies);
-    if (sig !== this._staticSig) {
+    const bake = this._staticBake;
+    if (this._bakeReusable(bake, sig)) {
+      if (this._camMatchesBake(bake)) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(this._staticCache, 0, 0);
+        ctx.restore();
+        return true;
+      }
+      if (this._camMoving()) {
+        // camera still travelling: reuse the bitmap, transformed;
+        // the exact rebake happens on the first settled frame.
+        this._blitTransformed(this._staticCache, bake);
+        return true;
+      }
+    }
+    if (!bake || bake.sig !== sig || !this._camMatchesBake(bake)
+      || bake.w !== view.w || bake.h !== view.h || bake.dpr !== this.dpr) {
       if (!this._staticCache) {
         try {
           this._staticCache = document.createElement('canvas');
@@ -202,6 +264,7 @@ export class Renderer {
       }
       this.ctx = mainCtx;
       this._staticSig = sig;
+      this._staticBake = { x: camera.x, y: camera.y, zoom: camera.zoom, w: view.w, h: view.h, dpr: this.dpr, sig };
     }
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -210,23 +273,43 @@ export class Renderer {
     return true;
   }
 
-  /** Signature of everything the backdrop depends on. */
+  /** Content signature of the backdrop: only the grid flag. The
+   *  grid pattern itself is a function of the camera, which the bake
+   *  record tracks separately (1.38) — under the corrective transform
+   *  the baked grid still lands on the right world lines. */
   _backdropSignature(showGrid) {
-    const { camera, view } = this;
-    let h = 2166136261 >>> 0;
-    const mix = (n) => { h ^= (n | 0); h = Math.imul(h, 16777619) >>> 0; };
-    mix((camera.x * 2) | 0); mix((camera.y * 2) | 0); mix((camera.zoom * 1000) | 0);
-    mix(view.w | 0); mix(view.h | 0); mix((this.dpr * 100) | 0); mix(showGrid ? 1 : 0);
-    return h.toString(36);
+    return showGrid ? 'grid' : 'plain';
   }
 
   /** Blit the backdrop (bg fill + grid), re-baking when its signature
    *  changed. Returns false when caching is unavailable (caller then
    *  draws the fill + grid inline, exactly as before). */
   _blitBackdrop(showGrid) {
-    const { ctx, view } = this;
+    const { ctx, view, camera } = this;
     const sig = this._backdropSignature(showGrid);
-    if (sig !== this._backdropSig) {
+    const bake = this._backdropBake;
+    if (this._bakeReusable(bake, sig)) {
+      if (this._camMatchesBake(bake)) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(this._backdropCache, 0, 0);
+        ctx.restore();
+        return true;
+      }
+      if (this._camMoving()) {
+        // cover the strips the transformed bitmap cannot reach with
+        // the plain background colour, then blit it transformed.
+        ctx.save();
+        ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        ctx.fillStyle = '#fafafa';
+        ctx.fillRect(0, 0, view.w, view.h);
+        ctx.restore();
+        this._blitTransformed(this._backdropCache, bake);
+        return true;
+      }
+    }
+    if (!bake || bake.sig !== sig || !this._camMatchesBake(bake)
+      || bake.w !== view.w || bake.h !== view.h || bake.dpr !== this.dpr) {
       if (!this._backdropCache) {
         try {
           this._backdropCache = document.createElement('canvas');
@@ -248,6 +331,7 @@ export class Renderer {
         this.ctx = mainCtx;
       }
       this._backdropSig = sig;
+      this._backdropBake = { x: camera.x, y: camera.y, zoom: camera.zoom, w: view.w, h: view.h, dpr: this.dpr, sig };
     }
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
