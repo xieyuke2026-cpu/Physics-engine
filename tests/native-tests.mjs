@@ -335,5 +335,27 @@ function poolWorld() {
     `sleeping=${balls.filter((b) => b.isSleeping).length}/30`);
 }
 
+/* --- 1.44 orphan sleepers: support removed -> must fall --- */
+{
+  const e = new NativeEngine({ enableSleeping: true });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true });
+  const tower = [];
+  for (let i = 0; i < 6; i++) tower.push(e.addBody({ kind: 'rect', x: 1159, y: 508 - i * 64, width: 64, height: 64, friction: 0.4 }));
+  step(e, 600);
+  const topY = tower[5].position.y;
+  e.removeBody(tower[0]);
+  step(e, 300);
+  check('orphan tower falls after its base is deleted (native)',
+    tower[5].position.y > topY + 30, `fell ${(tower[5].position.y - topY).toFixed(1)} px`);
+  // Zero gravity: floating sleepers are legitimate, the probe opts out.
+  const ez = new NativeEngine({ enableSleeping: true });
+  ez.setGravity(0, 0, true);
+  ez.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true });
+  const zb = ez.addBody({ kind: 'rect', x: 640, y: 300, width: 40, height: 40, friction: 0.4 });
+  zb.isSleeping = true; // parked mid-air in zero-g
+  step(ez, 120);
+  check('zero-gravity sleeper is left alone by the orphan probe', zb.isSleeping === true);
+}
+
 console.log(`\nNativeEngine tests: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

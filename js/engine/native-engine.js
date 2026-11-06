@@ -28,6 +28,11 @@
    still topples; dense piles settle/sleep more slowly than Matter's;
    at substeps > 2 an extreme pile pressed against a thin wall can
    squeeze a body through it (the app's shipped configuration is 2).
+   1.12.3 adds the orphan-sleeper probe (shared with the Matter
+   backend): every 15 fixed steps, sleeping bodies with no support
+   chain — touching path to a non-sleeping body, a constraint/hinge
+   attachment, or a fluid overlap — are woken, so deleting or
+   dragging away a support can no longer leave bodies hovering.
    Bodies expose the field shape
    the hosts read (position / velocity / angle / vertices / bounds /
    circleRadius / plugin.pe.desc), so existing renderers work as-is.
@@ -952,6 +957,49 @@ export class NativeEngine {
     const n = this.substeps;
     const h = scale / n;
     for (let i = 0; i < n; i++) this._integrateSolve(h, i === 0);
+    // Orphan-sleeper probe (every 15 fixed steps): a sleeper whose
+    // support was deleted or dragged away must fall, not hover.
+    if (this.enableSleeping && Math.round(this._simMs / this.fixedDt) % 15 === 0) this._wakeOrphans();
+  }
+
+  /** Wake sleeping bodies that have lost every support. Support means
+   *  a touching chain (bounds grown 3 px) to a non-sleeping body, an
+   *  attachment to a constraint/hinge, or an overlap with a fluid
+   *  region. Without this, deleting the bottom box of a sleeping tower
+   *  left the rest hovering in mid-air forever — gravity never applies
+   *  to sleepers and nothing else re-checks them (user report, 1.44).
+   *  Zero/disabled gravity opts out: floating is legitimate there. */
+  _wakeOrphans() {
+    const g = this.gravity;
+    if (g.x === 0 && g.y === 0) return;
+    const sleepers = [];
+    for (const b of this._byId.values()) if (b.isSleeping && !b.isStatic) sleepers.push(b);
+    if (!sleepers.length) return;
+    const supported = new Set();
+    for (const c of this._cons.values()) { if (c.bodyA) supported.add(c.bodyA); if (c.bodyB) supported.add(c.bodyB); }
+    for (const hg of this._hinges.values()) { if (hg.bodyA) supported.add(hg.bodyA); if (hg.bodyB) supported.add(hg.bodyB); }
+    const touch = (A, B) => A.min.x - 3 <= B.max.x && A.max.x + 3 >= B.min.x && A.min.y - 3 <= B.max.y && A.max.y + 3 >= B.min.y;
+    const fluidBounds = [...this._fluids.values()].map((f) => ({
+      min: { x: f.x - f.width / 2, y: f.y - f.height / 2 },
+      max: { x: f.x + f.width / 2, y: f.y + f.height / 2 },
+    }));
+    const all = [...this._byId.values()];
+    const queue = [];
+    for (const s of sleepers) {
+      const id = s.plugin.pe.id;
+      if (supported.has(id)) { queue.push(s); continue; }
+      let ok = fluidBounds.some((fb) => touch(s.bounds, fb));
+      if (!ok) for (const o of all) { if (o !== s && !o.isSleeping && touch(s.bounds, o.bounds)) { ok = true; break; } }
+      if (ok) { supported.add(id); queue.push(s); }
+    }
+    for (let i = 0; i < queue.length; i++) {
+      const cur = queue[i];
+      for (const s of sleepers) {
+        const id = s.plugin.pe.id;
+        if (!supported.has(id) && touch(cur.bounds, s.bounds)) { supported.add(id); queue.push(s); }
+      }
+    }
+    for (const s of sleepers) if (!supported.has(s.plugin.pe.id)) this._wake(s);
   }
 
   _applyPairForces(scale) {

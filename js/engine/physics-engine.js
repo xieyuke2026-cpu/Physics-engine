@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.2 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.3 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -83,6 +83,13 @@
              snapshots, queries, seeded RNG). Matter stays the default
              and the reference behaviour; native is opt-in and labelled
              experimental while its feel is validated on real scenes.
+    1.12.3 — orphan-sleeper wake (MotionLab 1.44, BOTH backends):
+             a probe every 15 fixed steps wakes sleeping bodies whose
+             support chain is gone (deleted/dragged-away support left
+             towers hovering in mid-air forever); support = touching
+             chain to a non-sleeping body (statics count — Matter
+             marks statics sleeping too), constraint/hinge attachment,
+             or fluid overlap; zero/disabled gravity opts out.
     1.12.2 — native robustness (MotionLab 1.43): reference-face
              clipping no longer crashes on exactly-aligned stacks (the
              796-body stress scene froze mid-run); sleeping uses a
@@ -164,7 +171,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.2';
+export const VERSION = '1.12.3';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -330,6 +337,7 @@ export class PhysicsEngine {
     this.M = M;
     const { Engine } = M;
     this.engine = Engine.create({ enableSleeping: opts.enableSleeping === true });
+    this.enableSleeping = opts.enableSleeping === true;
     // Rigid machines (hinge clusters, rod-locked crosses) need more
     // constraint iterations than Matter's default 2, or simultaneous
     // rigid constraints leave multi-pixel anchor errors that read as
@@ -911,6 +919,47 @@ export class PhysicsEngine {
     const n = this.substeps;
     const dt = this.fixedDt / n;
     for (let i = 0; i < n; i++) this._subStep(dt);
+    // Orphan-sleeper probe (every 15 fixed steps): a sleeper whose
+    // support was deleted or dragged away must fall, not hover.
+    if (this.enableSleeping && Math.round(this._simMs / this.fixedDt) % 15 === 0) this._wakeOrphans();
+  }
+
+  /** Wake sleeping bodies that have lost every support (see the
+   *  NativeEngine twin for the rationale — deleting the bottom box of
+   *  a sleeping tower left the rest hovering forever, in BOTH
+   *  backends). Support = a touching chain (bounds grown 3 px) to a
+   *  non-sleeping body, a constraint/hinge attachment, or a fluid
+   *  region overlap. Zero/disabled gravity opts out. */
+  _wakeOrphans() {
+    const g = this.engine.gravity;
+    if (!g || (g.x === 0 && g.y === 0)) return;
+    const arr = this._bodies();
+    const sleepers = arr.filter((b) => b.isSleeping && !b.isStatic);
+    if (!sleepers.length) return;
+    const supported = new Set();
+    for (const rec of this._cons.values()) { if (rec.desc.bodyA) supported.add(rec.desc.bodyA); if (rec.desc.bodyB) supported.add(rec.desc.bodyB); }
+    for (const rec of this._hinges.values()) { if (rec.desc.bodyA) supported.add(rec.desc.bodyA); if (rec.desc.bodyB) supported.add(rec.desc.bodyB); }
+    const touch = (A, B) => A.min.x - 3 <= B.max.x && A.max.x + 3 >= B.min.x && A.min.y - 3 <= B.max.y && A.max.y + 3 >= B.min.y;
+    const fluidBounds = [...this._fluids.values()].map((f) => ({
+      min: { x: f.x - f.width / 2, y: f.y - f.height / 2 },
+      max: { x: f.x + f.width / 2, y: f.y + f.height / 2 },
+    }));
+    const queue = [];
+    for (const s of sleepers) {
+      const id = s.plugin.pe.id;
+      if (supported.has(id)) { queue.push(s); continue; }
+      let ok = fluidBounds.some((fb) => touch(s.bounds, fb));
+      if (!ok) for (const o of arr) { if (o !== s && (o.isStatic || !o.isSleeping) && touch(s.bounds, o.bounds)) { ok = true; break; } }
+      if (ok) { supported.add(id); queue.push(s); }
+    }
+    for (let i = 0; i < queue.length; i++) {
+      const cur = queue[i];
+      for (const s of sleepers) {
+        const id = s.plugin.pe.id;
+        if (!supported.has(id) && touch(cur.bounds, s.bounds)) { supported.add(id); queue.push(s); }
+      }
+    }
+    for (const s of sleepers) if (!supported.has(s.plugin.pe.id)) this.M.Sleeping.set(s, false);
   }
 
   /** Change the anti-tunnelling substep count (1..8). */

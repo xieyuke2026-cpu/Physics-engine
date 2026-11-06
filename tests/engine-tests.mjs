@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.2');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.3');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -69,6 +69,23 @@ pe5.setVelocity(sleeper, 0, -8);
 check('setVelocity wakes the body', sleeper.isSleeping === false);
 for (let i = 0; i < 30; i++) pe5.advance(1000 / 60, 1);
 check('woken body actually moves up', sleeper.position.y < 335, `y=${sleeper.position.y.toFixed(1)}`);
+
+/* --- orphan sleepers (1.44): support removed -> must fall, not hover --- */
+{
+  const pe = new PhysicsEngine({ enableSleeping: true });
+  pe.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true });
+  const tower = [];
+  for (let i = 0; i < 6; i++) tower.push(pe.addBody({ kind: 'rect', x: 1159, y: 508 - i * 64, width: 64, height: 64, friction: 0.4 }));
+  for (let i = 0; i < 600; i++) pe.advance(1000 / 60, 1);
+  const topY = tower[5].position.y;
+  pe.removeBody(pe.idOf(tower[0]));
+  for (let i = 0; i < 300; i++) pe.advance(1000 / 60, 1);
+  check('orphan tower falls after its base is deleted (matter)',
+    tower[5].position.y > topY + 30, `fell ${(tower[5].position.y - topY).toFixed(1)} px`);
+  check('landed orphans may sleep again (matter)',
+    tower.slice(1).filter((b) => b.isSleeping).length >= 3,
+    `sleeping=${tower.slice(1).filter((b) => b.isSleeping).length}/5`);
+}
 
 /* --- generic resize + drag --- */
 const pe6 = new PhysicsEngine();
