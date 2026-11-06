@@ -293,5 +293,47 @@ function poolWorld() {
     `v0=(${spin.vertices[0].x.toFixed(1)},${spin.vertices[0].y.toFixed(1)})`);
 }
 
+/* --- 1.43 regressions: the 796-body stress scene's three lessons ---
+   (a) _clipSegment crashed when an incident vertex landed EXACTLY on a
+   reference side plane (axis-aligned piles) — the scene froze mid-air
+   under native while matter ran on: "results completely different".
+   (b) Warm-start impulses re-applied on every substep double-counted
+   (they persist in the velocities) and launched bodies early.
+   (c) Instantaneous-threshold sleeping flickered in dense piles. --- */
+{
+  // (a) exactly-aligned box stack: every interface shares its x-extents
+  // with the box below, so incident vertices sit exactly on side planes.
+  const e = new NativeEngine({ enableSleeping: true });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true });
+  const boxes = [];
+  for (let i = 0; i < 6; i++) boxes.push(e.addBody({ kind: 'rect', x: 640, y: 520 - i * 40, width: 80, height: 40, friction: 0.5 }));
+  step(e, 600); // would throw TypeError in _clipSegment before the fix
+  check('aligned stack: no clip crash, stack stands', boxes.every((b) => Math.abs(b.position.x - 640) < 6),
+    boxes.map((b) => Math.round(b.position.x)).join(','));
+  check('aligned stack: boxes sleep', boxes.filter((b) => b.isSleeping).length >= 4,
+    `sleeping=${boxes.filter((b) => b.isSleeping).length}/6`);
+}
+{
+  // (b)+(c) 30-ball chute pile at the shipped configuration (substeps
+  // 2): settles on the floor, partially sleeps, nothing sinks into the
+  // slab or leaves the world. (Substeps > 2 in extreme piles against
+  // thin walls can still squeeze a body through — known limit, see the
+  // engine header; the app always runs substeps 2.)
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2 });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true });
+  e.addBody({ kind: 'rect', x: 579, y: 300, width: 6, height: 480, isStatic: true });
+  e.addBody({ kind: 'rect', x: 701, y: 300, width: 6, height: 480, isStatic: true });
+  const balls = [];
+  for (let i = 0; i < 30; i++) balls.push(e.addBody({ kind: 'circle', x: 640 + (i % 3 - 1) * 14, y: 40 + Math.floor(i / 3) * 34, radius: 13, restitution: 0.1, friction: 0.4 }));
+  step(e, 900);
+  const lowest = Math.max(...balls.map((b) => b.position.y));
+  check('chute pile: contained, floor respected',
+    balls.every((b) => Number.isFinite(b.position.x) && b.position.y < 541) && lowest > 505,
+    `lowest=${lowest.toFixed(1)}`);
+  check('chute pile: some balls sleep',
+    balls.filter((b) => b.isSleeping).length >= 4,
+    `sleeping=${balls.filter((b) => b.isSleeping).length}/30`);
+}
+
 console.log(`\nNativeEngine tests: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

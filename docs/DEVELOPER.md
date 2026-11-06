@@ -14,8 +14,8 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.42 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.12.1 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| MotionLab（应用） | 1.43 | `js/ui.js` 的 `APP_VERSION` |
+| PhysicsEngine（2D 核心） | 1.12.2 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -40,7 +40,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.12.1'
+  console.log(VERSION); // '1.12.2'
 </script>
 ```
 
@@ -274,6 +274,7 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
   'native' })` 直接构造；从零编写的顺序冲量求解器覆盖全部公开接口
   （堆叠/休眠/铰链马达/真实浮力/磁力/引力/阵风/快照/种子随机），力模型
   按固定步踢一次、子步下限 2；专属行为测试 43 项（tests/native-tests.mjs）
+- 1.12.2 — Native 健壮性：参考面裁剪对「入射顶点恰落在侧平面上」的精确对齐堆积不再崩溃（极限场景曾因此中途冻结）；休眠改平滑运动量 + 支撑记忆（密集堆积入睡 72→163/705）；热启动冲量只在首个子步施加（重复施加是按子步数放大的能量泄漏）
 - 1.12.1 — Native 宿主契约修复：圆形刚体补 `vertices` 多边形近似
   （10–25 边，与 Matter 一致）——宿主按顶点路径绘制每个刚体，1.12.0 的
   圆形顶点为空曾使画布只剩网格；求解行为无变化。**后端契约补充：每个

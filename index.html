@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.42">
+<link rel="stylesheet" href="css/style.css?v=1.43">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -428,11 +428,11 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.42</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.43</span></div>
           <div class="whatsnew-card">
-            <p data-i18n-text="hub.whatsnew.b1">修复 Native 后端下物体不显示：圆形物体现已正常绘制（1.41 线上复验发现的问题，PhysicsEngine 1.12.1）</p>
-            <p data-i18n-text="hub.whatsnew.b2">新增 Native 渲染回归测试：真实应用以自研引擎启动并跑通钉板全程绘制，防同类问题再漏检</p>
-            <p data-i18n-text="hub.whatsnew.b3">1.41 回顾：自研物理引擎 Native 落地，设置里可与 Matter.js 切换（Matter.js 仍是默认）</p>
+            <p data-i18n-text="hub.whatsnew.b1">修复 Native 在大场景中途冻结：碰撞裁剪崩溃已修（796 物体极限压测可完整跑完），PhysicsEngine 1.12.2</p>
+            <p data-i18n-text="hub.whatsnew.b2">Native 堆积更稳：休眠判定平滑化、热启动只在首个子步施加——大堆积更快静下来，也不再有物体被莫名弹飞</p>
+            <p data-i18n-text="hub.whatsnew.b3">场景属性的「引擎」一行改为显示当前后端（切换即更新）；README 简介补上双引擎说明</p>
           </div>
         </section>
       </aside>
@@ -505,6 +505,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.42"></script>
+<script type="module" src="js/app.js?v=1.43"></script>
 </body>
 </html>

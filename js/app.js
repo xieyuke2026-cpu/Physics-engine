@@ -434,6 +434,7 @@ function refreshPanel() {
     if (w) { panel.showWind(w); return; }
     selectedWindId = null;
   }
+  panel.backendId = world.core.backendId; // scene panel's Engine row follows the live backend
   panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)), world.fluids(), world.winds());
 }
 

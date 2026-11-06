@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.42';
+export const APP_VERSION = '1.43';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -95,18 +95,25 @@ export class Panel {
     });
   }
 
+  engineLabel() {
+    // The scene panel's Engine row names the CURRENT solver backend
+    // (app.js keeps panel.backendId in sync) — it used to hardcode
+    // "Matter.js", which stayed wrong after switching to Native.
+    return this.backendId === 'native' ? L('Native（自研）', 'Native (self-developed)') : 'Matter.js';
+  }
+
   showScene(settings, bodies, fluids, winds) {
     const list = Array.isArray(bodies) ? bodies : [];
     const flist = Array.isArray(fluids) ? fluids : [];
     const wlist = Array.isArray(winds) ? winds : [];
-    const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',') + '|' + wlist.map((w) => `${w.id}:${w.vx},${w.vy}`).join(',') + '|seed:' + (settings.seed ?? '');
+    const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',') + '|' + wlist.map((w) => `${w.id}:${w.vx},${w.vy}`).join(',') + '|seed:' + (settings.seed ?? '') + '|be:' + (this.backendId || 'matter');
     if (this.mode === 'scene' && this.root.childElementCount && this._sceneSig === sig) { this.refreshScene(settings, list.length); return; }
     this._sceneSig = sig;
     this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('场景属性 Scene', 'Scene Properties')));
     const ro = el(`<div class="readonly-grid"><span>${L('物体数量', 'Bodies')}</span><b data-ro="count">${list.length}</b>
-      <span>${L('引擎', 'Engine')}</span><b>Matter.js</b><span>${L('格式', 'Format')}</span><b>motionlab-scene v2</b></div>`);
+      <span>${L('引擎', 'Engine')}</span><b data-ro="engine">${this.engineLabel()}</b><span>${L('格式', 'Format')}</span><b>motionlab-scene v2</b></div>`);
     r.appendChild(ro);
     r.appendChild(title(L('重力与模拟', 'Gravity & Simulation')));
     const chips = el('<div class="chip-row"></div>');
@@ -211,6 +218,8 @@ export class Panel {
   refreshScene(settings, bodyCount) {
     const c = this.root.querySelector('[data-ro="count"]');
     if (c) c.textContent = String(bodyCount);
+    const eg = this.root.querySelector('[data-ro="engine"]');
+    if (eg) eg.textContent = this.engineLabel();
     this._setIfIdle('gravityX', settings.gravityX); this._setIfIdle('gravityY', settings.gravityY);
     this._setIfIdle('speed', settings.speed);
   }

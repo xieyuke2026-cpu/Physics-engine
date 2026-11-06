@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.1 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.2 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -83,6 +83,14 @@
              snapshots, queries, seeded RNG). Matter stays the default
              and the reference behaviour; native is opt-in and labelled
              experimental while its feel is validated on real scenes.
+    1.12.2 — native robustness (MotionLab 1.43): reference-face
+             clipping no longer crashes on exactly-aligned stacks (the
+             796-body stress scene froze mid-run); sleeping uses a
+             smoothed motion metric with remembered support (dense
+             piles: 72 -> 163 of 705 asleep at 15 s); warm-start
+             impulses apply on the first substep only (they persist in
+             the velocities — re-applying them leaked energy scaled by
+             the substep count).
     1.12.1 — native host-contract fix (MotionLab 1.42): native circle
              bodies now expose a vertices polygon approximation (10–25
              sides, mirroring Matter circle bodies). Hosts draw every
@@ -156,7 +164,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.1';
+export const VERSION = '1.12.2';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.

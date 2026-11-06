@@ -15,8 +15,8 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.42 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.12.1 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| MotionLab (app) | 1.43 | `APP_VERSION` in `js/ui.js` |
+| PhysicsEngine (2D core) | 1.12.2 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.12.1'
+  console.log(VERSION); // '1.12.2'
 </script>
 ```
 
@@ -328,6 +328,7 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   magnetism / gravitation / gusts / snapshots / seeded RNG), force
   models kicking once per fixed step and a substep floor of 2; its
   own 43-check behaviour suite (tests/native-tests.mjs)
+- 1.12.2 — Native robustness: reference-face clipping no longer crashes on exactly-aligned stacks (the stress scene used to freeze mid-run); sleeping uses smoothed motion with remembered support (dense piles: 72 → 163 of 705 asleep); warm-start impulses apply on the first substep only (re-applying them leaked energy scaled by the substep count)
 - 1.12.1 — Native host-contract fix: circle bodies now expose a
   `vertices` polygon approximation (10–25 sides, as Matter does) —
   hosts draw every body through its vertex path, and 1.12.0's empty

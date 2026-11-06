@@ -1,9 +1,9 @@
 # MotionLab — 2D Physics Sandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.12.1-blue.svg)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.12.2-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-597%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-603%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -11,9 +11,9 @@
 
 ## English
 
-**MotionLab** is a browser-based 2D physics sandbox powered by **Matter.js**: create rigid bodies, tune gravity, friction and elasticity, connect springs, rods and motorised hinges, add pairwise gravitation, fluid buoyancy, magnetism and wind fields, then save experiments as portable JSON scenes. No build step, no backend — open the page and play, on desktop or tablet.
+**MotionLab** is a browser-based 2D physics sandbox with **two switchable physics engines**: the battle-tested **Matter.js** backend (the default) and **Native**, a solver developed in-house from scratch (since 1.41, experimental) — create rigid bodies, tune gravity, friction and elasticity, connect springs, rods and motorised hinges, add pairwise gravitation, fluid buoyancy, magnetism and wind fields, then save experiments as portable JSON scenes and replay them on either engine. No build step, no backend — open the page and play, on desktop or tablet.
 
-Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse — copy `js/engine/physics-engine.js` plus `vendor/matter.min.js` into your own project. Features: fixed-timestep simulation with sub-stepping, seeded RNG, named bodies, pairwise gravitation, fluid regions (buoyancy), magnetism, wind fields, hinges & motors, a formulas library, and spatial queries (region / raycast). A platform-fighter prototype, **PFLab**, is built on the same core.
+Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse — copy `js/engine/physics-engine.js` plus `vendor/matter.min.js` into your own project. Features: fixed-timestep simulation with sub-stepping, seeded RNG, named bodies, pairwise gravitation, fluid regions (buoyancy), magnetism, wind fields, hinges & motors, a formulas library, and spatial queries (region / raycast). Its solver backends live behind a registry (`PhysicsEngine.BACKENDS`): `matter` (active) and `native` (self-developed, experimental) implement the same API, so hosts pick a solver with `PhysicsEngine.create({ backend })`. A platform-fighter prototype, **PFLab**, is built on the same core.
 
 - **Live demo**: https://xieyuke2026-cpu.github.io/Physics-engine/
 - **Examples**: [Orbital gravitation](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [Fluid buoyancy](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [Seeded Galton board](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html)
@@ -22,8 +22,8 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 
 中文完整文档在下方 ↓ Full documentation in Chinese below.
 
-一个运行在浏览器中的 2D 物理模拟与实验平台。基于 **Matter.js** 的真实刚体物理：
-重力、碰撞、摩擦、弹性、旋转与不同质量的物体，都可以在画布中创建、拖拽、调参并保存为实验场景。
+一个运行在浏览器中的 2D 物理模拟与实验平台。**双物理引擎可切换**：默认的 **Matter.js** 后端（成熟稳定），加上 1.41 起落地的**自研求解器 Native**（从零编写、实验性）——
+重力、碰撞、摩擦、弹性、旋转与不同质量的物体，都可以在画布中创建、拖拽、调参并保存为实验场景，同一个场景可以在两个引擎上分别重演、对比手感。
 
 设计关键词：Minimalist · Scientific · Interactive · Responsive · Lightweight。
 黑白灰为主、低饱和蓝为强调色的科学软件风格界面，全部图标为统一线条风格的 SVG（无 Emoji 功能图标）。
@@ -85,6 +85,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 - **v1.28 / 引擎 1.7.0 机械**：铰链工具把两个物体钉在同一点上相对转动，可加马达匀速驱动（转速面板可调）；同一台机器的零件互不碰撞，折叠旋转不卡角。顶栏新增录制按钮，一键把实验录成循环 GIF
 - **v1.29 修复**：摩天轮十字臂散架/座舱翻转已修复（连杆锁角 + 整机同簇 + 座舱中心铰接，实测 60 秒转满 2466°、十字与座舱偏差 0°）；引擎 1.7.1 把默认约束迭代提到 4，刚性机器的锚点误差从像素级降到 0；选中静态物体时属性面板新增「拖动静态物体」开关，运行中也能直接拖它改位置
 - **v1.30 新增**：预设「风车」——没有任何马达，纯靠一块只盖住轮子上半部的风场区域驱动（帆叶划过顶部被风推走、绕回底部无风区，整圈循环），引擎 1.8.0 的风场「阵风」让它忽快忽慢（实测转速在约 6.5–10 秒/圈之间呼吸）；风场编辑器多了阵风与周期两个滑杆
+- **v1.43 修复**：Native 在大场景中途冻结已修（碰撞裁剪崩溃，PhysicsEngine 1.12.2）；休眠平滑化让大堆积更快静下来；场景属性「引擎」行跟随当前后端
 - **v1.42 修复**：Native 后端下物体不显示已修（圆形刚体补齐顶点多边形，PhysicsEngine 1.12.1）；新增应用级 Native 渲染回归测试，全量 597 项
 - **v1.41 自研物理引擎 Native（实验性）**：PhysicsEngine 1.12.0 带来从零编写的 Native 求解器（顺序冲量 + 热启动、SAT 接触、休眠、铰链马达、真实浮力、磁力 / 引力 / 阵风，覆盖引擎全部接口，专属 43 项行为测试）；设置里可切换物理引擎后端（切换即重演当前场景），Matter.js 仍是默认
 - **v1.40 主界面工作台 + 后端接口正式化**：主界面概览改为工作台布局（深色侧边栏 + 场景/预设紧凑列表 + 右侧详情检查器与「本版更新」卡；方向由三版预览选定）；PhysicsEngine 1.11.0 开放后端注册表 `BACKENDS` 与 `PhysicsEngine.create({ backend })`，实例带 `backendId`，设置面板按注册表渲染「物理引擎后端」一行——自研 Native 后端已登记为规划中（1.41 开发），未就绪时明确报错、绝不静默回退到其他求解器

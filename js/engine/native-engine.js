@@ -24,7 +24,11 @@
    towers slowly tip (measured: a 5-box tower diverges at substeps 1,
    is rock-stable at 2+), so the constructor and setSubsteps clamp to
    at least 2. Hosts that pass substeps ≥ 2 (MotionLab does) are
-   unaffected. Bodies expose the field shape
+   unaffected. Known limits (1.43): a 10-high single-column tower
+   still topples; dense piles settle/sleep more slowly than Matter's;
+   at substeps > 2 an extreme pile pressed against a thin wall can
+   squeeze a body through it (the app's shipped configuration is 2).
+   Bodies expose the field shape
    the hosts read (position / velocity / angle / vertices / bounds /
    circleRadius / plugin.pe.desc), so existing renderers work as-is.
 
@@ -237,6 +241,8 @@ export class NativeEngine {
       isStatic: desc.isStatic,
       isSleeping: false,
       sleepCounter: 0,
+      _motion: 0,
+      _supportAge: 9999,
       density: desc.density,
       friction: desc.friction,
       frictionAir: desc.frictionAir,
@@ -288,7 +294,7 @@ export class NativeEngine {
   }
 
   _wake(b) {
-    if (b.isSleeping) { b.isSleeping = false; b.sleepCounter = 0; }
+    if (b.isSleeping) { b.isSleeping = false; b.sleepCounter = 0; b._motion = 0.1; }
   }
   _changed() { if (typeof this.onChange === 'function') this.onChange(); }
 
@@ -945,7 +951,7 @@ export class NativeEngine {
     if (this._winds.size) this._applyWinds();
     const n = this.substeps;
     const h = scale / n;
-    for (let i = 0; i < n; i++) this._integrateSolve(h);
+    for (let i = 0; i < n; i++) this._integrateSolve(h, i === 0);
   }
 
   _applyPairForces(scale) {
@@ -1173,7 +1179,7 @@ export class NativeEngine {
   _invM(b) { return b.isStatic || b.isSleeping ? 0 : b.inverseMass; }
   _invI(b) { return b.isStatic || b.isSleeping ? 0 : b.inverseInertia; }
 
-  _integrateSolve(h) {
+  _integrateSolve(h, warmStart = true) {
     const dragBody = this._drag ? this._drag.body : null;
     // Drag servo: position-driven (the pointer wins over gravity).
     if (dragBody && !dragBody.isStatic && this._byId.get(dragBody.plugin.pe.id) === dragBody) {
@@ -1214,13 +1220,19 @@ export class NativeEngine {
     // Warm starting: seed each contact with the impulses its feature
     // point accumulated last step and pre-apply them — resting stacks
     // start each step already held up instead of re-solving from zero
-    // (the cure for resting-stack jitter).
+    // (the cure for resting-stack jitter). FIRST substep only: the
+    // pre-applied impulse stays in the velocities, so re-applying it on
+    // later substeps double-counts it — an energy leak that scaled
+    // with the substep count (resting piles sustained a creep limit
+    // cycle; on the 796-body stress scene it also launched a body at
+    // ~65 px/step in the first seconds). Later substeps continue from
+    // the carried velocity with a fresh delta solve.
     const cacheSeen = new Set();
     for (const c of contacts) {
       const key = `${c.a.plugin.pe.id}|${c.b.plugin.pe.id}|${Math.round(c.px / 8)},${Math.round(c.py / 8)}`;
       c._cacheKey = key;
       cacheSeen.add(key);
-      const warm = this._contactCache.get(key);
+      const warm = warmStart ? this._contactCache.get(key) : null;
       if (warm) {
         c.accN = warm.n; c.accT = warm.t;
         this._applyImpulse(c.a, -c.accN * c.nx + c.accT * c.ny, -c.accN * c.ny - c.accT * c.nx, c.rax, c.ray);
@@ -1262,25 +1274,34 @@ export class NativeEngine {
     for (const b of this._byId.values()) {
       if (!b.isStatic) this._syncShape(b);
     }
-    // Sleeping bookkeeping. The metric is squared speed (Matter-style
-    // motion): micro-jitter at a settled interface reads ~0.06, well
-    // under the 0.09 threshold, so a supported stack actually falls
-    // asleep and freezes solver noise instead of slowly walking apart.
-    // Only bodies WITH a contact this step can sleep — a tossed body
-    // pausing at its apex has none and keeps flying.
+    // Sleeping bookkeeping — Matter-style SMOOTHED motion: the metric is
+    // an exponentially decaying max of v² + ω², so a single solver nudge
+    // in a pile cannot reset the fuse (the pre-1.43 rule — instantaneous
+    // speed < 0.3, |ω| < 0.03, contact this very step — flickered around
+    // its thresholds in dense piles: on the 796-body stress scene only
+    // 72/705 dynamics slept after 15 s vs Matter's 256). Support is
+    // remembered for 45 steps so a body resting between contacts still
+    // counts as supported, while a tossed body (no recent contact, and
+    // its launch motion still unwound in the smoothed metric) cannot
+    // fall asleep mid-flight.
     if (this.enableSleeping) {
       const supported = new Set();
       for (const c of contacts) { supported.add(c.a); supported.add(c.b); }
       for (const b of this._byId.values()) {
-        if (b.isStatic || b.isSleeping) continue;
+        if (b.isStatic) continue;
+        if (supported.has(b)) b._supportAge = 0; else b._supportAge = (b._supportAge ?? 9999) + 1;
+        if (b.isSleeping) continue;
+        const inst = b.velocity.x * b.velocity.x + b.velocity.y * b.velocity.y
+          + b.angularVelocity * b.angularVelocity;
+        b._motion = Math.max(inst, (b._motion || 0) * 0.9);
         const driven = b === dragBody || this._isMotorDriven(b);
-        const motion = b.velocity.x * b.velocity.x + b.velocity.y * b.velocity.y;
-        const slow = supported.has(b) && motion < 0.09 && Math.abs(b.angularVelocity) < 0.03;
+        const slow = b._motion < 0.1 && b._supportAge <= 45;
         if (!driven && slow) {
           b.sleepCounter++;
           if (b.sleepCounter >= 30) {
             b.isSleeping = true;
             b.velocity.x = 0; b.velocity.y = 0; b.angularVelocity = 0;
+            b._motion = 0;
           }
         } else b.sleepCounter = 0;
       }
@@ -1575,15 +1596,25 @@ export class NativeEngine {
   }
 
   _clipSegment(pts, tx, ty, plane, side) {
-    if (!pts.length) return pts;
-    const d0 = (pts[0].x * tx + pts[0].y * ty - plane) * side;
-    const d1 = (pts[1].x * tx + pts[1].y * ty - plane) * side;
+    // Sutherland–Hodgman over an open polyline of 0/1/2 points. The
+    // earlier version indexed pts[1] unconditionally and used a strict
+    // sign-product crossing test: an incident vertex landing EXACTLY on
+    // a side plane (routine with axis-aligned piles) produced a 1-point
+    // result and the second clip crashed reading pts[1].x — the 796-body
+    // stress scene hit this within seconds; small scenes never did.
     const out = [];
-    if (d0 >= 0) out.push(pts[0]);
-    if (d1 >= 0) out.push(pts[1]);
-    if (d0 * d1 < 0) {
-      const t = d0 / (d0 - d1);
-      out.push({ x: pts[0].x + (pts[1].x - pts[0].x) * t, y: pts[0].y + (pts[1].y - pts[0].y) * t });
+    if (!pts.length) return out;
+    const dist = (p) => (p.x * tx + p.y * ty - plane) * side;
+    let prev = pts[0], prevD = dist(prev);
+    if (prevD >= 0) out.push(prev);
+    for (let i = 1; i < pts.length; i++) {
+      const cur = pts[i], curD = dist(cur);
+      if (prevD * curD < 0) {
+        const t = prevD / (prevD - curD);
+        out.push({ x: prev.x + (cur.x - prev.x) * t, y: prev.y + (cur.y - prev.y) * t });
+      }
+      if (curD >= 0) out.push(cur);
+      prev = cur; prevD = curD;
     }
     return out;
   }
