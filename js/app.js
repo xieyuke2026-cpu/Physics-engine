@@ -4,8 +4,6 @@
 
 import { icon, TOOL_ICONS } from './icons.js';
 import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene, MAX_SCENE_JSON_BYTES, sceneJsonTooLarge } from './scene.js';
-import { createAssistant } from './ai/assistant.js?v=1.57';
-import { describeSceneSummary } from './ai/actions.js';
 import { Recorder } from './record.js';
 import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';
 import { PhysicsWorld } from './physics.js';
@@ -2097,59 +2095,4 @@ function boot() {
   });
   checkForUpdate();
 }
-/* ---------------- AI assistant host API (1.50) ----------------
-   The assistant module drives the lab exclusively through these calls;
-   generated scenes still pass validateScene() like any import. */
-const aiHost = {
-  version: APP_VERSION,
-  listPresets() { return presetScenes().map((p) => ({ key: p.key, name: p.name })); },
-  loadPreset(key) {
-    const p = presetScenes().find((x) => x.key === key);
-    if (!p) return { ok: false, error: `未知预设 ${key}` };
-    loadPreset(p);
-    return { ok: true };
-  },
-  importScene(raw) {
-    const v = validateScene(raw);
-    if (!v.ok) return { ok: false, error: '场景校验未通过（格式或数量超限）' };
-    loadScene(v.scene); resetHistory(); setRunning(true);
-    toast(t('msg.presetLoaded', { name: v.scene.name }));
-    return { ok: true, name: v.scene.name };
-  },
-  addBodies(bodies) {
-    const merged = currentScene();
-    const stamp = Date.now().toString(36);
-    merged.bodies = [...merged.bodies, ...bodies.map((b, i) => bodyData({ ...b, id: `ai-${stamp}-${i}` }))];
-    const v = validateScene(merged);
-    if (!v.ok) return { ok: false, error: '合并后场景校验未通过' };
-    loadScene(v.scene); resetHistory(); scheduleAutosave();
-    return { ok: true };
-  },
-  setGravity(spec) {
-    if (spec.preset) {
-      const k = spec.preset;
-      if (k === 'moon') { settings.gravityX = 0; settings.gravityY = 0.17; settings.gravityEnabled = true; }
-      else if (k === 'earth') { settings.gravityX = 0; settings.gravityY = 1; settings.gravityEnabled = true; }
-      else if (k === 'jupiter') { settings.gravityX = 0; settings.gravityY = 2.5; settings.gravityEnabled = true; }
-      else if (k === 'zero') { settings.gravityEnabled = false; }
-      else if (k === 'side') { settings.gravityX = 1; settings.gravityY = 0; settings.gravityEnabled = true; }
-      else return { ok: false, error: `未知重力预设 ${k}` };
-    } else {
-      settings.gravityX = spec.x; settings.gravityY = spec.y; settings.gravityEnabled = true;
-    }
-    world.applySettings(settings);
-    panel.mode = null; refreshPanel(); updateStatus();
-    pushHistorySoon(); scheduleAutosave();
-    return { ok: true };
-  },
-  setBackend(id) { setEngineBackend(id); return { ok: true }; },
-  clearScene() { loadScene(defaultScene()); resetHistory(); scheduleAutosave(); return { ok: true }; },
-  describeScene() {
-    const g = settings.gravityEnabled ? `重力 (${settings.gravityX}, ${settings.gravityY})` : '重力关闭';
-    return `${describeSceneSummary(currentScene(), world.core.backendId)}${g}。`;
-  },
-};
-const assistant = createAssistant(aiHost);
-$('btnAI').addEventListener('click', () => assistant.toggle());
-
 boot();

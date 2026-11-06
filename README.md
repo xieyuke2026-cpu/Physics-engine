@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.12.4-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-663%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-628%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -16,8 +16,6 @@
 It runs on **two switchable solver backends** behind one API: the battle-tested **Matter.js** backend (the default) and **Native**, a solver written from scratch in this repo (experimental) — the same scene replays on either engine, so you can compare how they feel.
 
 Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse in other projects (see *Reuse* below). A platform-fighter prototype, **PFLab**, is included as a demonstration of what the same API can build.
-
-New in 1.50: a built-in **AI assistant** — Qwen2.5-0.5B-Instruct running fully on-device via Transformers.js (WebGPU on desktop, WASM on iOS; one ~786MB download, then offline). It answers questions from a local knowledge base built from the scene library and developer docs, and it can act — generate scenes, add bodies, load presets, set gravity, switch backends — with every action passing the same strict validation as scene import.
 
 - **Live demo**: https://xieyuke2026-cpu.github.io/Physics-engine/
 - **Examples**: [Orbital gravitation](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [Fluid buoyancy](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [Seeded Galton board](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html) · [Fluid spreading — dam breach](https://xieyuke2026-cpu.github.io/Physics-engine/examples/spread.html)
@@ -58,12 +56,6 @@ Interactive · Responsive · Lightweight——黑白灰为主、低饱和蓝为�
 
 - 同一公开 API、两个求解器后端：**Matter.js**（默认、成熟稳定）与 **Native**（本仓库从零编写的顺序冲量求解器，实验性）。
 - 后端由注册表 `PhysicsEngine.BACKENDS` 管理，`PhysicsEngine.create({ backend })` 构造；设置里切换即以当前场景重建并重演，场景属性面板会显示当前后端。
-
-### AI 助手（本地模型，1.50）
-
-- 顶栏「AI 助手」：**Qwen2.5-0.5B-Instruct 在浏览器本地运行**（Transformers.js；桌面 WebGPU、iOS 走 WASM），首次使用下载约 786MB 并缓存，之后离线可用，**对话与数据不出设备**。
-- 不止聊天：助手能按自然语言**生成场景、添加物体、加载预设、调重力、切换后端**，每个动作都经过与场景导入相同的严格校验（数量预算、坐标/尺寸范围、未知预设拒绝），模型说错了也伤不到实验室。
-- 场景库与开发者文档被编成本地知识库，聊天时按需检索递给模型作参考资料——它答的是这个项目的事，而不是泛泛而谈。
 
 ### 编辑与交互
 

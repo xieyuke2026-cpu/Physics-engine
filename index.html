@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.57">
+<link rel="stylesheet" href="css/style.css?v=1.49">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -57,7 +57,6 @@
       <button id="btnImport" class="tb-btn icon" data-i18n-title="tb.title.import" title="导入 JSON"></button>
       <button id="btnShare" class="tb-btn icon" data-i18n-title="tb.title.share" title="分享场景（复制链接）"></button>
       <input id="fileImport" type="file" accept="application/json,.json" hidden>
-      <button id="btnAI" class="tb-btn wide" title="AI 助手：本地小模型，可对话与生成场景">AI 助手</button>
       <button id="btnSettings" class="tb-btn icon" data-i18n-title="tb.title.settings" title="设置"></button>
       <button id="btnPanel" class="tb-btn icon" data-i18n-title="tb.title.panel" title="折叠 / 展开属性面板"></button>
     </div>
@@ -441,11 +440,11 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.57</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.49</span></div>
           <div class="whatsnew-card">
-            <p data-i18n-text="hub.whatsnew.b1">AI 助手换回 Qwen 模型：SmolLM2 中文实测是乱码、不合格；这次带着 1.56 的全部修复（线程门控+看门狗）在 iPad 上再战</p>
-            <p data-i18n-text="hub.whatsnew.b2">动作识别三度加固：回复正文里内联的动作 JSON 也能提取执行（SmolLM2 实测写对了却没被认出的那种）</p>
-            <p data-i18n-text="hub.whatsnew.b3">引擎与既有行为与 1.56 一致；全量测试 663 项。发布说明已更新覆盖至 1.57</p>
+            <p data-i18n-text="hub.whatsnew.b1">示例「流体蔓延 · 水坝决口」手感调校：按实测把涌浪从堆高 27px / 晃 8.4 秒压到 19px / 5.6 秒——留一点涌浪，去掉果冻感</p>
+            <p data-i18n-text="hub.whatsnew.b2">调校只动示例页的通量参数（k 0.22→0.28、阻尼 0.992→0.988），模型单测 8 项复跑全过（全量 628 项）</p>
+            <p data-i18n-text="hub.whatsnew.b3">引擎与应用行为与 1.48 一致；下一个 Release 仍等 1.50</p>
           </div>
         </section>
       </aside>
@@ -514,23 +513,10 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
   <button id="btnUpdateDismiss" class="tb-btn icon" aria-label="关闭提示">✕</button>
 </div>
 
-<aside id="aiPanel" hidden aria-label="AI 助手">
-  <div class="ai-head">
-    <div class="ai-title"><span data-i18n-text="ai.title">AI 助手</span> <span class="ai-sub" data-i18n-text="ai.sub">本地模型 · Qwen2.5-0.5B</span></div>
-    <button id="aiClose" class="ai-close" data-i18n-title="ai.close" title="关闭">✕</button>
-  </div>
-  <div class="ai-statusrow"><div id="aiStatus" class="ai-status">模型未加载</div><button id="aiUnload" class="ai-unload" data-i18n-text="ai.unload" hidden>卸载模型</button></div>
-  <div id="aiMessages" class="ai-messages"></div>
-  <div id="aiChips" class="ai-chips"></div>
-  <div class="ai-inputrow">
-    <textarea id="aiInput" rows="2" data-i18n-ph="ai.ph" placeholder="问点什么，或让我动手：生成一个牛顿摆…"></textarea>
-    <button id="aiSend" class="ai-send" data-i18n-text="ai.send">发送</button>
-  </div>
-</aside>
 <div id="toast" hidden></div>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.57"></script>
+<script type="module" src="js/app.js?v=1.49"></script>
 </body>
 </html>

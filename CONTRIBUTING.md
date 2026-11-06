@@ -15,7 +15,7 @@
 | `js/engine/physics-engine-3d.js` | PhysicsEngine3D 核心（cannon-es） |
 | `js/pf/` | PF 引擎 / PFLab 平台格斗模块（只依赖 PhysicsEngine 公开 API） |
 | `docs/DEVELOPER.md` / `docs/DEVELOPER-EN.md` | 引擎与 PF 引擎的完整调用文档（中 / 英） |
-| `examples/` | 四个独立示例页（轨道 / 浮力 / 种子钉板 / 流体蔓延），可直接打开 |
+| `examples/` | 三个独立示例页（轨道 / 浮力 / 种子钉板），可直接打开 |
 | `tests/` | Node 自动化测试（见下） |
 | `vendor/` | 第三方库原文件（matter.min.js 等），**不要手改** |
 
