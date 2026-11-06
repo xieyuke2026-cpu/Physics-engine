@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.53">
+<link rel="stylesheet" href="css/style.css?v=1.54">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -441,11 +441,11 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.53</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.54</span></div>
           <div class="whatsnew-card">
-            <p data-i18n-text="hub.whatsnew.b1">AI 助手动作可靠性修复：模型改为先输出动作再写说明，长篇大论也不会把动作挤掉（1.52 线上实测抓到的）</p>
-            <p data-i18n-text="hub.whatsnew.b2">连同 1.52：iOS/iPadOS 直走 WASM 不再崩页；面板「卸载模型」按钮随时释放内存</p>
-            <p data-i18n-text="hub.whatsnew.b3">引擎与既有行为与 1.52 一致；全量测试 656 项。发布说明已更新覆盖至 1.53</p>
+            <p data-i18n-text="hub.whatsnew.b1">AI 助手换模型瘦身一半：SmolLM2-360M（约 390MB）——原模型实测 786MB，iPad 下载到 100% 建会话就崩</p>
+            <p data-i18n-text="hub.whatsnew.b2">连同 1.52–1.53：iOS 直走 WASM、「卸载模型」按钮、动作先行输出，助手的稳定性三连修</p>
+            <p data-i18n-text="hub.whatsnew.b3">引擎与既有行为与 1.53 一致；全量测试 656 项。发布说明已更新覆盖至 1.54</p>
           </div>
         </section>
       </aside>
@@ -516,7 +516,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <aside id="aiPanel" hidden aria-label="AI 助手">
   <div class="ai-head">
-    <div class="ai-title">AI 助手 <span class="ai-sub">本地模型 · Qwen2.5-0.5B</span></div>
+    <div class="ai-title">AI 助手 <span class="ai-sub">本地模型 · SmolLM2-360M</span></div>
     <button id="aiClose" class="ai-close" title="关闭">✕</button>
   </div>
   <div class="ai-statusrow"><div id="aiStatus" class="ai-status">模型未加载</div><button id="aiUnload" class="ai-unload" hidden>卸载模型</button></div>
@@ -531,6 +531,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.53"></script>
+<script type="module" src="js/app.js?v=1.54"></script>
 </body>
 </html>

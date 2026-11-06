@@ -1,6 +1,6 @@
 /* MotionLab AI assistant — inference worker (1.50).
-   Runs Qwen2.5-0.5B-Instruct locally via Transformers.js (ONNX Runtime Web):
-   WebGPU when available, WASM otherwise. The model (~350MB, q4) downloads
+   Runs SmolLM2-360M-Instruct locally via Transformers.js (ONNX Runtime Web):
+   WebGPU when available, WASM otherwise. The model (~390MB, q4) downloads
    once from a Hugging Face mirror and is cached by the browser; nothing is
    sent to any server at inference time. Loaded lazily, only when the user
    first talks to the assistant. */
@@ -11,7 +11,7 @@ env.useBrowserCache = true;
 // Leave CPU headroom for the 60 FPS lab while WASM inference runs.
 if (env.backends?.onnx?.wasm) env.backends.onnx.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
 
-const MODEL = 'onnx-community/Qwen2.5-0.5B-Instruct';
+const MODEL = 'HuggingFaceTB/SmolLM2-360M-Instruct';
 const HOSTS = ['https://hf-mirror.com/', 'https://huggingface.co/'];
 let generator = null;
 let deviceUsed = null;

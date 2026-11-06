@@ -4,7 +4,7 @@
 
 import { icon, TOOL_ICONS } from './icons.js';
 import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene, MAX_SCENE_JSON_BYTES, sceneJsonTooLarge } from './scene.js';
-import { createAssistant } from './ai/assistant.js?v=1.53';
+import { createAssistant } from './ai/assistant.js?v=1.54';
 import { describeSceneSummary } from './ai/actions.js';
 import { Recorder } from './record.js';
 import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';

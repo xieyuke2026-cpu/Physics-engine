@@ -17,7 +17,7 @@ It runs on **two switchable solver backends** behind one API: the battle-tested 
 
 Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse in other projects (see *Reuse* below). A platform-fighter prototype, **PFLab**, is included as a demonstration of what the same API can build.
 
-New in 1.50: a built-in **AI assistant** — Qwen2.5-0.5B-Instruct running fully on-device via Transformers.js (WebGPU with a WASM fallback; one ~350MB download, then offline). It answers questions from a local knowledge base built from the scene library and developer docs, and it can act — generate scenes, add bodies, load presets, set gravity, switch backends — with every action passing the same strict validation as scene import.
+New in 1.50: a built-in **AI assistant** — SmolLM2-360M-Instruct running fully on-device via Transformers.js (WebGPU on desktop, WASM on iOS; one ~390MB download, then offline). It answers questions from a local knowledge base built from the scene library and developer docs, and it can act — generate scenes, add bodies, load presets, set gravity, switch backends — with every action passing the same strict validation as scene import.
 
 - **Live demo**: https://xieyuke2026-cpu.github.io/Physics-engine/
 - **Examples**: [Orbital gravitation](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [Fluid buoyancy](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [Seeded Galton board](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html) · [Fluid spreading — dam breach](https://xieyuke2026-cpu.github.io/Physics-engine/examples/spread.html)
@@ -61,7 +61,7 @@ Interactive · Responsive · Lightweight——黑白灰为主、低饱和蓝为�
 
 ### AI 助手（本地模型，1.50）
 
-- 顶栏「AI 助手」：**Qwen2.5-0.5B-Instruct 在浏览器本地运行**（Transformers.js；WebGPU 优先、WASM 兜底），首次使用下载约 350MB 并缓存，之后离线可用，**对话与数据不出设备**。
+- 顶栏「AI 助手」：**SmolLM2-360M-Instruct 在浏览器本地运行**（Transformers.js；桌面 WebGPU、iOS 走 WASM），首次使用下载约 390MB 并缓存，之后离线可用，**对话与数据不出设备**。
 - 不止聊天：助手能按自然语言**生成场景、添加物体、加载预设、调重力、切换后端**，每个动作都经过与场景导入相同的严格校验（数量预算、坐标/尺寸范围、未知预设拒绝），模型说错了也伤不到实验室。
 - 场景库与开发者文档被编成本地知识库，聊天时按需检索递给模型作参考资料——它答的是这个项目的事，而不是泛泛而谈。
 

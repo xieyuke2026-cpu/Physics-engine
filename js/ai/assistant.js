@@ -1,5 +1,5 @@
 /* MotionLab AI assistant — panel controller (1.50).
-   A local small model (Qwen2.5-0.5B-Instruct) runs in a Web Worker on the
+   A local small model (SmolLM2-360M-Instruct) runs in a Web Worker on the
    user's device. This module owns the chat panel, builds the model's
    context (core prompt + locally retrieved knowledge + live scene
    summary), and executes the model's validated actions through the host
@@ -121,15 +121,15 @@ export function createAssistant(host) {
   });
 
   brain.onProgress = (p) => {
-    if (p.total > 0) setStatus(L(`正在下载模型… ${Math.round((p.loaded / p.total) * 100)}%（仅首次，约 350MB，下完缓存离线可用）`,
-      `Downloading model… ${Math.round((p.loaded / p.total) * 100)}% (first time only, ~350MB, cached afterwards)`));
+    if (p.total > 0) setStatus(L(`正在下载模型… ${Math.round((p.loaded / p.total) * 100)}%（仅首次，约 390MB，下完缓存离线可用）`,
+      `Downloading model… ${Math.round((p.loaded / p.total) * 100)}% (first time only, ~390MB, cached afterwards)`));
   };
 
   function greet() {
     if (greeted) return; greeted = true;
     addMsg('assistant', L(
-      '你好，我是 MotionLab 的本地 AI 助手。模型（Qwen2.5-0.5B）会在你第一次提问时下载到这台设备上（约 350MB，仅一次，之后离线可用），对话不出设备。我可以答疑，也能动手：生成场景、加载预设、调重力、换后端。试试下面的快捷提问，或直接打字。',
-      'Hi, I am the local AI assistant. The model (Qwen2.5-0.5B) downloads to this device on your first question (~350MB, once, then offline). Chats never leave the device. I can answer questions and act: generate scenes, load presets, set gravity, switch backends.'));
+      '你好，我是 MotionLab 的本地 AI 助手。模型（SmolLM2-360M）会在你第一次提问时下载到这台设备上（约 390MB，仅一次，之后离线可用），对话不出设备。我可以答疑，也能动手：生成场景、加载预设、调重力、换后端。试试下面的快捷提问，或直接打字。',
+      'Hi, I am the local AI assistant. The model (SmolLM2-360M) downloads to this device on your first question (~390MB, once, then offline). Chats never leave the device. I can answer questions and act: generate scenes, load presets, set gravity, switch backends.'));
     setStatus(L('模型未加载（首次提问时下载）', 'Model not loaded (downloads on first question)'));
   }
 
