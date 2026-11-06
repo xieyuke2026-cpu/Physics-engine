@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>示例 · 流体蔓延（水坝决口） — PhysicsEngine</title>
+<style>
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f4f5f6; color: #1c1e21; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 32px; }
+  h1 { font-size: 20px; margin: 4px 0 6px; }
+  p { color: #4a5058; font-size: 14px; line-height: 1.6; margin: 4px 0 12px; }
+  code { background: #e8eaec; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  canvas { background: #ffffff; border: 1px solid #dde1e5; border-radius: 10px; width: 100%; height: auto; display: block; }
+  button { font-size: 14px; padding: 7px 16px; border-radius: 8px; border: 1px solid #2f6db3; background: #2f6db3; color: #fff; cursor: pointer; }
+  button[disabled] { opacity: 0.45; cursor: default; }
+  button.ghost { background: #fff; color: #2f6db3; }
+  a { color: #2f6db3; }
+  .hint { font-size: 13px; color: #7a828c; }
+</style>
+</head>
+<body>
+<main>
+  <h1>流体蔓延 · 水坝决口</h1>
+  <p>引擎的流体区域是固定矩形，不会自己蔓延。这一页演示开发者如何在<strong>只用公开 API</strong> 的前提下，
+     在引擎之上加一层「水柱通量模型」：把水面切成一排竖直水柱，相邻面存一个带惯性的通量——水位差给通量
+     加速，水就会涌动、蔓延、自己找平；柱子的地面高度与地形对齐（也可改为用 <code>raycast</code> 向下采样），
+     浮力由宿主按柱面高度通过 <code>addVelocity</code> 施加。点「抽掉坝墙」看决口：左岸水库的水涌入右侧
+     低地，最后在低地积成新池。体积严格守恒。返回 <a href="../index.html">MotionLab</a> · <a href="../docs/DEVELOPER.md">开发者文档</a></p>
+  <canvas id="cv" width="960" height="600"></canvas>
+  <p><button id="breach">抽掉坝墙</button> <button id="reset" class="ghost">重置</button>
+     <span class="hint">低地上的木箱原本在旱地上——水漫到时它会被浮起来。</span></p>
+</main>
+<script src="../vendor/matter.min.js"></script>
+<script type="module">
+import { PhysicsEngine } from '../js/engine/physics-engine.js';
+
+/* ================= 水柱蔓延模型（宿主层，不属于引擎） =================
+   每根柱子只记深度 depth；水位 level = 地面海拔 + depth。相邻面存通量
+   flux：水位差给通量加速、通量带惯性（水会冲、会晃），每步按每柱的可用
+   水量统一缩放出流，体积严格守恒。barrier 集合里的相邻面不流通。
+   地面海拔由 floorY（y 向下坐标）换算：elev = H − floorY。 */
+// == SPREAD MODEL START ==
+class SpreadWater {
+  constructor({ x0 = 0, colW = 8, count, floorY, datum = 600 }) {
+    this.x0 = x0; this.colW = colW; this.count = count; this.datum = datum;
+    this.floorY = floorY.slice();                    // 每柱地面 y（向下为正）
+    this.depth = new Float64Array(count);            // 每柱水深（px）
+    this.flux = new Float64Array(count - 1);         // 每面通量（>0 向右，正负带惯性）
+    this.barriers = new Set();                       // 不可流通的相邻面：i 表示 i 与 i+1 之间
+  }
+  level(i) { return (this.datum - this.floorY[i]) + this.depth[i]; }  // 水面海拔（越大越高）
+  surfaceY(i) { return this.datum - this.level(i); }                   // 水面 y（绘图/浮力用）
+  totalVolume() { let v = 0; for (let i = 0; i < this.count; i++) v += this.depth[i] * this.colW; return v; }
+  /** 推进一次：通量先按水位差加速并衰减，再按源柱水量缩放实际转移量。 */
+  step(k = 0.22, damp = 0.992) {
+    const { depth, flux, count } = this;
+    for (let i = 0; i < count - 1; i++) {
+      if (this.barriers.has(i)) { flux[i] = 0; continue; }
+      flux[i] = (flux[i] + k * (this.level(i) - this.level(i + 1))) * damp;
+    }
+    // 每柱出流预算：总出流不超过本柱水深，超了就等比缩放（经典 pipe 模型缩放）
+    const out = new Float64Array(count - 1);
+    const scale = new Float64Array(count).fill(1);
+    for (let i = 0; i < count - 1; i++) {
+      let t = flux[i];
+      if (t > 0) { if (depth[i] > 0) scale[i] = Math.min(scale[i], 1); }
+      out[i] = t;
+    }
+    const outSum = new Float64Array(count);
+    for (let i = 0; i < count - 1; i++) {
+      if (out[i] > 0) outSum[i] += out[i];
+      else outSum[i + 1] -= out[i];
+    }
+    for (let c = 0; c < count; c++) {
+      if (outSum[c] > depth[c] && outSum[c] > 0) scale[c] = depth[c] / outSum[c];
+    }
+    for (let i = 0; i < count - 1; i++) {
+      let t = out[i];
+      t *= t > 0 ? scale[i] : scale[i + 1];
+      // 防大幅过冲：单步转移不超过水位差 + 源水深（允许小幅过冲产生晃荡）
+      const diff = this.level(i) - this.level(i + 1);
+      const lim = Math.abs(diff) + Math.min(depth[i], depth[i + 1]) + 1;
+      if (Math.abs(t) > lim) t = Math.sign(t) * lim;
+      if (t > 0 && t > depth[i]) t = depth[i];
+      if (t < 0 && -t > depth[i + 1]) t = -depth[i + 1];
+      depth[i] -= t; depth[i + 1] += t;
+      flux[i] = t;                                     // 通量以实际转移为准
+    }
+  }
+  surfaceYAt(x) {
+    const i = Math.max(0, Math.min(this.count - 1, Math.floor((x - this.x0) / this.colW)));
+    return this.depth[i] > 0.05 ? this.surfaceY(i) : Infinity;        // 干柱返回 Infinity（无水面）
+  }
+  colRange(xL, xR) {
+    const a = Math.max(0, Math.floor((xL - this.x0) / this.colW));
+    const b = Math.min(this.count - 1, Math.floor((xR - this.x0) / this.colW));
+    return [a, b];
+  }
+}
+// == SPREAD MODEL END ==
+
+/* ================= 场景 ================= */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const W = 960, H = 600;
+
+const pe = new PhysicsEngine({ enableSleeping: true, seed: 7, substeps: 2 });
+// 地形：地面 + 左岸高台（水库底）+ 两侧墙
+pe.addBody({ kind: 'rect', x: 480, y: 580, width: 960, height: 40, isStatic: true, name: 'floor' });
+pe.addBody({ kind: 'rect', x: 212, y: 495, width: 424, height: 130, isStatic: true, name: 'bench' });
+pe.addBody({ kind: 'rect', x: 8, y: 300, width: 16, height: 600, isStatic: true, name: 'wall-l' });
+pe.addBody({ kind: 'rect', x: 952, y: 300, width: 16, height: 600, isStatic: true, name: 'wall-r' });
+const dam = pe.addBody({ kind: 'rect', x: 412, y: 365, width: 24, height: 130, isStatic: true, name: '坝' });
+dam.plugin.pe.desc.color = '#8a6d4f';
+
+// 水柱：每柱 8px，共 120 柱；地面高度向引擎地形对齐（高台顶 430 / 低地 560）
+const COLW = 8, COLS = W / COLW;
+const floorY = [];
+for (let i = 0; i < COLS; i++) {
+  const cx = i * COLW + COLW / 2;
+  // 两侧墙体内的柱子视为高地（水不进墙）；其余：高台顶 430 / 低地 560
+  floorY.push(cx < 16 || cx >= 944 ? 300 : (i * COLW < 424 ? 430 : 560));
+}
+const water = new SpreadWater({ x0: 0, colW: COLW, count: COLS, floorY, datum: H });
+for (let i = 0; i < COLS; i++) if (i * COLW >= 16 && i * COLW < 400) water.depth[i] = 90;  // 水库：水面 y=340
+const DAM_FACE = Math.floor(400 / COLW) - 1;   // 坝左脸所在的相邻面（col 49 | 50）
+water.barriers.add(DAM_FACE);
+
+// 漂浮物：水库里两个、旱低地一个（等水来浮）、低地一个铁块（沉底不动）
+const floaters = [];
+function addFloater(desc, color) {
+  const b = pe.addBody(desc);
+  b.plugin.pe.desc.color = color;
+  floaters.push(b);
+  return b;
+}
+addFloater({ kind: 'rect', x: 130, y: 315, width: 46, height: 34, density: 0.0004, name: '木箱' }, '#b08954');
+addFloater({ kind: 'circle', x: 260, y: 318, radius: 16, density: 0.0002, name: '软木' }, '#e8c882');
+addFloater({ kind: 'rect', x: 700, y: 543, width: 46, height: 34, density: 0.0004, name: '旱地木箱' }, '#b08954');
+addFloater({ kind: 'rect', x: 856, y: 545, width: 30, height: 30, density: 0.01, name: '铁块' }, '#5a6167');
+
+const WATER_DENSITY = 0.001;
+function applyBuoyancy(stepsElapsed) {
+  for (const b of floaters) {
+    const d = b.plugin.pe.desc;
+    const h = d.kind === 'circle' ? d.radius * 2 : d.height;
+    const surf = water.surfaceYAt(b.position.x);
+    if (!Number.isFinite(surf)) continue;
+    const bottom = b.position.y + h / 2;
+    const frac = Math.max(0, Math.min(1, (bottom - surf) / h));
+    if (frac <= 0) continue;
+    // 浮力踢：与引擎流体同一公式（g × 密度比 × 浸没比），宿主用 addVelocity 施加
+    const ratio = Math.min(WATER_DENSITY / (d.density || 0.001), 3);
+    pe.addVelocity(b, 0, -0.16 * frac * ratio * stepsElapsed);
+    // 水中阻尼：平移与转动都刹
+    const damp = Math.max(0, 1 - 0.05 * frac);
+    pe.setVelocity(b, b.velocity.x * damp, b.velocity.y * (frac > 0.9 ? damp : 1));
+    b.angularVelocity *= Math.max(0, 1 - 0.08 * frac);
+  }
+}
+
+let damPresent = true;
+document.getElementById('breach').addEventListener('click', (ev) => {
+  if (!damPresent) return;
+  damPresent = false;
+  pe.removeBody(pe.idOf(dam));
+  water.barriers.delete(DAM_FACE);
+  ev.target.disabled = true;
+});
+document.getElementById('reset').addEventListener('click', () => location.reload());
+
+/* ================= 渲染 ================= */
+function drawWater() {
+  // 显示水面 = 基础水面 + 物体排水顶起（逐帧重算、不累积）
+  const disp = new Float64Array(COLS);
+  for (const b of floaters) {
+    const d = b.plugin.pe.desc;
+    const h = d.kind === 'circle' ? d.radius * 2 : d.height;
+    const wdt = d.kind === 'circle' ? d.radius * 2 : d.width;
+    const surf = water.surfaceYAt(b.position.x);
+    if (!Number.isFinite(surf)) continue;
+    const sub = Math.max(0, Math.min(h, b.position.y + h / 2 - surf));
+    if (sub <= 0) continue;
+    const [a, bb] = water.colRange(b.position.x - wdt / 2, b.position.x + wdt / 2);
+    const add = (sub * wdt) / ((bb - a + 1) * COLW);
+    for (let i = a; i <= bb; i++) disp[i] += add;
+  }
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i < COLS; i++) {
+    if (water.depth[i] <= 0.05) { started = false; continue; }
+    const x = i * COLW, y = water.surfaceY(i) - disp[i];
+    if (!started) { ctx.moveTo(x, water.floorY[i]); ctx.lineTo(x, y); started = true; }
+    else ctx.lineTo(x, y);
+    if (i === COLS - 1 || water.depth[i + 1] <= 0.05) ctx.lineTo(x + COLW, water.floorY[i]);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(47, 109, 179, 0.32)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(47, 109, 179, 0.75)';
+  ctx.stroke();
+}
+
+let last = performance.now(), lastSim = 0;
+function frame(now) {
+  pe.advance(now - last, 1); last = now;
+  const stepsElapsed = Math.max(0, (pe.simTime - lastSim) / (1000 / 60)); lastSim = pe.simTime;
+  water.step(); water.step();                    // 每帧推进两轮
+  if (stepsElapsed > 0) applyBuoyancy(Math.min(stepsElapsed, 4));
+  ctx.clearRect(0, 0, W, H);
+  drawWater();
+  pe.forEachBody((b) => {
+    const d = b.plugin.pe.desc;
+    ctx.save();
+    ctx.translate(b.position.x, b.position.y);
+    ctx.rotate(b.angle);
+    ctx.fillStyle = d.color || (b.isStatic ? '#d5d9de' : '#c9ced4');
+    ctx.strokeStyle = '#3c4249';
+    if (d.kind === 'circle') { ctx.beginPath(); ctx.arc(0, 0, d.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    else { ctx.fillRect(-d.width / 2, -d.height / 2, d.width, d.height); ctx.strokeRect(-d.width / 2, -d.height / 2, d.width, d.height); }
+    ctx.restore();
+    if (pe.nameOf(b)) {
+      ctx.fillStyle = '#1c1e21'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(pe.nameOf(b), b.position.x, b.position.y - (d.kind === 'circle' ? d.radius + 8 : d.height / 2 + 8));
+    }
+  });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

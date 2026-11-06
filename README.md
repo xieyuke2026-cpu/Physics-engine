@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.12.4-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-620%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-628%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -18,7 +18,7 @@ It runs on **two switchable solver backends** behind one API: the battle-tested 
 Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse in other projects (see *Reuse* below). A platform-fighter prototype, **PFLab**, is included as a demonstration of what the same API can build.
 
 - **Live demo**: https://xieyuke2026-cpu.github.io/Physics-engine/
-- **Examples**: [Orbital gravitation](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [Fluid buoyancy](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [Seeded Galton board](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html)
+- **Examples**: [Orbital gravitation](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [Fluid buoyancy](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [Seeded Galton board](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html) · [Fluid spreading — dam breach](https://xieyuke2026-cpu.github.io/Physics-engine/examples/spread.html)
 - **Developer docs**: [docs/DEVELOPER-EN.md](docs/DEVELOPER-EN.md) （中文版：[docs/DEVELOPER.md](docs/DEVELOPER.md))
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md) · **License**: MIT
 
@@ -98,7 +98,7 @@ Interactive · Responsive · Lightweight——黑白灰为主、低饱和蓝为�
 ```
 
 - **能力速览**：固定步进、休眠、种子随机、物体命名、空间查询（区域/射线）、冲量助手、快照/还原（纯 JSON）、`Formulas` 公式库（动能/动量/轨道速度/浮力等），以及上文全部世界效应。完整 API 见开发者文档。
-- **在线示例**：[万有引力轨道](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [流体浮力](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [种子钉板](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html)（源码在 `examples/`）。
+- **在线示例**：[万有引力轨道](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [流体浮力](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [种子钉板](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html) · [流体蔓延（水坝决口）](https://xieyuke2026-cpu.github.io/Physics-engine/examples/spread.html)（源码在 `examples/`）。
 - **独立包**：`~/workspace/physics-engine/` 是同一核心的独立打包（引擎 + 类型声明 + 测试 + 示例），与站内副本保持同步。
 - **PF 引擎**（`js/pf/`）：平台格斗模块集，同样可独立调用（门面 `PFEngine`、无头对局、AI 档位与调参）。
 - 参与开发：[CONTRIBUTING.md](CONTRIBUTING.md) · 安全政策：[SECURITY.md](SECURITY.md) · 测试报告：[TEST-REPORT.md](TEST-REPORT.md)
