@@ -52,7 +52,7 @@ class SpreadWater {
   surfaceY(i) { return this.datum - this.level(i); }                   // 水面 y（绘图/浮力用）
   totalVolume() { let v = 0; for (let i = 0; i < this.count; i++) v += this.depth[i] * this.colW; return v; }
   /** 推进一次：通量先按水位差加速并衰减，再按源柱水量缩放实际转移量。 */
-  step(k = 0.22, damp = 0.992) {
+  step(k = 0.28, damp = 0.988) {
     const { depth, flux, count } = this;
     for (let i = 0; i < count - 1; i++) {
       if (this.barriers.has(i)) { flux[i] = 0; continue; }

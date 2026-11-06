@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.48">
+<link rel="stylesheet" href="css/style.css?v=1.49">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -440,11 +440,11 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.48</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.49</span></div>
           <div class="whatsnew-card">
-            <p data-i18n-text="hub.whatsnew.b1">新示例「流体蔓延 · 水坝决口」：在引擎之上用水柱通量模型让水自己找平、决口漫入低地（examples/spread.html）</p>
-            <p data-i18n-text="hub.whatsnew.b2">蔓延模型带体积守恒 / 找平 / 决口单测（全量 628 项）；它是给开发者的扩展范式示例——效果建在引擎公开 API 之上</p>
-            <p data-i18n-text="hub.whatsnew.b3">纯新增示例页：引擎与应用行为与 1.47 一致</p>
+            <p data-i18n-text="hub.whatsnew.b1">示例「流体蔓延 · 水坝决口」手感调校：按实测把涌浪从堆高 27px / 晃 8.4 秒压到 19px / 5.6 秒——留一点涌浪，去掉果冻感</p>
+            <p data-i18n-text="hub.whatsnew.b2">调校只动示例页的通量参数（k 0.22→0.28、阻尼 0.992→0.988），模型单测 8 项复跑全过（全量 628 项）</p>
+            <p data-i18n-text="hub.whatsnew.b3">引擎与应用行为与 1.48 一致；下一个 Release 仍等 1.50</p>
           </div>
         </section>
       </aside>
@@ -517,6 +517,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.48"></script>
+<script type="module" src="js/app.js?v=1.49"></script>
 </body>
 </html>
