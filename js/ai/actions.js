@@ -45,6 +45,31 @@ export function extractActions(text) {
       try { const o = JSON.parse(t); const name = actionName(o); if (name) { actions.push({ ...o, action: name }); clean = ''; } } catch { /* keep text */ }
     }
   }
+  // inline object followed by prose (SmolLM2 live test wrote exactly this):
+  // find the first balanced {...} that parses to an action and lift it out.
+  if (!actions.length) {
+    const start = clean.indexOf('{');
+    if (start >= 0) {
+      let depth = 0, end = -1, inStr = false, esc = false;
+      for (let i = start; i < clean.length; i++) {
+        const ch = clean[i];
+        if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+        if (ch === '"') inStr = true;
+        else if (ch === '{') depth++;
+        else if (ch === '}' && --depth === 0) { end = i; break; }
+      }
+      if (end > start) {
+        try {
+          const o = JSON.parse(clean.slice(start, end + 1));
+          const name = actionName(o);
+          if (name) {
+            actions.push({ ...o, action: name });
+            clean = (clean.slice(0, start) + clean.slice(end + 1)).trim();
+          }
+        } catch { /* not an action — keep text */ }
+      }
+    }
+  }
   return { actions, text: clean.trim() };
 }
 

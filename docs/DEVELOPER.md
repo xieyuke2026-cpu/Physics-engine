@@ -14,7 +14,7 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.56 | `js/ui.js` 的 `APP_VERSION` |
+| MotionLab（应用） | 1.57 | `js/ui.js` 的 `APP_VERSION` |
 | PhysicsEngine（2D 核心） | 1.12.4 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
@@ -398,7 +398,7 @@ m.reset();                                          // 同配置重开一局
 顶栏「AI 助手」是一个完全本地的小模型助手，代码在 `js/ai/`，与引擎解耦：
 
 - **推理**：`js/ai/worker.js` 在 Web Worker 里用 Transformers.js 跑
-  `HuggingFaceTB/SmolLM2-360M-Instruct`（q4，约 390MB，浏览器缓存；1.54 由 Qwen2.5-0.5B 换入——后者 q4 实测约 786MB，iPad 上建会话即崩）；
+  `onnx-community/Qwen2.5-0.5B-Instruct`（q4，约 786MB，浏览器缓存；1.54 曾换 SmolLM2-360M 减半体积，但其中文实测为乱码，1.57 换回）；
   WebGPU 优先、失败自动退 WASM；模型源 hf-mirror 优先、huggingface.co 兜底。
   面板首次发送消息才触发下载，实验室主线程不受影响。
 - **知识**：`js/ai/knowledge.js` 是人工提炼的知识块（物理概念/预设/格式/示例），

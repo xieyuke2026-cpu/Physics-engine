@@ -78,5 +78,14 @@ check('bare object with act key is extracted', (() => {
   return r.actions.length === 1 && r.actions[0].action === 'clearScene' && r.text === '';
 })());
 
+check('inline action JSON followed by prose is lifted out', (() => {
+  const r = extractActions('{"action":"loadPreset","preset":"cradle" } 后面跟着一串说明文字。');
+  return r.actions.length === 1 && r.actions[0].preset === 'cradle' && r.text.includes('说明文字');
+})());
+check('braces in ordinary prose are not treated as actions', (() => {
+  const r = extractActions('集合写作 {1, 2, 3}，函数记作 f(x)={x}。');
+  return r.actions.length === 0 && r.text.includes('{1, 2, 3}');
+})());
+
 console.log(`\nai-assistant tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

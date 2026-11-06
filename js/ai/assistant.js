@@ -1,5 +1,5 @@
 /* MotionLab AI assistant — panel controller (1.50).
-   A local small model (SmolLM2-360M-Instruct) runs in a Web Worker on the
+   A local small model (Qwen2.5-0.5B-Instruct) runs in a Web Worker on the
    user's device. This module owns the chat panel, builds the model's
    context (core prompt + locally retrieved knowledge + live scene
    summary), and executes the model's validated actions through the host
