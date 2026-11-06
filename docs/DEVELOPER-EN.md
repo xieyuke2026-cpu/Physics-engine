@@ -15,7 +15,7 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.43 | `APP_VERSION` in `js/ui.js` |
+| MotionLab (app) | 1.45 | `APP_VERSION` in `js/ui.js` |
 | PhysicsEngine (2D core) | 1.12.3 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
@@ -126,6 +126,9 @@ the single source of truth: the module exports `BACKENDS` (also
 - 'active' and 'experimental' backends construct normally (hosts should label experimental ones as such); asking for a planned or unknown backend **throws** (the message states the status) — there is no silent fallback: swapping solvers changes simulation results, and the host must know.
 - The backend contract: a backend implements this class's full public surface (body / constraint / hinge management, fluid / wind / magnet regions, fixed-timestep `advance`, snapshots, spatial queries, the seeded RNG). Hosts code against that API only, never against backend internals — MotionLab 1.41 wires it exactly this way: the Settings backend picker rebuilds the world on the chosen solver and replays the current scene, with zero host-code changes.
 - Native solver notes (1.12.0): sequential impulses with warm starting, SAT + reference-face clipping contacts, sleeping; force models and motors kick once per fixed step (independent of the substep count); the substep count floors at 2 (tall stacks are under-damped at 1); known limits: a 10-high single-column tower still topples, and position correction is linear-only. Its behaviour suite is `tests/native-tests.mjs`.
+- **Host contract (1.12.1)**: every body — circles included — must expose a non-empty `vertices` polygon that tracks its pose; hosts draw every body through its vertices. Native circles shipped with empty vertices in 1.12.0, which left the live canvas showing only the grid while physics ran fine (the engine suite never renders, and the app smoke never rendered under Native — both missed it); MotionLab guards the line with the app-level `tests/native-render.mjs`.
+- **Native robustness (1.12.2)**: reference-face clipping tolerates degenerate 0/1-point segments (exactly-aligned stacks used to crash large scenes mid-run); sleeping uses a smoothed motion metric with remembered support; warm-start impulses apply on the first substep only (re-applying them leaked energy scaled by the substep count).
+- **Orphan-sleeper wake (1.12.3, both backends)**: sleepers ignore gravity, so without a support re-check, deleting a tower's base or dragging a support away left everything above hovering forever. Both backends now run a support probe (`_wakeOrphans`) every 15 fixed steps: a sleeping dynamic body with no support left is woken. Support means a touching chain (bounds grown by 3 px) reaching a non-sleeping body (statics count as anchors — note that Matter marks static bodies as sleeping too), an attachment to a constraint/hinge, or an overlap with a fluid region; zero/disabled gravity opts out.
 
 ### Seeded RNG (1.3.0)
 
@@ -339,6 +342,20 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
 
 ---
 
+### The MotionLab scene file format (host format; import hardening in 1.39)
+
+The engine itself knows no file format. The MotionLab host's scene JSON is
+`{ format: 'motionlab-scene', version: 2, name, settings, bodies, constraints, hinges, fluids, winds }`
+(version 1 files still import). Imports — including the decompressed size
+of share links — are capped at **2 MB**; budgets: bodies ≤ 2000,
+constraints ≤ 500, hinges ≤ 500, fluids/winds ≤ 20 each. `validateScene`
+(`js/scene.js`) audits every field: coordinates must be finite with
+|value| ≤ 100000, width/height ∈ (0, 5000], radius ∈ (0, 2500], sides an
+integer 3–64, restitution 0–2, scene name ≤ 128 chars, body labels ≤ 64;
+constraint/hinge endpoints must reference existing bodies. Oversize or
+invalid files are rejected whole with a stated reason, and the current
+scene is left untouched. Exports and share links pass the same validation.
+
 ## 2. The PF engine (platform-fighter module set)
 
 The PF engine is a platform-fighter foundation layered on PhysicsEngine: a
@@ -448,11 +465,20 @@ assertions.
 
 ```bash
 python3 -m http.server 8000        # local preview at http://localhost:8000
-node tests/engine-tests.mjs        # PhysicsEngine core
-node tests/run-tests.mjs           # scenes / logic
-node tests/pf-smoke.mjs            # PF engine logic
-node tests/smoke.mjs               # UI smoke (incl. the stylesheet-integrity guard)
-node tests/nav-smoke.mjs tests/pf-ui-smoke.mjs tests/landing-smoke.mjs tests/lab3d-smoke.mjs
+node tests/engine-tests.mjs        # PhysicsEngine core (140 checks)
+node tests/native-tests.mjs        # Native backend behaviour (53)
+node tests/native-render.mjs       # real-app rendering under Native + zero window errors (7)
+node tests/run-tests.mjs           # scenes / logic (160)
+node tests/smoke.mjs               # app smoke (91)
+node tests/nav-smoke.mjs           # home-hub / navigation smoke (39)
+node tests/landing-smoke.mjs       # landing smoke (18)
+node --expose-gc tests/soak.mjs    # memory soak (17; omitting --expose-gc false-reports heap growth)
+node tests/render-tests.mjs        # renderer caches (10)
+node tests/pf-smoke.mjs            # PF engine logic (27)
+node tests/pf-ui-smoke.mjs         # PF UI smoke (10)
+node tests/engine3d-tests.mjs      # 3D core (22)
+node tests/lab3d-smoke.mjs         # 3D lab smoke (13)
+# 607 checks total (as of MotionLab 1.44 / PhysicsEngine 1.12.3)
 ```
 
 Releases are pushed as static files straight to GitHub Pages; `version.json`

@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.44">
+<link rel="stylesheet" href="css/style.css?v=1.45">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -249,12 +249,12 @@
       <section id="navSectionDocs" hidden>
         <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.docs">开发者文档 · 通用物理引擎 PhysicsEngine</span></div>
         <div class="docs" data-lang="zh">
-          <p>MotionLab 的物理层是一个与项目无关的通用核心 <code>PhysicsEngine</code>（基于 Matter.js）：只吃纯数据描述符，不依赖 DOM、渲染或任何文件格式。你可以把它单独下载到自己的项目里，用同一套 API 搭建物理模拟。核心文件只有两个：<code>physics-engine.js</code>（引擎本体，ES 模块）和 <code>matter.min.js</code>（Matter.js 0.20 本体）。</p>
+          <p>MotionLab 的物理层是一个与项目无关的通用核心 <code>PhysicsEngine</code>：只吃纯数据描述符，不依赖 DOM、渲染或任何文件格式。你可以把它单独下载到自己的项目里，用同一套 API 搭建物理模拟。核心文件：<code>physics-engine.js</code>（引擎本体与后端注册表，ES 模块）、<code>native-engine.js</code>（1.12.0 起的自研 Native 后端，<code>physics-engine.js</code> 会引用它）和 <code>matter.min.js</code>（Matter.js 0.20 本体，默认后端用）。</p>
           <p><b>当前版本</b>：<span class="docsVersions">MotionLab — · PhysicsEngine — · Matter.js —</span>。引擎版本在代码里可读 <code>PhysicsEngine.VERSION</code>（模块同时导出 <code>VERSION</code> 常量）；设置面板的「关于」一栏显示的也是同一组版本号。</p>
           <h4>一、如何下载</h4>
           <ul>
             <li><b>整站源码</b>：打开仓库 <a href="https://github.com/xieyuke2026-cpu/Physics-engine" target="_blank" rel="noopener">github.com/xieyuke2026-cpu/Physics-engine</a>，点 <b>Code → Download ZIP</b>；或用 git：<code>git clone https://github.com/xieyuke2026-cpu/Physics-engine.git</code></li>
-            <li><b>只要引擎（两个文件）</b>：<a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/js/engine/physics-engine.js" target="_blank" rel="noopener">physics-engine.js</a> · <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/vendor/matter.min.js" target="_blank" rel="noopener">matter.min.js</a>（打开后另存即可）</li>
+            <li><b>只要引擎（三个文件）</b>：<a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/js/engine/physics-engine.js" target="_blank" rel="noopener">physics-engine.js</a> · <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/js/engine/native-engine.js" target="_blank" rel="noopener">native-engine.js</a> · <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/vendor/matter.min.js" target="_blank" rel="noopener">matter.min.js</a>（打开后另存即可）</li>
           </ul>
           <h4>二、如何调用（最小示例）</h4>
           <p>Matter 必须先以普通 script 加载为全局变量；引擎是 ES 模块，用 <code>type="module"</code> 引入。也可以不挂全局，改用 <code>PhysicsEngine.setMatter(Matter)</code> 或构造参数 <code>{ matter }</code> 注入。</p>
@@ -295,6 +295,12 @@
             <li><b>铰链与马达</b>（1.7.0）：<code>addHinge({ bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })</code> 把两个物体（或物体与固定铰座，<code>bodyA: null</code>）钉在同一点上，只能绕点转动；<code>motorSpeed</code> 是马达目标相对角速度（弧度/步，±0.3），加速有上限、反作用按转动惯量反比分配给另一端。同一台机器的零件互不碰撞（铰链簇共享负碰撞组），折叠旋转不卡角；被马达驱动的物体不会休眠。<code>setHingeMotor(id, v)</code> 改转速，<code>hingeAnchors()</code> 给渲染/拾取用的铰点坐标，快照携带铰链</li>
             <li><b>在实验室里直接用</b>（1.23 起，1.25/1.26 扩充）：点画布空白处，右侧「场景属性」面板的「世界效应」一节可调万有引力 G、添加并编辑流体与风场区域；流体/风场区域在画布上可以直接拖动改位置。左侧工具栏的「磁铁」工具（或世界效应一节的按钮）能直接放固定磁铁，点选任意物体后还可改名、在「材质」一节设磁性，或一键套用泡沫/木头/橡胶/冰/铁材质预设；顶部「分享」按钮把整个场景压进一条链接，对方打开即进入该场景；「我的项目」主页工具栏有「导入场景」入口；另有「万有引力轨道」「浮力池」「磁铁阵列」「风洞实验」「材质实验室」「磁铁秋千」「马达风车」「摩天轮」等预设可直接载入体验</li>
             <li><b>机械与录制</b>（1.28）：左侧工具栏新增「铰链」工具——先在第一个物体上点铰接点，再点第二个物体即可铰接（点空白 = 固定铰座）；点选画布上的铰链圆点可设马达转速或删除。顶部「录制」按钮把画布动画录成循环 GIF 导出（最长 20 秒），发帖、做演示素材不用再录屏</li>
+            <li><b>失去支撑会醒来</b>（1.44）：睡着的物体每 15 步自动检查支撑——删掉睡塔的底层、拖走支撑物，上面睡着的物体会被唤醒并掉落，不再悬空（Matter 与 Native 双引擎）；被弹簧/铰链挂住、浸在流体里都算有支撑，零重力时不检查</li>
+            <li><b>Native 大场景健壮性</b>（1.43）：修复 Native 在大场景中途崩溃冻结（碰撞裁剪对精确对齐的堆叠不再出错，796 物体极限压测可完整跑完）；休眠判定平滑化让大堆积更快静下来；场景属性的「引擎」一行改为显示当前后端、切换即更新</li>
+            <li><b>Native 物体不显示已修</b>（1.42）：Native 的圆形物体补齐顶点多边形（宿主契约：每个刚体必须暴露非空 vertices），修好 1.41 里 Native 下画布只剩网格的问题</li>
+            <li><b>主界面工作台</b>（1.40）：主界面改版为工作台式布局（深色侧栏 + 场景/预设列表 + 右侧详情检查器）；后端接口同时正式化为注册表（见上「后端注册表」）</li>
+            <li><b>场景导入加固</b>（1.39）：导入文件上限 2 MB（含分享链接解压后），物体 ≤2000、约束/铰链各 ≤500、流体/风场各 ≤20，逐项校验坐标与尺寸范围；坏文件整体拒绝并说明原因，当前场景不受影响</li>
+            <li><b>捏合缩放流畅化</b>（1.38）：缩放/平移时缓存层改用贴图变换、不再逐帧重烘焙，钉板场景相机移动时每帧绘制调用减少约 81%</li>
             <li><b>种子要看得见效果</b>（1.37）：「刷新种子」现在会立刻按新种子重演场景——动态物体的起始位置按种子重新微偏（钉板换个种子，球的落点分布就变）；手动填种子后点「按种子重演」同理。同一种子、同一场景，重演结果一模一样</li>
             <li><b>随机种子</b>（1.36）：场景属性里新增「随机种子」——引擎的随机流（1.21 起就有）第一次接入界面：种子随场景保存/分享，载入即生效；点「刷新种子」换一轮随机；配套动作「随机扰动」用当前种子给每个动态物体一次随机冲量，同一种子扰动结果可完全重演</li>
             <li><b>渲染再优化</b>（1.35）：背景网格也进离屏缓存——网格只随相机变化，以前每帧重画约 240 笔；现在和静态层一样烘焙后贴图。高尔顿钉板每帧绘制调用继 1.33 后再降约 46%（535 → 290）</li>
@@ -335,12 +341,12 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           </ul>
         </div>
         <div class="docs" data-lang="en" hidden>
-          <p>MotionLab's physics layer is a general-purpose core, <code>PhysicsEngine</code> (built on Matter.js), with no ties to this project: it consumes plain data descriptors and knows nothing about the DOM, rendering, or any file format. You can download it into your own project and build physics simulations with the same API. The core is just two files: <code>physics-engine.js</code> (the engine, an ES module) and <code>matter.min.js</code> (Matter.js 0.20).</p>
+          <p>MotionLab's physics layer is a general-purpose core, <code>PhysicsEngine</code>, with no ties to this project: it consumes plain data descriptors and knows nothing about the DOM, rendering, or any file format. You can download it into your own project and build physics simulations with the same API. The core files are <code>physics-engine.js</code> (the engine and backend registry, an ES module), <code>native-engine.js</code> (the self-developed Native backend since 1.12.0, imported by <code>physics-engine.js</code>) and <code>matter.min.js</code> (Matter.js 0.20, used by the default backend).</p>
           <p><b>Current versions</b>: <span class="docsVersions">MotionLab — · PhysicsEngine — · Matter.js —</span>. The engine version is readable in code as <code>PhysicsEngine.VERSION</code> (the module also exports a <code>VERSION</code> constant); Settings → About shows the same set.</p>
           <h4>1. Download</h4>
           <ul>
             <li><b>Full source</b>: open the repo <a href="https://github.com/xieyuke2026-cpu/Physics-engine" target="_blank" rel="noopener">github.com/xieyuke2026-cpu/Physics-engine</a> and choose <b>Code → Download ZIP</b>, or use git: <code>git clone https://github.com/xieyuke2026-cpu/Physics-engine.git</code></li>
-            <li><b>Engine only (two files)</b>: <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/js/engine/physics-engine.js" target="_blank" rel="noopener">physics-engine.js</a> · <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/vendor/matter.min.js" target="_blank" rel="noopener">matter.min.js</a> (open and save)</li>
+            <li><b>Engine only (three files)</b>: <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/js/engine/physics-engine.js" target="_blank" rel="noopener">physics-engine.js</a> · <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/js/engine/native-engine.js" target="_blank" rel="noopener">native-engine.js</a> · <a href="https://raw.githubusercontent.com/xieyuke2026-cpu/Physics-engine/main/vendor/matter.min.js" target="_blank" rel="noopener">matter.min.js</a> (open and save)</li>
           </ul>
           <h4>2. Minimal example</h4>
           <p>Matter must load first as a global via a classic script; the engine is an ES module imported with <code>type="module"</code>. Alternatively inject it with <code>PhysicsEngine.setMatter(Matter)</code> or the <code>{ matter }</code> constructor option.</p>
@@ -381,6 +387,12 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
             <li><b>Hinges &amp; motors</b> (1.7.0): <code>addHinge({ bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })</code> pins two bodies (or a body to a fixed mount with <code>bodyA: null</code>) at one shared point so they can only rotate around it; <code>motorSpeed</code> is the motor's target relative angular velocity (rad/step, ±0.3), acceleration-capped, with the reaction split by inverse inertia. Parts of one machine never collide with each other (a hinge cluster shares a negative collision group), so folding and spinning never jam; motor-driven bodies never fall asleep. <code>setHingeMotor(id, v)</code> retunes a motor, <code>hingeAnchors()</code> returns pin points for rendering/picking, and hinges persist in snapshots.</li>
             <li><b>Use it right in the lab</b> (1.23, expanded in 1.25/1.26): with nothing selected, the Scene panel's "World Effects" section sets gravitation G and adds/edits fluid and wind regions; fluid and wind regions can be dragged on the canvas to move them. The Magnet tool in the left rail (or the button in World Effects) places a fixed magnet directly; select any body to rename it, set its magnetism in the Material section, or apply a one-tap material preset (foam / wood / rubber / ice / iron). The top-bar Share button packs a whole scene into a link that opens right into that scene, and the My Projects home has its own Import Scene entry. The "Orbital Gravitation", "Buoyancy Pool", "Magnet Array", "Wind Tunnel", "Materials Lab" and "Magnet Swing" and "Motor Windmill" / "Ferris Wheel" presets load ready-made demos.</li>
             <li><b>Machinery &amp; recording</b> (1.28): the left rail gains a Hinge tool — tap the pin point on a first body, then a second body to hinge them (empty space = fixed mount); tap a hinge pin marker on the canvas to set its motor speed or delete it. The top-bar Record button captures the canvas animation as a looping GIF (up to 20 s) — no screen recording needed for posts and demos</li>
+            <li><b>Sleepers wake when support vanishes</b> (1.44): sleeping bodies re-check their support every 15 steps — delete the base of a sleeping tower or drag a support away and the bodies above wake and fall instead of hovering (both backends); being hung from a spring/hinge or immersed in a fluid counts as support, and zero gravity skips the check</li>
+            <li><b>Native large-scene robustness</b> (1.43): fixed Native crashing and freezing mid-run in large scenes (contact clipping no longer fails on exactly-aligned stacks — the 796-body stress scene runs to completion); a smoothed sleep metric settles big piles faster; the scene panel's Engine row now shows the live backend and follows switching</li>
+            <li><b>Native bodies render again</b> (1.42): Native circles now expose a vertices polygon (host contract: every body must expose non-empty vertices), fixing 1.41's grid-only canvas under Native</li>
+            <li><b>Workbench home hub</b> (1.40): the home hub is now a workbench (dark sidebar + scene/preset list + right-hand inspector); the backend interface was formalised into the registry at the same time (see "Backend registry" above)</li>
+            <li><b>Scene import hardening</b> (1.39): import files are capped at 2 MB (including decompressed share links), with budgets of 2000 bodies, 500 constraints, 500 hinges and 20 fluids/winds, and per-field range validation; a bad file is rejected whole with a stated reason and the current scene is untouched</li>
+            <li><b>Smoother pinch zoom</b> (1.38): while the camera moves, the cached layers are blitted with a transform instead of being rebaked every frame — about 81% fewer canvas calls per frame on the Galton board</li>
             <li><b>Seeds you can see</b> (1.37): Refresh Seed now immediately replays the scene under the new seed — dynamic bodies' starting positions are re-jittered from the seed (a new seed changes where the Galton balls land); Seeded Replay does the same for a hand-typed seed. Same seed, same scene, identical replay</li>
             <li><b>Random seed</b> (1.36): the scene panel gains a Random Seed — the engine's seeded RNG (present since 1.21) finally has a UI: the seed is saved/shared with the scene and applied on load, Refresh Seed re-rolls it, and the new Random Jitter action kicks every dynamic body from the seeded stream, so the same seed replays the exact same jitter</li>
             <li><b>Rendering, round two</b> (1.35): the background grid is cached offscreen too — it only changes with the camera but was redrawn every frame (~240 path calls); Galton-board draw calls per frame drop another ~46% after 1.33 (535 → 290)</li>
@@ -428,7 +440,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.44</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.45</span></div>
           <div class="whatsnew-card">
             <p data-i18n-text="hub.whatsnew.b1">修复 Native 在大场景中途冻结：碰撞裁剪崩溃已修（796 物体极限压测可完整跑完），PhysicsEngine 1.12.2</p>
             <p data-i18n-text="hub.whatsnew.b2">Native 堆积更稳：休眠判定平滑化、热启动只在首个子步施加——大堆积更快静下来，也不再有物体被莫名弹飞</p>
@@ -505,6 +517,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.44"></script>
+<script type="module" src="js/app.js?v=1.45"></script>
 </body>
 </html>

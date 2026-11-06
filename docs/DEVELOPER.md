@@ -14,7 +14,7 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.43 | `js/ui.js` 的 `APP_VERSION` |
+| MotionLab（应用） | 1.45 | `js/ui.js` 的 `APP_VERSION` |
 | PhysicsEngine（2D 核心） | 1.12.3 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
@@ -119,6 +119,9 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 - `active` 与 `experimental` 都可构造（experimental 请宿主如实标注）；请求 planned 或未知的后端会**抛错**（消息写明状态），不静默回退：换求解器会改变模拟结果，宿主必须知情。
 - 后端契约：后端须实现本类全部公开表面（物体 / 约束 / 铰链管理、流体 / 风场 / 磁力区域、固定步长 `advance`、快照、空间查询、种子随机流）。宿主只对这套 API 编程、不碰后端内部——MotionLab 1.41 已按此契约接入：设置里的后端选择器切换即以当前场景在新求解器上重建世界并重演，宿主代码零改动。
 - Native 求解器要点（1.12.0）：顺序冲量 + 热启动、SAT + 参考面裁剪接触、休眠；力模型与马达按固定步踢一次（与子步数无关）；子步下限 2（单子步时高塔堆叠欠阻尼）；已知弱项：10 层单列高塔仍会倒、位置修正只做线性部分。专属行为测试见 `tests/native-tests.mjs`。
+- **宿主契约（1.12.1）**：每个刚体——圆也不例外——必须暴露非空 `vertices` 并随位姿更新；宿主渲染器按顶点路径绘制每个刚体。1.12.0 的 Native 圆曾给出空 `vertices`，导致线上画布只剩网格而物理照常（引擎测试不渲染、应用冒烟不在 Native 下验绘制，两头漏检）——MotionLab 侧另有应用级 `tests/native-render.mjs` 守这条线。
+- **Native 健壮性（1.12.2）**：参考面裁剪容忍 0/1 点退化线段（精确对齐的堆叠曾让大场景中途崩溃冻结）；休眠改平滑运动量 + 支撑记忆；热启动冲量只在首个子步施加（重复施加是按子步数放大的能量泄漏）。
+- **孤儿睡眠体唤醒（1.12.3，双后端）**：睡眠体不吃重力，若无人复查支撑，删掉塔底或拖走支撑物会让上方整塔永远悬空。两后端每 15 个固定步运行支撑探测 `_wakeOrphans`：睡眠动态体若失去全部支撑即被唤醒——支撑指接触链（包围盒外扩 3 px 连通）到达非睡眠体（静态体计入锚点；注意 Matter 会把静态体也标记为休眠）、约束/铰链挂载、或流体区域重叠；零重力/重力关闭时探测豁免。
 
 ### 随机种子（1.3.0）
 
@@ -283,6 +286,18 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
 
 ---
 
+### MotionLab 场景文件格式（宿主格式，1.39 导入加固）
+
+引擎本身不认识文件格式；MotionLab 宿主的场景 JSON 结构为
+`{ format: 'motionlab-scene', version: 2, name, settings, bodies, constraints, hinges, fluids, winds }`
+（version 1 的旧文件仍可导入）。导入（含分享链接解压后的字节数）统一
+上限 **2 MB**；数量预算：物体 ≤ 2000、约束 ≤ 500、铰链 ≤ 500、流体/风场
+各 ≤ 20。`validateScene`（`js/scene.js`）逐项审计：坐标须有限且
+|坐标| ≤ 100000，宽高 ∈ (0, 5000]、半径 ∈ (0, 2500]、边数 3–64 的整数、
+弹性 0–2、场景名 ≤ 128 字、物体标签 ≤ 64 字；约束/铰链的端点必须引用
+已存在的物体。超限或不合法的文件会被整体拒绝并给出中文原因，当前场景
+不受影响。导出与分享链接走同一套校验。
+
 ## 二、PF 引擎调用方式（平台格斗模块集）
 
 PF 引擎是建立在 PhysicsEngine 之上的平台格斗底层：角色控制器（探地、土狼
@@ -381,11 +396,20 @@ m.reset();                                          // 同配置重开一局
 
 ```bash
 python3 -m http.server 8000        # 本地预览 http://localhost:8000
-node tests/engine-tests.mjs        # PhysicsEngine 核心（40 项）
-node tests/run-tests.mjs           # 场景/逻辑（65 项）
+node tests/engine-tests.mjs        # PhysicsEngine 核心（140 项）
+node tests/native-tests.mjs        # Native 后端行为（53 项）
+node tests/native-render.mjs       # Native 下真实应用绘制 + 零窗口错误（7 项）
+node tests/run-tests.mjs           # 场景/逻辑（160 项）
+node tests/smoke.mjs               # 应用冒烟（91 项）
+node tests/nav-smoke.mjs           # 主界面/导航冒烟（39 项）
+node tests/landing-smoke.mjs       # 落地页冒烟（18 项）
+node --expose-gc tests/soak.mjs    # 内存浸泡（17 项；漏加 --expose-gc 会误报堆暴涨）
+node tests/render-tests.mjs        # 渲染缓存（10 项）
 node tests/pf-smoke.mjs            # PF 引擎逻辑（27 项）
-node tests/smoke.mjs               # UI 冒烟（含样式完整性守卫）
-node tests/nav-smoke.mjs tests/pf-ui-smoke.mjs tests/landing-smoke.mjs tests/lab3d-smoke.mjs
+node tests/pf-ui-smoke.mjs         # PF 界面冒烟（10 项）
+node tests/engine3d-tests.mjs      # 3D 核心（22 项）
+node tests/lab3d-smoke.mjs         # 3D 实验室冒烟（13 项）
+# 全量 607 项（MotionLab 1.44 / PhysicsEngine 1.12.3 时点）
 ```
 
 发布流程为静态文件直推 GitHub Pages；`version.json` 与入口资源的 `?v=`
