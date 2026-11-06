@@ -195,7 +195,7 @@ const DICT = {
   'hub.emptySaved': ['暂无已保存场景。在实验室里点顶部「保存」，或用上方「复制当前场景」，就会出现在这里。', 'No saved scenes yet. Use Save in the lab, or "Duplicate Scene" above, and they will appear here.'],
   'hub.inspector': ['场景详情', 'Details'],
   'hub.whatsnew': ['本版更新', "What's New"],
-  'hub.whatsnew.b1': ['AI 模型换回 Qwen2.5-0.5B：SmolLM2 的中文实测是语义乱码、不合格；这次带着 1.56 的全部修复（线程门控、看门狗、双语、方言容错）在 iPad 上再战', 'Back to Qwen2.5-0.5B: SmolLM2’s Chinese measured as gibberish and failed. This build brings every 1.56 fix (thread gating, watchdog, bilingual UI, dialect tolerance) to the iPad test'],
+  'hub.whatsnew.b1': ['AI 助手换回 Qwen 模型（Qwen2.5-0.5B）：SmolLM2 的中文实测是语义乱码、不合格；这次带着 1.56 的全部修复（线程门控、看门狗、双语、方言容错）在 iPad 上再战', 'The AI assistant is back on Qwen (Qwen2.5-0.5B): SmolLM2\u2019s Chinese measured as gibberish and failed. This build brings every 1.56 fix (thread gating, watchdog, bilingual UI, dialect tolerance) to the iPad test'],
   'hub.whatsnew.b2': ['动作识别三度加固：回复正文里内联的动作 JSON 也能被提取执行（实测中模型写对了却没被认出的那种写法）', 'Action extraction hardened a third time: an action JSON inlined in prose is now lifted out and executed (the exact shape a live test wrote correctly but went unrecognised)'],
   'hub.whatsnew.b3': ['引擎与既有行为与 1.56 一致；全量测试 663 项。发布说明已更新覆盖至 1.57', 'Engine and existing behaviour identical to 1.56; 663 checks total. The release notes now cover through 1.57'],
   'hub.rel.now': ['刚刚', 'just now'],
