@@ -15,6 +15,15 @@ const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
 /** Pull every action block out of a model reply. Returns { actions, text }
     where text has the blocks stripped (malformed blocks are dropped). */
+/** The model does not always use the exact key: accept `action`, `act` or
+    `type` as the action-name key and normalise to `action`. Validation
+    downstream stays strict — tolerance lives only in this parser. */
+function actionName(o) {
+  if (!o || typeof o !== 'object') return null;
+  for (const k of ['action', 'act', 'type']) if (typeof o[k] === 'string' && o[k]) return o[k];
+  return null;
+}
+
 export function extractActions(text) {
   const actions = [];
   let clean = String(text || '');
@@ -22,7 +31,8 @@ export function extractActions(text) {
   clean = clean.replace(fence, (m, body) => {
     try {
       const o = JSON.parse(body.trim());
-      if (o && typeof o.action === 'string') { actions.push(o); return ''; }
+      const name = actionName(o);
+      if (name) { actions.push({ ...o, action: name }); return ''; }
     } catch { /* not an action block — keep the text */ }
     return m;
   });
@@ -30,7 +40,7 @@ export function extractActions(text) {
   if (!actions.length) {
     const t = clean.trim();
     if (t.startsWith('{') && t.endsWith('}')) {
-      try { const o = JSON.parse(t); if (o && typeof o.action === 'string') { actions.push(o); clean = ''; } } catch { /* keep text */ }
+      try { const o = JSON.parse(t); const name = actionName(o); if (name) { actions.push({ ...o, action: name }); clean = ''; } } catch { /* keep text */ }
     }
   }
   return { actions, text: clean.trim() };

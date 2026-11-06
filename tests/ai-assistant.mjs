@@ -59,5 +59,24 @@ check('scene summary counts bodies + backend', (() => {
   return s.includes('circle×2') && s.includes('约束 1') && s.includes('native') && s.includes('板');
 })());
 
+/* ---- 1.55: dialect tolerance (live-caught: model wrote ```json + "act") ---- */
+check('json fence + act key is extracted and normalised', (() => {
+  const r = extractActions('我调用了预设。\n```json\n{"act": "loadPreset", "preset": "cradle"}\n```\n这样可以。');
+  return r.actions.length === 1 && r.actions[0].action === 'loadPreset' && r.actions[0].preset === 'cradle'
+    && !r.text.includes('loadPreset') && r.text.includes('这样可以');
+})());
+check('type key works as the action-name alias', (() => {
+  const r = extractActions('```action\n{"type":"setGravity","preset":"moon"}\n```');
+  return r.actions.length === 1 && r.actions[0].action === 'setGravity';
+})());
+check('unrelated JSON in a json fence stays as text', (() => {
+  const r = extractActions('配置长这样：\n```json\n{"foo": 1}\n```');
+  return r.actions.length === 0 && r.text.includes('"foo"');
+})());
+check('bare object with act key is extracted', (() => {
+  const r = extractActions('{"act":"clearScene"}');
+  return r.actions.length === 1 && r.actions[0].action === 'clearScene' && r.text === '';
+})());
+
 console.log(`\nai-assistant tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
