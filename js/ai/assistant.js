@@ -23,7 +23,7 @@ const CORE_PROMPT = `你是 MotionLab 的 AI 助手，在用户设备本地运�
 /* ---------------- worker brain ---------------- */
 class WorkerBrain {
   constructor() {
-    this.worker = null; this.state = 'idle'; this.device = null;
+    this.worker = null; this.state = 'idle'; this.device = null; this.respawned = false;
     this.pending = new Map(); this.seq = 0; this.onProgress = null; this.loadWaiters = [];
   }
   ensure() {
@@ -38,6 +38,16 @@ class WorkerBrain {
         return;
       }
       if (m.type === 'loadError') {
+        // A failed WebGPU init can poison the runtime for the whole worker;
+        // respawn ONCE as a fresh worker forced to WASM before giving up.
+        if (!this.respawned) {
+          this.respawned = true;
+          try { this.worker.terminate(); } catch { /* already gone */ }
+          this.worker = null; this.state = 'loading';
+          this.ensure();
+          this.worker.postMessage({ type: 'load', forceWasm: true });
+          return;
+        }
         this.state = 'error';
         for (const w of this.loadWaiters.splice(0)) w.reject(new Error(m.error));
         return;

@@ -14,11 +14,23 @@ const HOSTS = ['https://hf-mirror.com/', 'https://huggingface.co/'];
 let generator = null;
 let deviceUsed = null;
 
-async function load() {
+async function hasGpuAdapter() {
+  try {
+    if (!navigator.gpu) return false;
+    const a = await navigator.gpu.requestAdapter();
+    return !!a;
+  } catch { return false; }
+}
+
+async function load(forceWasm) {
   let lastErr = null;
+  // Probe first: requesting WebGPU without an adapter poisons the ORT
+  // session state and even the WASM retry fails ("no available backend
+  // found") — seen in the 1.50 live check. No adapter → straight to WASM.
+  const devices = (!forceWasm && (await hasGpuAdapter())) ? ['webgpu', 'wasm'] : ['wasm'];
   for (const host of HOSTS) {
     env.remoteHost = host;
-    for (const device of ['webgpu', 'wasm']) {
+    for (const device of devices) {
       try {
         const gen = await pipeline('text-generation', MODEL, {
           device, dtype: 'q4',
@@ -41,7 +53,7 @@ async function load() {
 
 onmessage = async (ev) => {
   const msg = ev.data || {};
-  if (msg.type === 'load') { if (!generator) await load(); else postMessage({ type: 'loaded', device: deviceUsed }); return; }
+  if (msg.type === 'load') { if (!generator) await load(!!msg.forceWasm); else postMessage({ type: 'loaded', device: deviceUsed }); return; }
   if (msg.type === 'chat') {
     if (!generator) { postMessage({ type: 'error', id: msg.id, error: 'model not loaded' }); return; }
     try {

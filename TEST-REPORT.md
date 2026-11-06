@@ -1,3 +1,13 @@
+## 0aw. 1.51 验证（AI 助手加载修复，2026-11-06）
+
+1.50 线上端到端（真实浏览器）：面板/问候/发送正常，模型经 hf-mirror 下载
+23%→93% 后加载失败，原文错误 “no available backend found. ERR: [webgpu]
+Failed to get GPU adapter”——测试环境无 GPU 适配器。根因：worker 不加探测
+按 webgpu→wasm 顺序硬试，WebGPU 会话创建失败污染 ORT 状态，WASM 兜底随之
+同错。1.51 修复：worker 先 requestAdapter 探测、无适配器直走 WASM；宿主在
+loadError 时自动重建 Worker 并 forceWasm 重试一次。复测要点：同环境应全程
+WASM 加载成功→回复→✓ 回执→画布出现牛顿摆（结果见当次发布记录）。
+
 ## 0av. 1.50 验证（AI 助手：本地小模型，2026-11-06）
 
 Ryan 拍板：用现成小模型（否决纯检索方案「不够聪明」），直接接入实验室作 1.50。

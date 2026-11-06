@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.50">
+<link rel="stylesheet" href="css/style.css?v=1.51">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -441,11 +441,11 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.50</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.51</span></div>
           <div class="whatsnew-card">
-            <p data-i18n-text="hub.whatsnew.b1">AI 助手上线：本地小模型 Qwen2.5-0.5B 直接在你的设备上运行（首次使用下载约 350MB，之后离线可用），对话不出设备</p>
-            <p data-i18n-text="hub.whatsnew.b2">助手不止会聊：它能生成场景、加载预设、调重力、切换后端——每个动作都经过与导入相同的严格校验；场景库与开发者文档是它的本地参考资料</p>
-            <p data-i18n-text="hub.whatsnew.b3">实验室顶栏点「AI 助手」打开；全量测试 655 项。v1.50 Release 说明已备好（覆盖 1.41–1.50）</p>
+            <p data-i18n-text="hub.whatsnew.b1">AI 助手加载修复：无 WebGPU 的环境不再加载失败——先探测适配器、没有就直接走 WASM，失败还会自动换新进程重试一次</p>
+            <p data-i18n-text="hub.whatsnew.b2">1.50 线上实测发现：下载可达 93%，但无 GPU 适配器时强求 WebGPU 会连累 WASM 兜底一起失败；1.51 已按实测修复</p>
+            <p data-i18n-text="hub.whatsnew.b3">引擎与既有行为与 1.50 一致；v1.50 Release 说明仍可直接用于发布（内容覆盖至 1.51）</p>
           </div>
         </section>
       </aside>
@@ -531,6 +531,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.50"></script>
+<script type="module" src="js/app.js?v=1.51"></script>
 </body>
 </html>
