@@ -52,6 +52,7 @@ click(viewBtn('presets'));
 await wait(60);
 check('sidebar: presets view hides saved + current sections',
   doc.getElementById('navSectionSaved').hidden && doc.getElementById('navSectionCurrent').hidden
+  && doc.getElementById('navSectionSavedList').hidden && doc.getElementById('hubInspector').hidden
   && !doc.getElementById('navSectionPresets').hidden);
 check('sidebar: presets view hides the search toolbar', doc.getElementById('navToolbar').style.display === 'none');
 click(viewBtn('library'));
@@ -60,9 +61,11 @@ check('sidebar: library view shows saved, hides presets',
   !doc.getElementById('navSectionSaved').hidden && doc.getElementById('navSectionPresets').hidden);
 click(viewBtn('overview'));
 await wait(60);
-check('sidebar: overview shows everything again',
-  !doc.getElementById('navSectionSaved').hidden && !doc.getElementById('navSectionPresets').hidden
-  && !doc.getElementById('navSectionCurrent').hidden);
+check('sidebar: overview is the workbench (rows + inspector, grids tucked away)',
+  !doc.getElementById('navSectionCurrent').hidden
+  && !doc.getElementById('navSectionSavedList').hidden && !doc.getElementById('navSectionPresetsList').hidden
+  && !doc.getElementById('hubInspector').hidden
+  && doc.getElementById('navSectionSaved').hidden && doc.getElementById('navSectionPresets').hidden);
 
 /* --- v1.12: developer docs view + settings reachable from the hub --- */
 click(viewBtn('docs'));
@@ -131,6 +134,24 @@ check('nav: presets listed as cards with overview thumbnails',
   doc.querySelectorAll('#presetList .preset-card').length === 21
   && !!doc.querySelector('#presetList .preset-card canvas.thumb'));
 check('nav: sidebar preset count shows 2D only while 3D is hidden', doc.getElementById('countPresets').textContent === '21');
+
+/* --- v1.40: workbench overview (rows + inspector) --- */
+check('workbench: scene rows mirror the library', doc.querySelectorAll('#sceneRows .scene-row').length === 1
+  && doc.querySelector('#sceneRows').textContent.includes('我的实验一号'));
+check('workbench: preset rows list all 21 presets', doc.querySelectorAll('#presetRows .scene-row').length === 21,
+  `rows=${doc.querySelectorAll('#presetRows .scene-row').length}`);
+check('workbench: inspector defaults to the newest saved scene',
+  doc.getElementById('inspBody').textContent.includes('我的实验一号')
+  && doc.getElementById('inspBody').textContent.includes('打开'));
+const galtonRow = [...doc.querySelectorAll('#presetRows .scene-row')].find((r) => r.textContent.includes('钉板'));
+click(galtonRow);
+await wait(60);
+check('workbench: selecting a preset row retargets the inspector',
+  doc.getElementById('inspBody').textContent.includes('钉板概率')
+  && doc.getElementById('inspBody').textContent.includes('载入并运行'));
+check('workbench: whats-new card sits in the inspector column',
+  doc.getElementById('navWhatsNew').textContent.includes('本版更新')
+  && doc.getElementById('navWhatsNew').textContent.includes('工作台'));
 
 // search filters cards
 const search = doc.getElementById('sceneSearch');

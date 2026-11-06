@@ -14,8 +14,8 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.27 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.10.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| MotionLab（应用） | 1.40 | `js/ui.js` 的 `APP_VERSION` |
+| PhysicsEngine（2D 核心） | 1.11.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -40,7 +40,7 @@
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.10.0'
+  console.log(VERSION); // '1.11.0'
 </script>
 ```
 
@@ -102,6 +102,22 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 坐标系：像素、y 向下；角度为弧度（`setAngleDeg` 除外）。约束描述符的端点
 字段是 **`bodyA` / `bodyB`**（id 字符串；`bodyA: null` 表示世界锚点，锚点
 坐标取 `pointA` 的世界坐标）。
+
+### 后端接口（1.11.0）
+
+引擎的公开 API 背后是可替换的求解器「后端」。注册表是唯一事实来源：模块
+导出 `BACKENDS`（同 `PhysicsEngine.BACKENDS`），每项含
+`id / name / status（'active' | 'planned'）/ since / summary`：
+
+| id | 名称 | 状态 |
+| --- | --- | --- |
+| `matter` | Matter.js | active（默认，自 1.0.0） |
+| `native` | Native（自研） | planned（目标 MotionLab 1.41） |
+
+- 构造：`PhysicsEngine.create({ backend: 'matter' })`（缺省即 matter）；直接 `new PhysicsEngine()` 等价。
+- 实例带 `backendId`，可随时读出当前求解器。
+- 请求 planned 或未知的后端会**抛错**（消息写明状态），不静默回退：换求解器会改变模拟结果，宿主必须知情。
+- 后端契约：后端须实现本类全部公开表面（物体 / 约束 / 铰链管理、流体 / 风场 / 磁力区域、固定步长 `advance`、快照、空间查询、种子随机流）。宿主只对这套 API 编程、不碰后端内部——1.41 的 Native 落地时，宿主零改动即可切换。
 
 ### 随机种子（1.3.0）
 
@@ -250,6 +266,9 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
   流体新增流速 vx/vy，阻尼向有效流速混合；风场与流体重叠时带入表面
   水流（阵风修正风速 × 40% × 功率 × 水平重叠），fluidFlow(id) 可读；
   流体阻尼/水流不再被零重力整体关掉（只有浮力需要重力）
+- 1.11.0 — 后端接口正式化：`BACKENDS` 注册表（matter 使用中 / native
+  自研规划中，目标 1.41）+ `PhysicsEngine.create({ backend })` 按注册表
+  构造 + 实例 `backendId`；未就绪后端明确报错不静默回退，模拟行为零变化
 
 ---
 

@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 globalThis.Matter = require('../vendor/matter.min.js');
 
-const { PhysicsEngine, VERSION, Formulas } = await import('../js/engine/physics-engine.js');
+const { PhysicsEngine, VERSION, Formulas, BACKENDS } = await import('../js/engine/physics-engine.js');
 
 let pass = 0, fail = 0;
 function check(name, cond, extra = '') {
@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.10.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.11.0');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -666,6 +666,29 @@ function galtonBins(seed) {
   check('1.7.0: setHingeMotor clamps and validates',
     pe4.setHingeMotor(pe4.describeHinges()[0].id, 9) && pe4.describeHinges()[0].motorSpeed === 0.3
     && !pe4.setHingeMotor(pe4.describeHinges()[0].id, NaN));
+}
+
+/* --- v1.11.0: backend registry / interface formalisation --- */
+{
+  check('backends: registry lists matter (active) + native (planned)',
+    Array.isArray(BACKENDS) && BACKENDS.length === 2
+    && BACKENDS[0].id === 'matter' && BACKENDS[0].status === 'active'
+    && BACKENDS[1].id === 'native' && BACKENDS[1].status === 'planned');
+  check('backends: class exposes the same registry', PhysicsEngine.BACKENDS === BACKENDS);
+  const def = PhysicsEngine.create();
+  check('backends: create() defaults to the matter backend', def instanceof PhysicsEngine && def.backendId === 'matter');
+  const exp = PhysicsEngine.create({ backend: 'matter' });
+  check('backends: create({backend:"matter"}) works and reports its id', exp instanceof PhysicsEngine && exp.backendId === 'matter');
+  let nativeErr = '';
+  try { PhysicsEngine.create({ backend: 'native' }); } catch (e) { nativeErr = e.message; }
+  check('backends: planned native backend refuses plainly (no silent fallback)', /not available/.test(nativeErr) && /planned/.test(nativeErr), nativeErr);
+  let unknownErr = '';
+  try { PhysicsEngine.create({ backend: 'bullet' }); } catch (e) { unknownErr = e.message; }
+  check('backends: unknown backend id refuses', /unknown backend/.test(unknownErr), unknownErr);
+  const sim = PhysicsEngine.create({ backend: 'matter' });
+  sim.addBody({ kind: 'circle', x: 100, y: 0, radius: 10 });
+  for (let i = 0; i < 60; i++) sim.advance(1000 / 60);
+  check('backends: a registry-created engine simulates (ball falls)', sim.allBodies()[0].position.y > 10, `y=${sim.allBodies()[0].position.y}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

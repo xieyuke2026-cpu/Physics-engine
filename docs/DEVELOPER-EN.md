@@ -15,8 +15,8 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.27 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.10.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| MotionLab (app) | 1.40 | `APP_VERSION` in `js/ui.js` |
+| PhysicsEngine (2D core) | 1.11.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.10.0'
+  console.log(VERSION); // '1.11.0'
 </script>
 ```
 
@@ -108,6 +108,23 @@ Coordinate system: pixels, y grows downward; angles are radians (except
 `setAngleDeg`). Constraint descriptor endpoints are **`bodyA` / `bodyB`**
 (id strings; `bodyA: null` means a world anchor whose coordinates come from
 `pointA`).
+
+### The backend interface (1.11.0)
+
+Behind the public API sits a pluggable solver "backend". The registry is
+the single source of truth: the module exports `BACKENDS` (also
+`PhysicsEngine.BACKENDS`), each entry carrying
+`id / name / status ('active' | 'planned') / since / summary`:
+
+| id | Name | Status |
+| --- | --- | --- |
+| `matter` | Matter.js | active (the default, since 1.0.0) |
+| `native` | Native (self-developed) | planned (targeted at MotionLab 1.41) |
+
+- Construct through the registry: `PhysicsEngine.create({ backend: 'matter' })` (omitting `backend` means matter); `new PhysicsEngine()` is equivalent.
+- Every instance reports its solver as `backendId`.
+- Asking for a planned or unknown backend **throws** (the message states the status) — there is no silent fallback: swapping solvers changes simulation results, and the host must know.
+- The backend contract: a backend implements this class's full public surface (body / constraint / hinge management, fluid / wind / magnet regions, fixed-timestep `advance`, snapshots, spatial queries, the seeded RNG). Hosts code against that API only, never against backend internals — when the Native backend lands in 1.41, hosts switch with zero changes.
 
 ### Seeded RNG (1.3.0)
 
@@ -298,6 +315,11 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   (gust-adjusted wind x 40% x power x horizontal overlap), readable
   via fluidFlow(id); fluid drag/flow no longer switch off in
   zero-gravity worlds (only buoyancy needs gravity)
+- 1.11.0 — backend interface formalised: the `BACKENDS` registry
+  (matter active / native self-developed, planned for 1.41),
+  `PhysicsEngine.create({ backend })` constructing through it, and
+  `backendId` on every instance; unavailable backends throw plainly
+  instead of falling back silently; simulation behaviour unchanged
 
 ---
 

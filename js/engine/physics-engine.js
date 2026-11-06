@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.10.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.11.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -73,6 +73,14 @@
              multi-pixel anchor errors at 2 iterations (measured on a
              ferris wheel: hub drift 28px, cross error 5.6°); at 4 the
              same machine holds its hub exactly and its cross angle
+     1.11.0 — backend interface formalised: a BACKENDS registry (also
+             PhysicsEngine.BACKENDS) names every solver backend behind
+             this API, PhysicsEngine.create({ backend }) constructs
+             through the registry, and every instance reports its
+             backendId. The Matter.js backend is the only active one;
+             a self-developed Native backend is registered as planned
+             (MotionLab 1.41) — hosts code against this API only and
+             can render engine pickers from the registry.
      1.10.0 — buoyancy obeys its preconditions: the displaced volume
              is the body's TRUE submerged area (part polygons clipped
              to the fluid rectangle — circles and rotated bodies get
@@ -130,7 +138,32 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.10.0';
+export const VERSION = '1.11.0';
+
+/* ============================================================================
+   Backends (1.11.0) — the solver behind this API is pluggable.
+
+   A "backend" is whatever implements this class's public surface:
+   body / constraint / hinge management, fluid / wind / magnet regions,
+   fixed-timestep advance(), snapshots, spatial queries and the seeded
+   RNG. Hosts must code against that API only — never against a
+   backend's internals — so backends can be swapped without host
+   changes. This registry is the single source of truth: hosts render
+   engine pickers from it, and PhysicsEngine.create({ backend })
+   constructs through it. An entry whose status is not 'active' is a
+   published intention, not a usable engine: create() says so plainly
+   instead of silently falling back.
+   ========================================================================== */
+export const BACKENDS = [
+  {
+    id: 'matter', name: 'Matter.js', status: 'active', since: '1.0.0',
+    summary: 'The original solver: Matter.js 0.20 rigid-body engine behind the PhysicsEngine API, plus the engine-level force models (gravitation, buoyancy, magnetism, wind).',
+  },
+  {
+    id: 'native', name: 'Native', status: 'planned', since: null,
+    summary: 'A self-developed solver written for this API (impulse solver, sleeping, stacking stability). In development — targeted at MotionLab 1.41; until it lands, create({ backend: "native" }) throws.',
+  },
+];
 
 /* ============================================================================
    Formulas — pure physics helpers (no engine state).
@@ -182,6 +215,26 @@ export const Formulas = {
 export class PhysicsEngine {
   /** Core version; same value as the module-level VERSION export. */
   static get VERSION() { return VERSION; }
+
+  /** The backend registry (also exported standalone as `BACKENDS`). */
+  static get BACKENDS() { return BACKENDS; }
+
+  /**
+   * Construct an engine through the backend registry (1.11.0).
+   * `opts.backend` names a BACKENDS entry ('matter' when omitted).
+   * A registered-but-not-active backend — and an unknown id — throws
+   * a plain error: silently falling back to another solver would
+   * change simulation results without telling the host.
+   */
+  static create(opts = {}) {
+    const backend = opts.backend || 'matter';
+    if (backend === 'matter') return new PhysicsEngine(opts);
+    const known = BACKENDS.find((b) => b.id === backend);
+    if (known) {
+      throw new Error(`PhysicsEngine: backend "${backend}" (${known.name}) is registered but not available in ${VERSION} — status: ${known.status}`);
+    }
+    throw new Error(`PhysicsEngine: unknown backend "${backend}" (known: ${BACKENDS.map((b) => b.id).join(', ')})`);
+  }
 
   /** The pure-formula library (also exported standalone as `Formulas`). */
   static get Formulas() { return Formulas; }
@@ -255,6 +308,7 @@ export class PhysicsEngine {
     // 4 is the measured cost/quality balance; overridable per engine.
     this.engine.constraintIterations = Math.max(1, Math.round(num(opts.constraintIterations, 4)));
     this.world = this.engine.world;
+    this.backendId = 'matter'; // registry id of the solver behind this instance (1.11.0)
     this.fixedDt = num(opts.fixedDt, 1000 / 60);
     this.maxSteps = Math.max(1, Math.round(num(opts.maxSteps, 5)));
     this.substeps = Math.max(1, Math.min(8, Math.round(num(opts.substeps, 1))));

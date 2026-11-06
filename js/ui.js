@@ -3,12 +3,12 @@
    (position / velocity while simulating) are patched in place. */
 
 import { icon } from './icons.js';
-import { VERSION as ENGINE_VERSION } from './engine/physics-engine.js';
+import { VERSION as ENGINE_VERSION, BACKENDS as ENGINE_BACKENDS } from './engine/physics-engine.js';
 import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.39';
+export const APP_VERSION = '1.40';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -473,6 +473,12 @@ export function renderSettings(root, ui, cb) {
   clear.addEventListener('click', () => cb.onClearAll());
   wrap.appendChild(clear);
   wrap.appendChild(title(L('关于', 'About')));
+  // Backend registry (1.40): rendered from the engine's own BACKENDS list —
+  // the picker becomes real when the native backend lands in 1.41.
+  const backendLine = ENGINE_BACKENDS.map((b) => (b.status === 'active'
+    ? `${b.name}${L('（当前）', ' (current)')}`
+    : `${b.name}${L('（开发中）', ' (in development)')}`)).join(' · ');
+  wrap.appendChild(el(`<p class="empty-note">${L('物理引擎后端', 'Physics backend')}: ${backendLine}</p>`));
   const matterVersion = (typeof window !== 'undefined' && window.Matter && window.Matter.version) || '0.20.0';
   wrap.appendChild(el(`<p class="empty-note">${L(`MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。`, `MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · Fully static (GitHub Pages) · no backend, no API key. Shortcuts: Space run/pause · Ctrl+Z/Y undo/redo · Ctrl+S save · Ctrl+D duplicate body · Arrow keys nudge · R rotate 15° · Delete remove.`)}</p>`));
   root.appendChild(wrap);

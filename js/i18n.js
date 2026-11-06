@@ -193,6 +193,17 @@ const DICT = {
   'card.presetTitle': ['点击卡片也可直接载入并运行', 'Click the card to load and run it directly'],
   'hub.emptyNoMatch': ['没有匹配的场景。', 'No matching scenes.'],
   'hub.emptySaved': ['暂无已保存场景。在实验室里点顶部「保存」，或用上方「复制当前场景」，就会出现在这里。', 'No saved scenes yet. Use Save in the lab, or "Duplicate Scene" above, and they will appear here.'],
+  'hub.inspector': ['场景详情', 'Details'],
+  'hub.whatsnew': ['本版更新', "What's New"],
+  'hub.whatsnew.b1': ['主界面改为工作台布局：场景列表 + 详情检查器，点开就能接着做', 'The home hub is now a workbench: a scene list plus a details inspector — click and keep building'],
+  'hub.whatsnew.b2': ['物理引擎后端接口正式化（PhysicsEngine 1.11.0）：后端注册表开放，自研 Native 后端将在 1.41 到来', 'PhysicsEngine 1.11.0 formalises the backend interface with an open registry — the self-developed Native backend arrives in 1.41'],
+  'hub.whatsnew.b3': ['导入更安全：场景 JSON 设 2 MB 上限并做全字段校验（1.39）', 'Safer imports: scene JSON is capped at 2 MB with full field validation (1.39)'],
+  'hub.rel.now': ['刚刚', 'just now'],
+  'hub.rel.min': ['{n} 分钟前', '{n} min ago'],
+  'hub.rel.hour': ['{n} 小时前', '{n} hr ago'],
+  'hub.rel.day': ['{n} 天前', '{n} d ago'],
+  'hub.insp.meta': ['{n} 个物体{c} · 更新于 {when}', '{n} objects{c} · updated {when}'],
+  'hub.insp.presetMeta': ['{n} 个物体 · 内置实验预设', '{n} objects · built-in preset'],
 
   /* ---------- settings / update bar ---------- */
   'set.title': ['设置', 'Settings'],

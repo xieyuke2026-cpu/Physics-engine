@@ -198,11 +198,15 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.39')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.10.0')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.40')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.11.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
+check('v1.40: settings shows the backend registry line (Matter current, Native in development)',
+  doc.getElementById('settingsBody').textContent.includes('物理引擎后端')
+  && doc.getElementById('settingsBody').textContent.includes('Matter.js（当前）')
+  && doc.getElementById('settingsBody').textContent.includes('Native（开发中）'));
 {
   // Stylesheet integrity guard: a truncated rule once left an unclosed block
   // that silently disabled every later rule in real browsers (all of PFLab's

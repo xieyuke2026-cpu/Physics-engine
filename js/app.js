@@ -972,11 +972,18 @@ async function checkForUpdate() {
 function setNavView(view) {
   navView = view;
   document.querySelectorAll('.side-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
-  $('navSectionCurrent').hidden = view !== 'overview';
-  $('navSectionSaved').hidden = view === 'presets' || view === 'docs';
-  $('navSectionSaved3D').hidden = view === 'presets' || view === 'docs';
-  $('navSectionPresets').hidden = view === 'library' || view === 'docs';
-  $('navSectionPresets3D').hidden = view === 'library' || view === 'docs';
+  // Workbench overview (1.40): the centre column shows compact rows and
+  // the inspector aside; the card grids belong to the library / presets
+  // views.
+  const overview = view === 'overview';
+  $('navSectionCurrent').hidden = !overview;
+  $('navSectionSavedList').hidden = !overview;
+  $('navSectionPresetsList').hidden = !overview;
+  $('hubInspector').hidden = !overview;
+  $('navSectionSaved').hidden = view === 'presets' || view === 'docs' || overview;
+  $('navSectionSaved3D').hidden = view === 'presets' || view === 'docs' || overview;
+  $('navSectionPresets').hidden = view === 'library' || view === 'docs' || overview;
+  $('navSectionPresets3D').hidden = view === 'library' || view === 'docs' || overview;
   $('navSectionDocs').hidden = view !== 'docs';
   $('navToolbar').style.display = view === 'presets' || view === 'docs' ? 'none' : '';
   $('navTitle').textContent = t(`hub.title.${view}`);
@@ -1240,6 +1247,196 @@ function renderSceneNav() {
   if (FEATURE_3D) renderPresetList3D();
   renderSceneCards($('sceneSearch').value.trim());
   if (FEATURE_3D) renderSceneCards3D($('sceneSearch').value.trim());
+  renderSceneRows();
+  renderPresetRows();
+  renderInspector();
+}
+
+/* ---------------- hub workbench (1.40): rows + inspector ----------------
+   The overview is a workbench: compact scene/preset rows in the centre
+   column, and the selected item detailed in the right-hand inspector
+   (preview, meta, actions). The card grids remain for the library and
+   presets views; both render from the same store data. */
+let hubSel = null; // { kind: 'scene' | 'preset', key: scene name | preset key }
+
+function relTime(ts) {
+  const then = ts || Date.now();
+  const s = Math.max(0, (Date.now() - then) / 1000);
+  if (s < 90) return t('hub.rel.now');
+  if (s < 3600) return t('hub.rel.min', { n: Math.max(1, Math.round(s / 60)) });
+  if (s < 86400) return t('hub.rel.hour', { n: Math.round(s / 3600) });
+  if (s < 86400 * 30) return t('hub.rel.day', { n: Math.round(s / 86400) });
+  return new Date(then).toLocaleDateString();
+}
+
+function sortedSceneNames(filter = '') {
+  const scenes = store.loadScenes();
+  return Object.keys(scenes)
+    .filter((n) => !filter || n.toLowerCase().includes(filter.toLowerCase()))
+    .sort((a, b) => (scenes[b].updatedAt || 0) - (scenes[a].updatedAt || 0));
+}
+
+function hubRow({ scene, title, sub, selected, kind, key, onSelect, onOpen, openLabel }) {
+  const row = document.createElement('div');
+  row.className = 'scene-row' + (selected ? ' sel' : '');
+  row.dataset.kind = kind;
+  row.dataset.key = key;
+  const cv = document.createElement('canvas');
+  cv.className = 'row-thumb'; cv.width = 132; cv.height = 74;
+  row.appendChild(cv);
+  const mid = document.createElement('div');
+  mid.className = 'row-mid';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'row-name'; nameEl.textContent = title;
+  const subEl = document.createElement('div');
+  subEl.className = 'row-sub'; subEl.textContent = sub;
+  mid.appendChild(nameEl); mid.appendChild(subEl);
+  row.appendChild(mid);
+  const b = document.createElement('button');
+  b.className = 'mini-btn primary';
+  b.textContent = openLabel;
+  b.addEventListener('click', (e) => { e.stopPropagation(); onOpen(); });
+  row.appendChild(b);
+  row.addEventListener('click', onSelect);
+  row.addEventListener('dblclick', onOpen);
+  requestAnimationFrame(() => drawThumb(cv, scene));
+  return row;
+}
+
+function renderSceneRows() {
+  const wrap = $('sceneRows');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const filter = $('sceneSearch').value.trim();
+  const scenes = store.loadScenes();
+  const names = sortedSceneNames(filter);
+  if (!names.length) {
+    wrap.appendChild(Object.assign(document.createElement('p'), {
+      className: 'empty-note',
+      textContent: filter ? t('hub.emptyNoMatch') : t('hub.emptySaved'),
+    }));
+    return;
+  }
+  for (const name of names) {
+    const s = scenes[name];
+    const nCon = (s.constraints || []).length;
+    wrap.appendChild(hubRow({
+      scene: s,
+      title: name,
+      sub: t('card.sub', { n: s.bodies.length, c: nCon ? t('card.subSprings', { n: nCon }) : '', date: relTime(s.updatedAt) }),
+      selected: !!hubSel && hubSel.kind === 'scene' && hubSel.key === name,
+      kind: 'scene', key: name,
+      onSelect: () => selectHubItem('scene', name),
+      onOpen: () => openStoredScene(s),
+      openLabel: t('card.open'),
+    }));
+  }
+}
+
+function renderPresetRows() {
+  const wrap = $('presetRows');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  for (const p of presetScenes()) {
+    wrap.appendChild(hubRow({
+      scene: p.scene,
+      title: presetDisplayName(p),
+      sub: t('hub.insp.presetMeta', { n: p.scene.bodies.length }),
+      selected: !!hubSel && hubSel.kind === 'preset' && hubSel.key === p.key,
+      kind: 'preset', key: p.key,
+      onSelect: () => selectHubItem('preset', p.key),
+      onOpen: () => loadPreset(p),
+      openLabel: t('card.loadRun'),
+    }));
+  }
+}
+
+function selectHubItem(kind, key) {
+  hubSel = { kind, key };
+  renderSceneRows();
+  renderPresetRows();
+  renderInspector();
+}
+
+/** The item the inspector should show: the user's explicit selection
+ *  when it still exists, else the most recently saved scene, else
+ *  preset #1. The fallback is recomputed on every render — it is NOT
+ *  written back into hubSel, or a boot-time fallback (first preset)
+ *  would stick forever and outrank scenes saved later. */
+function inspectorTarget() {
+  const scenes = store.loadScenes();
+  if (hubSel && hubSel.kind === 'scene' && scenes[hubSel.key]) {
+    return { kind: 'scene', key: hubSel.key, scene: scenes[hubSel.key] };
+  }
+  if (hubSel && hubSel.kind === 'preset') {
+    const p = presetScenes().find((x) => x.key === hubSel.key);
+    if (p) return { kind: 'preset', key: p.key, preset: p };
+  }
+  const names = sortedSceneNames();
+  if (names.length) return { kind: 'scene', key: names[0], scene: scenes[names[0]] };
+  const p0 = presetScenes()[0];
+  return p0 ? { kind: 'preset', key: p0.key, preset: p0 } : null;
+}
+
+function renderInspector() {
+  const body = $('inspBody');
+  if (!body) return;
+  body.innerHTML = '';
+  const target = inspectorTarget();
+  if (!target) {
+    body.appendChild(Object.assign(document.createElement('p'), { className: 'empty-note', textContent: t('hub.emptySaved') }));
+    return;
+  }
+  const scene = target.kind === 'scene' ? target.scene : target.preset.scene;
+  const cv = document.createElement('canvas');
+  cv.className = 'insp-thumb'; cv.width = 528; cv.height = 236;
+  body.appendChild(cv);
+  requestAnimationFrame(() => drawThumb(cv, scene));
+  const nameEl = document.createElement('div');
+  nameEl.className = 'insp-name';
+  nameEl.textContent = target.kind === 'scene' ? target.key : presetDisplayName(target.preset);
+  body.appendChild(nameEl);
+  const nCon = (scene.constraints || []).length;
+  const meta = document.createElement('p');
+  meta.className = 'insp-meta';
+  meta.textContent = target.kind === 'scene'
+    ? t('hub.insp.meta', { n: scene.bodies.length, c: nCon ? t('card.subSprings', { n: nCon }) : '', when: relTime(scene.updatedAt) })
+    : t('hub.insp.presetMeta', { n: scene.bodies.length });
+  body.appendChild(meta);
+  const actions = document.createElement('div');
+  actions.className = 'insp-actions';
+  const addBtn = (label, cls, fn) => {
+    const b = document.createElement('button');
+    b.className = 'btn block' + (cls ? ` ${cls}` : '');
+    b.textContent = label;
+    b.addEventListener('click', fn);
+    actions.appendChild(b);
+  };
+  if (target.kind === 'preset') {
+    addBtn(t('card.loadRun'), 'accent', () => loadPreset(target.preset));
+  } else {
+    const s = target.scene;
+    const name = target.key;
+    addBtn(t('card.open'), 'accent', () => openStoredScene(s));
+    addBtn(t('card.duplicate'), '', () => {
+      let nn = `${name} ${t('msg.copySuffix')}`; let i = 2;
+      const all = store.loadScenes();
+      while (all[nn]) nn = `${name} ${t('msg.copySuffix')} ${i++}`;
+      if (store.saveSceneToLibrary({ ...s, name: nn })) { hubSel = { kind: 'scene', key: nn }; renderSceneNav(); toast(t('msg.duplicated', { name: nn })); }
+    });
+    addBtn(t('card.export'), '', () => exportSceneData(s));
+    addBtn(t('card.delete'), 'danger', () => {
+      if (!confirm(t('msg.deleteSceneConfirm', { name }))) return;
+      store.deleteSceneFromLibrary(name);
+      if (hubSel && hubSel.key === name) hubSel = null;
+      renderSceneNav(); toast(t('msg.sceneDeleted'));
+    });
+  }
+  body.appendChild(actions);
+  // keep row highlights in sync when the selection fell back to a default
+  document.querySelectorAll('#sceneRows .scene-row, #presetRows .scene-row').forEach((r) => {
+    r.classList.toggle('sel', r.dataset.kind === target.kind && r.dataset.key === target.key);
+  });
 }
 
 function loadPreset(p) {

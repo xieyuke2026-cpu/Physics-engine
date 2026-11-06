@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.39">
+<link rel="stylesheet" href="css/style.css?v=1.40">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -216,6 +216,8 @@
         <button id="btnDuplicateScene" class="btn"></button>
         <button id="btnImportHub" class="btn" data-i18n-text="hub.import">导入场景</button>
       </div>
+      <div class="scenenav-cols">
+      <div class="scenenav-center">
       <section id="navSectionCurrent">
         <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.current">当前与恢复</span></div>
         <div id="navCurrent" class="scene-grid"></div>
@@ -235,6 +237,14 @@
       <section id="navSectionSaved3D">
         <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.saved3d">已保存的 3D 场景</span></div>
         <div id="sceneList3d" class="scene-grid"></div>
+      </section>
+      <section id="navSectionSavedList">
+        <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.saved">已保存的 2D 场景</span></div>
+        <div id="sceneRows" class="scene-rows"></div>
+      </section>
+      <section id="navSectionPresetsList">
+        <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.presets">2D 实验预设</span></div>
+        <div id="presetRows" class="scene-rows"></div>
       </section>
       <section id="navSectionDocs" hidden>
         <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.docs">开发者文档 · 通用物理引擎 PhysicsEngine</span></div>
@@ -274,6 +284,7 @@
             <li><b>约束（弹簧 / 连杆）</b>：<code>addConstraint({ bodyA, bodyB, pointA, pointB, stiffness, damping, length })</code>。<code>bodyA</code> 传 <code>null</code> 表示固定在世界坐标 <code>pointA</code>；<code>stiffness</code> 接近 1 即为硬连杆；<code>removeConstraint(id)</code> 删除，删物体会自动清理它的约束</li>
             <li><b>推进</b>：<code>advance(elapsedMs, speed)</code> 固定步长累加器（任意刷新率都稳定）；<code>stepOnce()</code> 单步；<code>setSubsteps(1–8)</code> 子步防穿模（拖拽除外）</li>
             <li><b>存取</b>：<code>snapshot()</code> 导出纯 JSON <code>{ bodies, constraints, hinges, fluids, winds, rng }</code>；<code>load(data)</code> 还原（含随机流位置）</li>
+            <li><b>后端注册表</b>（1.11.0）：<code>PhysicsEngine.BACKENDS</code> 列出 API 背后的求解器后端（<code>matter</code> 使用中 / <code>native</code> 自研规划中），<code>PhysicsEngine.create({ backend })</code> 按注册表构造、实例带 <code>backendId</code>；宿主只对 API 编程，后端未就绪会明确报错、不静默回退</li>
             <li><b>查询与冲量</b>（1.2.0）：<code>queryRegion(x, y, w, h)</code> 区域内物体；<code>raycast(x1, y1, x2, y2)</code> 射线命中（由近到远，含命中点）；<code>addVelocity(body, dvx, dvy)</code> 叠加速度；<code>applyRadialImpulse(cx, cy, { radius, base, power, filter })</code> 径向冲击波（大小 = base + power×(1 − 距离/半径)，返回推开数量）</li>
             <li><b>随机种子</b>（1.3.0）：构造传 <code>{ seed }</code> 后，<code>random()</code> / <code>randomRange(min, max)</code> / <code>randomInt(min, max)</code> / <code>choice(arr)</code> / <code>shuffle(arr)</code> 走引擎自己的可复现随机流：同 seed 同序列，适合程序化场景与出生抖动；不传 seed 时随机选一个，可从 <code>pe.seed</code> 读回以便复现；<code>setSeed(n)</code> 随时重置，并同步 Matter 的内部种子</li>
             <li><b>命名物体</b>（1.4.0）：描述符可带 <code>name</code>（可重名），用 <code>getBodyByName(name)</code> / <code>getBodiesByName(name)</code> 按名查找、<code>renameBody(bodyOrId, name)</code> 改名、<code>nameOf(body)</code> 读名；名字随快照保存。MotionLab 里物体的标签（label）即其引擎名</li>
@@ -359,6 +370,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
             <li><b>Constraints (springs / rods)</b>: <code>addConstraint({ bodyA, bodyB, pointA, pointB, stiffness, damping, length })</code>. <code>bodyA: null</code> anchors to the world point <code>pointA</code>; <code>stiffness</code> near 1 behaves as a rigid rod; <code>removeConstraint(id)</code> removes one, and removing a body cleans up its constraints automatically.</li>
             <li><b>Stepping</b>: <code>advance(elapsedMs, speed)</code> fixed-step accumulator (stable at any refresh rate); <code>stepOnce()</code> single step; <code>setSubsteps(1–8)</code> anti-tunnelling substeps (except while dragging).</li>
             <li><b>Snapshots</b>: <code>snapshot()</code> exports plain JSON <code>{ bodies, constraints, hinges, fluids, winds, rng }</code>; <code>load(data)</code> restores it, including the random stream position.</li>
+            <li><b>Backend registry</b> (1.11.0): <code>PhysicsEngine.BACKENDS</code> lists the solver backends behind the API (<code>matter</code> active / <code>native</code> self-developed, planned); <code>PhysicsEngine.create({ backend })</code> constructs through the registry and instances report <code>backendId</code>. Hosts code against the API only — an unavailable backend throws plainly instead of silently falling back.</li>
             <li><b>Queries & impulses</b> (1.2.0): <code>queryRegion(x, y, w, h)</code>; <code>raycast(x1, y1, x2, y2)</code> (nearest first, with hit points); <code>addVelocity(body, dvx, dvy)</code>; <code>applyRadialImpulse(cx, cy, { radius, base, power, filter })</code> (magnitude = base + power×(1 − distance/radius), returns how many bodies were pushed).</li>
             <li><b>Seeded RNG</b> (1.3.0): pass <code>{ seed }</code> and <code>random()</code> / <code>randomRange(min, max)</code> / <code>randomInt(min, max)</code> / <code>choice(arr)</code> / <code>shuffle(arr)</code> draw from the engine's own reproducible stream — same seed, same sequence. Without a seed one is chosen for you; read it back via <code>pe.seed</code>; <code>setSeed(n)</code> resets the stream and syncs Matter's internal seed.</li>
             <li><b>Named bodies</b> (1.4.0): descriptors may carry <code>name</code> (duplicates allowed); find with <code>getBodyByName(name)</code> / <code>getBodiesByName(name)</code>, rename with <code>renameBody(bodyOrId, name)</code>, read with <code>nameOf(body)</code>. Names persist in snapshots. In MotionLab, a body's label is its engine name.</li>
@@ -409,6 +421,22 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           </ul>
         </div>
       </section>
+      </div>
+      <aside id="hubInspector">
+        <section>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.inspector">场景详情</span></div>
+          <div id="inspBody"></div>
+        </section>
+        <section id="navWhatsNew">
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.40</span></div>
+          <div class="whatsnew-card">
+            <p data-i18n-text="hub.whatsnew.b1">主界面改为工作台布局：场景列表 + 详情检查器，点开就能接着做</p>
+            <p data-i18n-text="hub.whatsnew.b2">物理引擎后端接口正式化（PhysicsEngine 1.11.0）：后端注册表开放，自研 Native 后端将在 1.41 到来</p>
+            <p data-i18n-text="hub.whatsnew.b3">导入更安全：场景 JSON 设 2 MB 上限并做全字段校验（1.39）</p>
+          </div>
+        </section>
+      </aside>
+      </div>
     </main>
   </div>
 </div>
@@ -477,6 +505,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.39"></script>
+<script type="module" src="js/app.js?v=1.40"></script>
 </body>
 </html>
