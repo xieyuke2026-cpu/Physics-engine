@@ -15,8 +15,8 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.46 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.12.3 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| MotionLab (app) | 1.47 | `APP_VERSION` in `js/ui.js` |
+| PhysicsEngine (2D core) | 1.12.4 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -331,6 +331,7 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   magnetism / gravitation / gusts / snapshots / seeded RNG), force
   models kicking once per fixed step and a substep floor of 2; its
   own 43-check behaviour suite (tests/native-tests.mjs)
+- 1.12.4 — dual-engine API parity: Native gains `wake` / `setMaxSpeed` / `maxSpeed` / `clearFluids` / `clearWinds` / `dragBody`, and `dragging` is boolean on both backends; new parity and framed-world regression tests; solver behaviour unchanged.
 - 1.12.3 — orphan-sleeper wake (both backends): a support probe every 15 steps wakes sleepers whose support is gone (deleting a tower base or dragging a support away no longer leaves bodies hovering); support = touching chain to a non-sleeping body, constraint/hinge attachment, or fluid overlap; zero gravity opts out.
 - 1.12.2 — Native robustness: reference-face clipping no longer crashes on exactly-aligned stacks (the stress scene used to freeze mid-run); sleeping uses smoothed motion with remembered support (dense piles: 72 → 163 of 705 asleep); warm-start impulses apply on the first substep only (re-applying them leaked energy scaled by the substep count)
 - 1.12.1 — Native host-contract fix: circle bodies now expose a

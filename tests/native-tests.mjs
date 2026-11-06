@@ -357,5 +357,69 @@ function poolWorld() {
   check('zero-gravity sleeper is left alone by the orphan probe', zb.isSleeping === true);
 }
 
+
+/* --- API parity with the Matter facade (2026-11-06 audit) --- */
+{
+  const pub = (proto) => Object.getOwnPropertyNames(proto)
+    .filter((n) => !n.startsWith('_') && n !== 'constructor');
+  const gettersOf = (proto) => pub(proto).filter((n) => {
+    const d = Object.getOwnPropertyDescriptor(proto, n); return d && typeof d.get === 'function';
+  });
+  const methodsOf = (proto) => pub(proto).filter((n) => !gettersOf(proto).includes(n));
+  const fm = methodsOf(PhysicsEngine.prototype), nm = methodsOf(NativeEngine.prototype);
+  const fg = gettersOf(PhysicsEngine.prototype), ng = gettersOf(NativeEngine.prototype);
+  const NATIVE_EXTRA = ['setAngle', 'setAngularVelocity']; // documented native-only helpers
+  check('parity: no facade method is missing on Native',
+    fm.filter((x) => !nm.includes(x)).length === 0,
+    fm.filter((x) => !nm.includes(x)).join(','));
+  check('parity: Native extras are only the documented helpers',
+    nm.filter((x) => !fm.includes(x) && !NATIVE_EXTRA.includes(x)).length === 0,
+    nm.filter((x) => !fm.includes(x)).join(','));
+  check('parity: no facade getter is missing on Native',
+    fg.filter((x) => !ng.includes(x)).length === 0,
+    fg.filter((x) => !ng.includes(x)).join(','));
+}
+/* --- the six members the audit found missing, exercised --- */
+{
+  const e = new NativeEngine({ enableSleeping: true });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true });
+  const b = e.addBody({ kind: 'rect', x: 640, y: 500, width: 40, height: 40 });
+  step(e, 240);
+  check('a settled body falls asleep before wake()', b.isSleeping === true);
+  e.wake(b);
+  check('wake(body) wakes a sleeping body', b.isSleeping === false);
+  e.setMaxSpeed(3);
+  check('maxSpeed reads back after setMaxSpeed', e.maxSpeed === 3);
+  e.setVelocity(b, 50, 0); step(e, 30);
+  check('setMaxSpeed clamps body speed', Math.hypot(b.velocity.x, b.velocity.y) <= 3.01,
+    `v=${Math.hypot(b.velocity.x, b.velocity.y).toFixed(2)}`);
+  e.setMaxSpeed(0);
+  e.addFluid({ x: 0, y: 0, width: 10, height: 10 });
+  e.addWind({ x: 0, y: 0, width: 10, height: 10, vx: 1 });
+  e.clearFluids(); e.clearWinds();
+  check('clearFluids / clearWinds empty the region lists', e.fluidCount === 0 && e.windCount === 0);
+  check('dragging is boolean false before a drag', e.dragging === false && e.dragBody === null);
+  e.beginDrag(b, b.position.x, b.position.y);
+  check('dragging is boolean true and dragBody is the body during a drag', e.dragging === true && e.dragBody === b);
+  e.endDrag();
+  check('drag state clears on endDrag', e.dragging === false && e.dragBody === null);
+}
+/* --- framed world: a ball bouncing off a spring-hung box stays inside
+       and settles (audit A re-test with the app frame, 2026-11-06) --- */
+{
+  const e = new NativeEngine({ enableSleeping: true, seed: 7 });
+  e.addBody({ kind: 'rect', x: 640, y: 570, width: 1280, height: 60, isStatic: true });
+  e.addBody({ kind: 'rect', x: 20, y: 300, width: 40, height: 600, isStatic: true });
+  e.addBody({ kind: 'rect', x: 1260, y: 300, width: 40, height: 600, isStatic: true });
+  e.addBody({ id: 'a', kind: 'rect', x: 400, y: 470, width: 40, height: 40 });
+  const ball = e.addBody({ id: 'b', kind: 'circle', x: 430, y: 300, radius: 15, restitution: 0.4 });
+  e.addConstraint({ bodyA: null, bodyB: 'a', pointA: { x: 400, y: 300 }, pointB: { x: 0, y: 0 }, stiffness: 0.02, length: 120 });
+  step(e, 1200);
+  check('framed world: ball stays inside the frame', ball.position.x > 40 && ball.position.x < 1240 && ball.position.y < 560,
+    `at (${ball.position.x.toFixed(0)},${ball.position.y.toFixed(0)})`);
+  check('framed world: ball settles asleep on the ground', ball.isSleeping === true && near(ball.position.y, 525, 3),
+    `y=${ball.position.y.toFixed(1)} sleeping=${ball.isSleeping}`);
+}
+
 console.log(`\nNativeEngine tests: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

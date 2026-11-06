@@ -535,3 +535,18 @@ PF 27+10、冒烟 67、导航 34、落地页 18、3D 冒烟 13）；独立包 12
   通过；独立包同步声明文件，`package.json` 新增 `types` 入口
 - 独立包 README 文件清单同步（补 native-engine.js 与类型声明）
 - 纯文档/打包版本：物理行为与 1.45 完全一致，引擎版本保持 1.12.3
+
+## MotionLab 1.47 / PhysicsEngine 1.12.4（2026-11-06）
+
+- **双引擎 API 对齐**（全面审计修复）：Native 补齐 `wake`、`setMaxSpeed`、`maxSpeed`、
+  `clearFluids`、`clearWinds`、`dragBody` 六个与 Matter 门面一致的成员；`dragging`
+  在 Native 上原本返回物体本体，现与门面统一为布尔。新增 parity 测试（公开成员
+  双向对比，白名单仅 Native 的 setAngle/setAngularVelocity）与带框世界回归测试
+- **卫生**：SECURITY.md 中英支持表统一到 1.47.x（英文行此前漏更新）；index.html 的
+  `?v=` 缓存戳更新；`physics-engine.d.ts` 修正 6 处与实现不符的签名（setPosition /
+  setVelocity / addVelocity 的分量参数、applyRadialImpulse 的 opts、beginDrag 的
+  (body, wx, wy) 形式、centerOfMass 返回形状）
+- **审计更正**：审计初报的「Native 三体挤压逃逸」经带框复测为误报——探针场景地板
+  无侧墙，球系滚出 plank 边缘；按应用真实框架复测双后端均正常落稳入睡。审计报告
+  已同步更正（goal files/audit-2026-11-06.md）
+- 求解行为与 1.46 一致；全量测试 607 → 620 项

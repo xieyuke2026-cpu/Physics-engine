@@ -1,3 +1,29 @@
+## 0as. MotionLab 1.47 / PhysicsEngine 1.12.4 — 全面审计修复（2026-11-06）
+
+应 Ryan 要求做的全面审计（报告 goal files/audit-2026-11-06.md）共 B/C 两类真发现，
+本版全部修复；A 类（Native 挤压逃逸）经复核为误报，见下。
+
+- **B 双引擎 API 对齐**：Native 补齐 wake / setMaxSpeed / maxSpeed（getter）/
+  clearFluids / clearWinds / dragBody（getter）；`dragging` 在 Native 原返回被拖物体
+  本体，改为与门面一致的布尔。tests/native-tests.mjs 新增 13 项（53 → 66）：公开
+  成员双向 parity 对比（白名单仅 Native 的 setAngle / setAngularVelocity 与门面独有
+  的内部项）、6 个成员的功能实测（唤醒、限速钳制、清区域、拖拽语义）、带框世界
+  回归（弹簧吊块 + 落球 1200 步，球留框内落稳入睡）。
+- **C 卫生**：SECURITY.md 英文支持表当前行 1.45.x → 与中文表统一为 1.47.x（当前）/
+  1.46.x / 1.45.x；index.html 的 ?v= 戳 1.45 → 1.47。
+- **d.ts 签名修正**：审计连带发现 physics-engine.d.ts 有 6 处与实现不符（按门面源码
+  核对）：setPosition / setVelocity / addVelocity 实为分量参数 (body, x, y) 而非
+  Vec；applyRadialImpulse 实为 (cx, cy, opts)；beginDrag 实为 (body, wx, wy)；
+  centerOfMass 返回 {x, y, mass} 而非可空。已按实现修正并重新同步独立包。
+- **A 误报更正（如实记录）**：初报「球在弹簧吊块与地板间被挤出世界（第 427 步）」
+  的探针场景地板是无侧墙的悬空 plank，仪器化追踪显示球是滚出 plank 右端后自由
+  下落（Matter 轨迹恰好留在板上）；按应用真实框架（地面 + 左右墙）复测 1200 步，
+  双后端均落稳入睡。审计报告 A 节已撤销并注明。方法论教训与 0ar 的 step() 误用
+  合并：探针场景必须带框；API 先看实现签名再调用。
+- **测试**：全量 620 项（Native 66、引擎 140、其余沿用）；独立包同步三文件
+  （physics-engine.js 仅 VERSION 与头注释、native-engine.js 本版改动、d.ts 修正）。
+- **线上复验**：待推送后执行。
+
 ## 0ar. MotionLab 1.46 — README 重构 + TypeScript 类型声明（2026-11-06）
 
 起因：Ryan 以路人身份向另一个 Claude 咨询本仓库优缺点，评价大体公道，其中三条可动手：

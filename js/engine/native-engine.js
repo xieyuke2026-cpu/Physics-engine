@@ -547,6 +547,7 @@ export class NativeEngine {
     if (ok) { this._fluidFlow.delete(id); this._changed(); }
     return ok;
   }
+  clearFluids() { this._fluids.clear(); }
   fluidById(id) { const f = this._fluids.get(id); return f ? { ...f } : null; }
   fluids() { return [...this._fluids.values()].map((f) => ({ ...f })); }
   forEachFluid(fn) { for (const f of this._fluids.values()) fn(f); }
@@ -578,6 +579,7 @@ export class NativeEngine {
     return ok;
   }
   windById(id) { const w = this._winds.get(id); return w ? { ...w } : null; }
+  clearWinds() { this._winds.clear(); }
   winds() { return [...this._winds.values()].map((w) => ({ ...w })); }
   forEachWind(fn) { for (const w of this._winds.values()) fn(w); }
   get windCount() { return this._winds.size; }
@@ -723,6 +725,10 @@ export class NativeEngine {
     this._recomputeMass(b);
     return true;
   }
+  wake(bodyOrId) {
+    const b = this._bodyOf(bodyOrId);
+    if (b) this._wake(b);
+  }
   stopMotion(bodyOrId) {
     const b = this._bodyOf(bodyOrId);
     if (!b) return false;
@@ -795,7 +801,8 @@ export class NativeEngine {
     this._drag.y = num(wy, this._drag.y);
   }
   endDrag() { this._drag = null; }
-  get dragging() { return this._drag ? this._drag.body : null; }
+  get dragging() { return !!this._drag; }
+  get dragBody() { return this._drag ? this._drag.body : null; }
 
   /* ------------------------------ queries ------------------------------ */
   _pointInBody(b, x, y) {
@@ -917,6 +924,8 @@ export class NativeEngine {
     };
   }
   setSubsteps(n) { this.substeps = Math.max(2, Math.min(8, Math.round(num(n, 2)))); }
+  setMaxSpeed(v) { this._maxSpeed = Math.max(0, num(v, 0)); }
+  get maxSpeed() { return this._maxSpeed; }
 
   /* ------------------------------ stepping ----------------------------- */
   advance(elapsedMs, speed = 1) {

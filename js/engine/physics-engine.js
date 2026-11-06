@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.3 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.4 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -83,6 +83,10 @@
              snapshots, queries, seeded RNG). Matter stays the default
              and the reference behaviour; native is opt-in and labelled
              experimental while its feel is validated on real scenes.
+    1.12.4 — API parity (MotionLab 1.47): Native gains wake /
+             setMaxSpeed / maxSpeed / clearFluids / clearWinds /
+             dragBody, and `dragging` is boolean on both backends
+             (it returned the body on Native). No solver changes.
     1.12.3 — orphan-sleeper wake (MotionLab 1.44, BOTH backends):
              a probe every 15 fixed steps wakes sleeping bodies whose
              support chain is gone (deleted/dragged-away support left
@@ -171,7 +175,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.3';
+export const VERSION = '1.12.4';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.

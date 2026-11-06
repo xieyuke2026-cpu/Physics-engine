@@ -296,9 +296,9 @@ export declare class PhysicsEngine {
   getBodiesByName(name: string): Body[];
   userDataOf(body: Body): unknown;
 
-  setPosition(body: Body, pos: Vec): void;
-  setVelocity(body: Body, vel: Vec): void;
-  addVelocity(body: Body, delta: Vec): void;
+  setPosition(body: Body, x: number, y: number): void;
+  setVelocity(body: Body, vx: number, vy: number): void;
+  addVelocity(body: Body, dvx: number, dvy: number): void;
   setAngleDeg(body: Body, degrees: number): void;
   setStatic(body: Body, isStatic: boolean): void;
   setDensity(body: Body, density: number): void;
@@ -311,14 +311,14 @@ export declare class PhysicsEngine {
   resize(body: Body, size: { width?: number; height?: number; radius?: number }): Body | null;
   stopMotion(body: Body): void;
   wake(body: Body): void;
-  /** Radial impulse centred at (x, y); returns how many bodies were hit. */
-  applyRadialImpulse(x: number, y: number, radius: number, power: number): number;
+  /** Radial impulse centred at (cx, cy); returns how many bodies were hit. */
+  applyRadialImpulse(cx: number, cy: number, opts?: { radius?: number; base?: number; power?: number; filter?: (body: Body) => boolean }): number;
 
   // ----- queries & readouts -----
   pick(x: number, y: number): Body | null;
   queryRegion(x: number, y: number, width: number, height: number): Body[];
   raycast(from: Vec, to: Vec): RayHit | null;
-  centerOfMass(): Vec | null;
+  centerOfMass(): { x: number; y: number; mass: number };
   bodyMomentum(body: Body): Vec;
   bodyKineticEnergy(body: Body): number;
   totalMomentum(): Vec;
@@ -360,8 +360,8 @@ export declare class PhysicsEngine {
   clearWinds(): void;
 
   // ----- drag (physics picking) -----
-  beginDrag(x: number, y: number): Body | null;
-  moveDrag(x: number, y: number): void;
+  beginDrag(body: Body, wx: number, wy: number): void;
+  moveDrag(wx: number, wy: number): void;
   endDrag(): void;
 
   // ----- seeded random -----
