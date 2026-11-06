@@ -1,3 +1,35 @@
+## 0ar. MotionLab 1.46 — README 重构 + TypeScript 类型声明（2026-11-06）
+
+起因：Ryan 以路人身份向另一个 Claude 咨询本仓库优缺点，评价大体公道，其中三条可动手：
+README 过长杂乱、无 TypeScript 类型、无 npm 包。本版处理前两条（Release 与 npm 由
+Ryan 本人操作，v1.46 发布文案已备在目标 files/release-v1.46-notes.md，为自 v1.24
+以来累积版）。
+
+- **README 重构**：自约 275 行（含 1.1→1.45 逐版本功能条目堆积）改为按主题组织：
+  英文摘要（是什么/双引擎/复用）+ 中文功能六组（物理模拟 / 世界效应 / 双引擎 /
+  编辑与交互 / 场景与分享 / PFLab）+ 复用节（三文件 + 最小示例 + 类型声明）+ 结构 /
+  数据格式 / 部署 / 已知问题 / 测试 / 联系。版本流水账全部移出（以 CHANGELOG 为准）；
+  徽章、演示图、联系方式、示例链接保留。
+- **类型声明**：新增 `js/engine/physics-engine.d.ts`（约 12.5 KB），覆盖全部公开
+  API：BodyDescriptor / Constraint / Hinge / Fluid / Wind 描述符、EngineSnapshot、
+  BackendInfo、Formulas 17 个公式与 PhysicsEngine 类的全部公开方法与只读状态。
+  以 TypeScript 5.6 `tsc --noEmit --strict` 对一段真实用法（create / addBody /
+  addConstraint / addFluid / addWind / snapshot / load / Formulas）校验，零错误。
+  独立包同步同一文件，`package.json` 新增 `"types": "physics-engine.d.ts"` 并加入
+  files 清单；独立包 README 文件清单同步补 native-engine.js 与类型声明（其「两文件」
+  说法一并改三文件）。
+- **应用内文档**：下载节的引擎直达链接补 physics-engine.d.ts（中英两块）。
+- **版本仪式波折（如实记录）**：本版仪式脚本两次中途失败——根因是三处记忆与文件
+  现状不符：①`version.json` 为无空格紧凑格式，带空格的替换未命中；②What's New
+  内容在 `js/i18n.js` 的 `hub.whatsnew.b1/b2/b3` 键，不在 index.html（index 中同名
+  静态回退自 1.43 起未更新，本版已一并刷到 1.46）；③应用内文档的版本条目是话题式
+  条目而非版本列表，预设锚点不存在。均改为核对原文后逐项修正；DEVELOPER 的版本
+  历史节为引擎版本史，引擎未变故只改版本表应用行。教训已同步：仪式脚本的替换必须
+  先 grep 原文再动手，静默 replace 不报错是最危险的失败方式。
+- **测试**：smoke 91 / nav 39 / landing 18 全过（nav 的 whatsnew 断言改查 README；
+  smoke About 断言随版更新）；引擎文件零改动，引擎测试沿用 1.45 结果。
+- **线上复验**：待推送后执行（version.json 1.46 + GitHub 仓库页新 README 渲染）。
+
 # MotionLab — 测试报告（2026-11-06，v1.45 更新）
 
 ## 0aq. v1.45 开发者文档全面刷新（PhysicsEngine 1.12.3 不变）

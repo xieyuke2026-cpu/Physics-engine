@@ -16,7 +16,7 @@ MotionLab / PhysicsEngine 是一个**纯客户端、纯静态**的项目：
 
 | 版本 | 是否提供安全修复 |
 | --- | --- |
-| MotionLab 1.45.x（当前） | ✅ |
+| MotionLab 1.46.x（当前） | ✅ |
 | MotionLab 1.44.x | ✅ |
 | MotionLab 1.43.x | ✅ |
 | PhysicsEngine 1.12.x（当前） | ✅ |
