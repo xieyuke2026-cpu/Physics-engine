@@ -5,6 +5,8 @@
    scenes still go through the app's own validateScene() afterwards.
    Budgets mirror the 1.39 import hardening, tightened for model output. */
 
+import { L } from '../i18n.js';
+
 export const ACTION_TYPES = ['loadPreset', 'generateScene', 'addBodies', 'setGravity', 'setBackend', 'clearScene'];
 export const GRAVITY_PRESETS = ['earth', 'moon', 'jupiter', 'zero', 'side'];
 export const MAX_ADD_BODIES = 40;
@@ -118,12 +120,12 @@ export function validateAction(raw, ctx) {
 /** One-line human summary of an executed action (for the chat log). */
 export function describeAction(a, ctx = {}) {
   switch (a.action) {
-    case 'loadPreset': return `加载预设「${ctx.presetName || a.preset}」`;
-    case 'generateScene': return `生成新场景（${a.scene.bodies.length} 个物体）`;
-    case 'addBodies': return `添加 ${a.bodies.length} 个物体`;
-    case 'setGravity': return a.preset ? `重力设为 ${a.preset}` : `重力设为 (${a.x}, ${a.y})`;
-    case 'setBackend': return `切换后端为 ${a.backend === 'native' ? 'Native（自研）' : 'Matter.js'}`;
-    case 'clearScene': return '清空场景';
+    case 'loadPreset': return L(`加载预设「${ctx.presetName || a.preset}」`, `Load preset "${ctx.presetName || a.preset}"`);
+    case 'generateScene': return L(`生成新场景（${a.scene.bodies.length} 个物体）`, `Generate a new scene (${a.scene.bodies.length} bodies)`);
+    case 'addBodies': return L(`添加 ${a.bodies.length} 个物体`, `Add ${a.bodies.length} bodies`);
+    case 'setGravity': return a.preset ? L(`重力设为 ${a.preset}`, `Set gravity to ${a.preset}`) : L(`重力设为 (${a.x}, ${a.y})`, `Set gravity to (${a.x}, ${a.y})`);
+    case 'setBackend': return L(`切换后端为 ${a.backend === 'native' ? 'Native（自研）' : 'Matter.js'}`, `Switch backend to ${a.backend === 'native' ? 'Native (in-house)' : 'Matter.js'}`);
+    case 'clearScene': return L('清空场景', 'Clear the scene');
     default: return a.action;
   }
 }

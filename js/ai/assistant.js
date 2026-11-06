@@ -6,6 +6,7 @@
    API the app exposes. The model is only downloaded after the user sends
    their first message. */
 import { retrieve } from './knowledge.js';
+import { t } from '../i18n.js';
 import { extractActions, validateAction, describeAction } from './actions.js';
 
 const CORE_PROMPT = `你是 MotionLab 的 AI 助手，在用户设备本地运行。MotionLab 是一个浏览器 2D 物理实验台（舞台宽 1280，地面顶面 y=540，坐标 y 向下）。
@@ -26,6 +27,7 @@ class WorkerBrain {
     this.hostVersion = hostVersion || '';
     this.worker = null; this.state = 'idle'; this.device = null; this.respawned = false;
     this.pending = new Map(); this.seq = 0; this.onProgress = null; this.loadWaiters = [];
+    this.lastProgressAt = 0; this.watchdog = null;
   }
   ensure() {
     if (this.worker) return;
@@ -33,9 +35,9 @@ class WorkerBrain {
     this.worker = new Worker(new URL(`./worker.js${v}`, import.meta.url), { type: 'module' });
     this.worker.onmessage = (ev) => {
       const m = ev.data || {};
-      if (m.type === 'progress') { this.onProgress && this.onProgress(m); return; }
+      if (m.type === 'progress') { this.lastProgressAt = Date.now(); this.onProgress && this.onProgress(m); return; }
       if (m.type === 'loaded') {
-        this.state = 'ready'; this.device = m.device;
+        this.state = 'ready'; this.device = m.device; this.stopWatchdog();
         for (const w of this.loadWaiters.splice(0)) w.resolve(m.device);
         return;
       }
@@ -50,7 +52,9 @@ class WorkerBrain {
           this.worker.postMessage({ type: 'load', forceWasm: true });
           return;
         }
-        this.state = 'error';
+        this.state = 'error'; this.stopWatchdog();
+        try { this.worker.terminate(); } catch { /* gone */ }
+        this.worker = null;
         for (const w of this.loadWaiters.splice(0)) w.reject(new Error(m.error));
         return;
       }
@@ -64,7 +68,31 @@ class WorkerBrain {
       if (this.state === 'loading') { this.state = 'error'; for (const w of this.loadWaiters.splice(0)) w.reject(new Error('worker failed')); }
     };
   }
+  startWatchdog() {
+    this.stopWatchdog();
+    this.watchdog = setInterval(() => {
+      if (this.state !== 'loading') { this.stopWatchdog(); return; }
+      if (Date.now() - this.lastProgressAt < 90000) return;
+      // No progress for 90s: session creation is stuck (the iPad 100% hang).
+      // Respawn once as a fresh WASM worker; after that, fail cleanly and
+      // TERMINATE so a stuck runtime stops eating the lab's frame rate.
+      if (!this.respawned) {
+        this.respawned = true;
+        try { this.worker.terminate(); } catch { /* gone */ }
+        this.worker = null; this.lastProgressAt = Date.now();
+        this.ensure();
+        this.worker.postMessage({ type: 'load', forceWasm: true });
+        return;
+      }
+      this.stopWatchdog();
+      try { this.worker.terminate(); } catch { /* gone */ }
+      this.worker = null; this.state = 'error';
+      for (const w of this.loadWaiters.splice(0)) w.reject(new Error(t('ai.err.timeout')));
+    }, 5000);
+  }
+  stopWatchdog() { if (this.watchdog) { clearInterval(this.watchdog); this.watchdog = null; } }
   unload() {
+    this.stopWatchdog();
     if (this.worker) { try { this.worker.terminate(); } catch { /* gone */ } }
     this.worker = null; this.state = 'idle'; this.device = null; this.respawned = false;
     for (const p of this.pending.values()) p.reject(new Error('unloaded'));
@@ -73,14 +101,26 @@ class WorkerBrain {
   load() {
     this.ensure();
     if (this.state === 'ready') return Promise.resolve(this.device);
-    if (this.state !== 'loading') { this.state = 'loading'; this.worker.postMessage({ type: 'load' }); }
+    if (this.state !== 'loading') { this.state = 'loading'; this.lastProgressAt = Date.now(); this.startWatchdog(); this.worker.postMessage({ type: 'load' }); }
     return new Promise((resolve, reject) => this.loadWaiters.push({ resolve, reject }));
   }
   async chat(messages, onToken) {
     await this.load();
     const id = ++this.seq;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, onToken });
+      const timer = setTimeout(() => {
+        if (!this.pending.has(id)) return;
+        this.pending.delete(id);
+        // Generation stuck: kill the worker so the lab gets its CPU back.
+        try { this.worker.terminate(); } catch { /* gone */ }
+        this.worker = null; this.state = 'idle';
+        reject(new Error(t('ai.err.gentimeout')));
+      }, 150000);
+      this.pending.set(id, {
+        resolve: (v) => { clearTimeout(timer); resolve(v); },
+        reject: (e) => { clearTimeout(timer); reject(e); },
+        onToken,
+      });
       this.worker.postMessage({ type: 'chat', id, messages });
     });
   }
@@ -95,8 +135,6 @@ export function createAssistant(host) {
   const history = []; // {role, content} trimmed pairs (assistant side stores cleaned text + execution notes)
   let busy = false, greeted = false;
 
-  const lang = (() => { try { return localStorage.getItem('motionlab.lang') === 'en' ? 'en' : 'zh'; } catch { return 'zh'; } })();
-  const L = (zh, en) => (lang === 'en' ? en : zh);
 
   function setStatus(text) { status.textContent = text; }
   function addMsg(role, text) {
@@ -116,26 +154,23 @@ export function createAssistant(host) {
   if (unloadBtn) unloadBtn.addEventListener('click', () => {
     brain.unload();
     unloadBtn.hidden = true;
-    setStatus(L('模型已卸载（内存已释放）', 'Model unloaded (memory freed)'));
-    addNote(L('已卸载模型，需要时再提问会重新加载（已缓存，不必再下载）', 'Model unloaded. Ask again to reload it from cache.'));
+    setStatus(t('ai.status.unloaded'));
+    addNote(t('ai.note.unloaded'));
   });
 
   brain.onProgress = (p) => {
-    if (p.total > 0) setStatus(L(`正在下载模型… ${Math.round((p.loaded / p.total) * 100)}%（仅首次，约 390MB，下完缓存离线可用）`,
-      `Downloading model… ${Math.round((p.loaded / p.total) * 100)}% (first time only, ~390MB, cached afterwards)`));
+    if (p.total > 0) setStatus(t('ai.status.downloading', { pct: Math.round((p.loaded / p.total) * 100) }));
   };
 
   function greet() {
     if (greeted) return; greeted = true;
-    addMsg('assistant', L(
-      '你好，我是 MotionLab 的本地 AI 助手。模型（SmolLM2-360M）会在你第一次提问时下载到这台设备上（约 390MB，仅一次，之后离线可用），对话不出设备。我可以答疑，也能动手：生成场景、加载预设、调重力、换后端。试试下面的快捷提问，或直接打字。',
-      'Hi, I am the local AI assistant. The model (SmolLM2-360M) downloads to this device on your first question (~390MB, once, then offline). Chats never leave the device. I can answer questions and act: generate scenes, load presets, set gravity, switch backends.'));
-    setStatus(L('模型未加载（首次提问时下载）', 'Model not loaded (downloads on first question)'));
+    addMsg('assistant', t('ai.greet'));
+    setStatus(t('ai.status.idle'));
   }
 
   async function execute(action) {
     const v = validateAction(action, { presetKeys: new Set(host.listPresets().map((p) => p.key)) });
-    if (!v.ok) { addNote(L(`动作被拦截：${v.error}`, `Action blocked: ${v.error}`)); return `（动作失败：${v.error}）`; }
+    if (!v.ok) { addNote(t('ai.blocked', { err: v.error })); return t('ai.didfail', { err: v.error }); }
     const a = v.action;
     let r;
     switch (a.action) {
@@ -150,10 +185,10 @@ export function createAssistant(host) {
     if (r && r.ok) {
       const label = describeAction(a, { presetName: host.listPresets().find((p) => p.key === a.preset)?.name });
       addNote(`✓ ${label}`);
-      return `（已执行：${label}）`;
+      return t('ai.did', { label });
     }
-    addNote(L(`动作失败：${(r && r.error) || '未知错误'}`, `Action failed: ${(r && r.error) || 'unknown'}`));
-    return `（动作失败：${(r && r.error) || '未知错误'}）`;
+    addNote(t('ai.failed', { err: (r && r.error) || 'unknown' }));
+    return t('ai.didfail', { err: (r && r.error) || 'unknown' });
   }
 
   async function send(text) {
@@ -164,7 +199,7 @@ export function createAssistant(host) {
     addMsg('user', q);
     const bubble = addMsg('assistant', '');
     try {
-      if (brain.state !== 'ready') setStatus(L('正在加载模型…', 'Loading model…'));
+      if (brain.state !== 'ready') setStatus(t('ai.status.loading'));
       const chunks = retrieve(q, 2);
       const kb = chunks.length ? `\n\n【参考资料】\n${chunks.map((c) => `《${c.title}》${c.text}`).join('\n')}` : '';
       const system = CORE_PROMPT + kb + `\n\n【当前状态】${host.describeScene()}`;
@@ -176,8 +211,7 @@ export function createAssistant(host) {
         bubble.textContent = streamed.split('```')[0].trim() || '…';
         msgs.scrollTop = msgs.scrollHeight;
       });
-      setStatus(brain.device === 'webgpu' ? L('模型就绪 · WebGPU（本地）', 'Model ready · WebGPU (local)')
-        : L('模型就绪 · WASM（本地）', 'Model ready · WASM (local)'));
+      setStatus(t(brain.device === 'webgpu' ? 'ai.status.ready.webgpu' : 'ai.status.ready.wasm'));
       if (unloadBtn) unloadBtn.hidden = false;
       const { actions, text: clean } = extractActions(raw || streamed);
       let note = '';
@@ -185,27 +219,23 @@ export function createAssistant(host) {
       bubble.textContent = clean || note || '…';
       history.push({ role: 'user', content: q }, { role: 'assistant', content: (clean || '') + note });
     } catch (e) {
-      bubble.textContent = L(`出错了：${e.message || e}。模型没加载成功时检查网络后重试——下载走镜像源，不需要 VPN。`,
-        `Error: ${e.message || e}. If the model failed to load, check the network and retry.`);
-      setStatus(L('模型加载失败', 'Model failed to load'));
+      bubble.textContent = t('ai.err.bubble', { err: e.message || e });
+      setStatus(t('ai.status.failed'));
     } finally {
       busy = false; sendBtn.disabled = false;
       msgs.scrollTop = msgs.scrollHeight;
     }
   }
 
-  // chips
-  const CHIPS = [
-    [L('给我一个牛顿摆', "Newton's cradle"), L('给我一个牛顿摆', "Give me a Newton's cradle")],
-    [L('把重力换成月球', 'Moon gravity'), L('把重力换成月球', 'Set gravity to the Moon')],
-    [L('浮力是怎么算的？', 'How does buoyancy work?'), L('浮力是怎么算的？', 'How is buoyancy calculated?')],
-    [L('生成一个小球滚下斜坡撞倒一排方块的场景', 'Ball, ramp and blocks'), L('生成一个小球滚下斜坡撞倒一排方块的场景', 'Generate a scene: a ball rolls down a ramp and knocks over a row of blocks')],
-  ];
-  for (const [label, prompt] of CHIPS) {
-    const b = document.createElement('button');
-    b.className = 'ai-chip'; b.textContent = label;
-    b.addEventListener('click', () => send(prompt));
-    chips.appendChild(b);
+  // chips (rebuilt on every open so a language switch is picked up)
+  function renderChips() {
+    chips.textContent = '';
+    for (const n of [1, 2, 3, 4]) {
+      const b = document.createElement('button');
+      b.className = 'ai-chip'; b.textContent = t(`ai.chip${n}.label`);
+      b.addEventListener('click', () => send(t(`ai.chip${n}.prompt`)));
+      chips.appendChild(b);
+    }
   }
   sendBtn.addEventListener('click', () => send());
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
@@ -213,7 +243,7 @@ export function createAssistant(host) {
 
   function toggle(force) {
     const show = force !== undefined ? force : panel.hasAttribute('hidden');
-    if (show) { panel.removeAttribute('hidden'); greet(); input.focus(); }
+    if (show) { panel.removeAttribute('hidden'); greet(); renderChips(); input.focus(); }
     else panel.setAttribute('hidden', '');
     return show;
   }

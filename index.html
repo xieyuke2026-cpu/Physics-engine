@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.55">
+<link rel="stylesheet" href="css/style.css?v=1.56">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -441,11 +441,11 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.55</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.56</span></div>
           <div class="whatsnew-card">
-            <p data-i18n-text="hub.whatsnew.b1">AI 助手动作识别变宽容：模型把动作写成 json 代码块、用 act 代替 action 也能认（受控实测抓到的静默失效）</p>
-            <p data-i18n-text="hub.whatsnew.b2">连同 1.54：模型减半为 SmolLM2-360M（约 390MB），iPad 下载完不再因体积崩页（待 iPad 终验）</p>
-            <p data-i18n-text="hub.whatsnew.b3">引擎与既有行为与 1.54 一致；全量测试 660 项。发布说明已更新覆盖至 1.55</p>
+            <p data-i18n-text="hub.whatsnew.b1">AI 助手接入中英文系统（面板文案随语言切换）；加载看门狗：初始化卡住 90 秒自动终止重试，不再无限拖帧率</p>
+            <p data-i18n-text="hub.whatsnew.b2">卡 100% 的另一嫌疑已除：WASM 多线程只在跨源隔离环境开启（Pages 不是），回到已验证的单线程配置</p>
+            <p data-i18n-text="hub.whatsnew.b3">引擎与既有行为与 1.55 一致；全量测试 661 项。发布说明已更新覆盖至 1.56</p>
           </div>
         </section>
       </aside>
@@ -516,21 +516,21 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <aside id="aiPanel" hidden aria-label="AI 助手">
   <div class="ai-head">
-    <div class="ai-title">AI 助手 <span class="ai-sub">本地模型 · SmolLM2-360M</span></div>
-    <button id="aiClose" class="ai-close" title="关闭">✕</button>
+    <div class="ai-title"><span data-i18n-text="ai.title">AI 助手</span> <span class="ai-sub" data-i18n-text="ai.sub">本地模型 · SmolLM2-360M</span></div>
+    <button id="aiClose" class="ai-close" data-i18n-title="ai.close" title="关闭">✕</button>
   </div>
-  <div class="ai-statusrow"><div id="aiStatus" class="ai-status">模型未加载</div><button id="aiUnload" class="ai-unload" hidden>卸载模型</button></div>
+  <div class="ai-statusrow"><div id="aiStatus" class="ai-status">模型未加载</div><button id="aiUnload" class="ai-unload" data-i18n-text="ai.unload" hidden>卸载模型</button></div>
   <div id="aiMessages" class="ai-messages"></div>
   <div id="aiChips" class="ai-chips"></div>
   <div class="ai-inputrow">
-    <textarea id="aiInput" rows="2" placeholder="问点什么，或让我动手：生成一个牛顿摆…"></textarea>
-    <button id="aiSend" class="ai-send">发送</button>
+    <textarea id="aiInput" rows="2" data-i18n-ph="ai.ph" placeholder="问点什么，或让我动手：生成一个牛顿摆…"></textarea>
+    <button id="aiSend" class="ai-send" data-i18n-text="ai.send">发送</button>
   </div>
 </aside>
 <div id="toast" hidden></div>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.55"></script>
+<script type="module" src="js/app.js?v=1.56"></script>
 </body>
 </html>

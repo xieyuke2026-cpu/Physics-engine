@@ -9,7 +9,11 @@ import { pipeline, env, TextStreamer } from 'https://cdn.jsdelivr.net/npm/@huggi
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 // Leave CPU headroom for the 60 FPS lab while WASM inference runs.
-if (env.backends?.onnx?.wasm) env.backends.onnx.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
+if (env.backends?.onnx?.wasm && self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
+// (Without cross-origin isolation there is no SharedArrayBuffer; asking the
+//  WASM runtime for threads anyway hung session creation on iOS WebKit —
+//  download sat at 100% forever, worker spinning, lab FPS in single digits.
+//  Single-threaded WASM is the configuration verified end-to-end on desktop.)
 
 const MODEL = 'HuggingFaceTB/SmolLM2-360M-Instruct';
 const HOSTS = ['https://hf-mirror.com/', 'https://huggingface.co/'];
