@@ -14,7 +14,7 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.49 | `js/ui.js` 的 `APP_VERSION` |
+| MotionLab（应用） | 1.50 | `js/ui.js` 的 `APP_VERSION` |
 | PhysicsEngine（2D 核心） | 1.12.4 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
@@ -393,7 +393,26 @@ m.reset();                                          // 同配置重开一局
 实际加载的 `Matter.version` 展示，不写死版本号。升级策略：先在副本中跑完
 引擎/逻辑/PF/UI 全部测试，断言不放宽的前提下通过才替换 vendored 文件。
 
-## 五、本地开发与测试
+## 五、AI 助手（1.50，应用层）
+
+顶栏「AI 助手」是一个完全本地的小模型助手，代码在 `js/ai/`，与引擎解耦：
+
+- **推理**：`js/ai/worker.js` 在 Web Worker 里用 Transformers.js 跑
+  `onnx-community/Qwen2.5-0.5B-Instruct`（q4，约 350MB，浏览器缓存）；
+  WebGPU 优先、失败自动退 WASM；模型源 hf-mirror 优先、huggingface.co 兜底。
+  面板首次发送消息才触发下载，实验室主线程不受影响。
+- **知识**：`js/ai/knowledge.js` 是人工提炼的知识块（物理概念/预设/格式/示例），
+  聊天时以关键词评分（英文词 + 中文双字组）检索 top-3 拼进系统提示——检索只负责
+  递资料，推理与回答全部由模型完成。
+- **动作协议**：`js/ai/actions.js` 定义模型可调用的动作（loadPreset /
+  generateScene / addBodies / setGravity / setBackend / clearScene），以
+  fenced `action` JSON 块出现在回复末尾。执行前经动作层校验（数量预算、
+  坐标/尺寸钳制、预设白名单），生成场景再过 `validateScene()`；宿主接口由
+  `app.js` 的 `aiHost` 提供（内部复用 loadScene/loadPreset/setEngineBackend）。
+- **测试**：`tests/ai-assistant.mjs` 覆盖检索、动作提取（含非动作代码块不被误吃）、
+  校验矩阵与场景摘要；面板开关由 smoke 覆盖。模型本身的效果需在真实设备验证。
+
+## 六、本地开发与测试
 
 ```bash
 python3 -m http.server 8000        # 本地预览 http://localhost:8000

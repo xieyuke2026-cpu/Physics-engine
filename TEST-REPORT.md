@@ -1,3 +1,16 @@
+## 0av. 1.50 验证（AI 助手：本地小模型，2026-11-06）
+
+Ryan 拍板：用现成小模型（否决纯检索方案「不够聪明」），直接接入实验室作 1.50。
+实现 js/ai/{worker,assistant,knowledge,actions}.js：Transformers.js 在 Web Worker
+跑 Qwen2.5-0.5B-Instruct（q4，hf-mirror 优先/huggingface.co 兜底，WebGPU→WASM
+自动降级），面板首条消息才触发下载；动作协议 fenced JSON 六种，执行前过动作层
+校验、生成场景再过 validateScene；宿主接口 aiHost 复用 loadScene/loadPreset/
+setEngineBackend/onGravityPreset 同款逻辑。纯逻辑测试 tests/ai-assistant.mjs
+24 项全过（检索命中、动作提取含「非动作代码块不被误吃」回归、校验矩阵、摘要）；
+smoke 新增面板开关 3 项（94）。**未验**：Node 侧真实模型冒烟被沙箱 npm 注册表
+策略拦截（403 policy_denied，与产品代码无关）；真实模型端到端（下载/推理/动作
+执行）由线上浏览器核对 + Ryan 的 iPad 终验。样式表大括号 304/304 平衡。
+
 ## 0au. 1.49 验证（ spread 示例涌浪调校，2026-11-06）
 
 Ryan 实录视频指出决口水体「像果冻」：通量阻尼 0.992 太轻。参数扫描量化

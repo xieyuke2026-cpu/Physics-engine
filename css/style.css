@@ -362,3 +362,23 @@ body.no-3d .mode-switch, body.no-3d #navSectionPresets3D, body.no-3d #navSection
 
 /* ===== 1.41: backend picker (Settings) ===== */
 .switch-row select { height: 32px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: #fff; font-size: 13px; max-width: 62%; }
+
+/* AI assistant panel (1.50) */
+#aiPanel{position:fixed;top:var(--topbar-h);right:0;bottom:0;width:min(372px,94vw);background:var(--panel);border-left:1px solid var(--border);z-index:45;display:flex;flex-direction:column}
+#aiPanel[hidden]{display:none}
+.ai-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
+.ai-title{font-weight:600;font-size:14px}
+.ai-sub{font-weight:400;font-size:11px;color:var(--muted,#7a828c);margin-left:6px}
+.ai-close{background:none;border:none;font-size:15px;cursor:pointer;color:inherit;padding:2px 6px}
+.ai-status{font-size:11.5px;color:var(--muted,#7a828c);padding:6px 12px;border-bottom:1px solid var(--border)}
+.ai-messages{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.ai-msg{max-width:88%;padding:7px 10px;border-radius:10px;font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.ai-msg.user{align-self:flex-end;background:var(--accent);color:#fff}
+.ai-msg.assistant{align-self:flex-start;background:var(--chip,#eef1f4)}
+.ai-note{align-self:flex-start;font-size:12px;color:var(--accent);padding:1px 4px}
+.ai-chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid var(--border)}
+.ai-chip{font-size:12px;padding:5px 9px;border-radius:20px;border:1px solid var(--border);background:none;color:inherit;cursor:pointer}
+.ai-inputrow{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border)}
+.ai-inputrow textarea{flex:1;resize:none;font:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:none;color:inherit}
+.ai-send{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:0 16px;font-size:13.5px;cursor:pointer}
+.ai-send[disabled]{opacity:.5;cursor:default}
