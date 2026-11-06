@@ -71,7 +71,7 @@ onmessage = async (ev) => {
         callback_function: (t) => postMessage({ type: 'token', id: msg.id, text: t }),
       });
       const out = await generator(msg.messages, {
-        max_new_tokens: 200, do_sample: true, temperature: 0.7, top_p: 0.9, streamer,
+        max_new_tokens: 320, do_sample: true, temperature: 0.7, top_p: 0.9, streamer,
       });
       const gt = out && out[0] && out[0].generated_text;
       const text = Array.isArray(gt) ? String(gt[gt.length - 1]?.content || '') : String(gt || '');
