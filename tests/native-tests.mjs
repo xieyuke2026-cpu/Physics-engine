@@ -269,5 +269,29 @@ function poolWorld() {
   check('galton world stays finite', e.findNonFiniteBodies().length === 0);
 }
 
+/* --- host rendering contract: every body exposes non-empty vertices ---
+   (1.42 regression: circles shipped with vertices = [] and the app
+   renderer, which opens each body's path at vertices[0], threw on the
+   first circle — physics ran but the canvas showed only the grid) --- */
+{
+  const e = new NativeEngine({ enableSleeping: true });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true });
+  const ball = e.addBody({ kind: 'circle', x: 640, y: 100, radius: 20, restitution: 0.2 });
+  check('circle body exposes a vertices polygon (10–25 sides)',
+    ball.vertices.length >= 10 && ball.vertices.length <= 25, `n=${ball.vertices.length}`);
+  const bw = ball.bounds.max.x - ball.bounds.min.x;
+  check('circle bounds hug the disc (polygon approximation)',
+    bw > 36 && bw <= 40.01, `w=${bw.toFixed(1)}`);
+  const v0y = ball.vertices[0].y;
+  step(e, 30);
+  check('circle vertices track the falling body',
+    ball.vertices[0].y > v0y + 30 && near(ball.vertices[0].x, ball.position.x, 0.01),
+    `dy=${(ball.vertices[0].y - v0y).toFixed(1)}`);
+  const spin = e.addBody({ kind: 'circle', x: 300, y: 100, radius: 15, angle: Math.PI / 2 });
+  check('circle vertices rotate with the body angle',
+    near(spin.vertices[0].x, 300 + 15, 0.5) && near(spin.vertices[0].y, 100, 0.5),
+    `v0=(${spin.vertices[0].x.toFixed(1)},${spin.vertices[0].y.toFixed(1)})`);
+}
+
 console.log(`\nNativeEngine tests: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

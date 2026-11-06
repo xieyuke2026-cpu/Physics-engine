@@ -491,8 +491,14 @@ export class Renderer {
     const dataId = world.dataIdOf(body);
     const verts = body.vertices;
     ctx.beginPath();
-    ctx.moveTo(verts[0].x, verts[0].y);
-    for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y);
+    if (verts && verts.length) {
+      ctx.moveTo(verts[0].x, verts[0].y);
+      for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y);
+    } else if (body.circleRadius > 0) {
+      // backend contract is non-empty vertices for every body, but never
+      // let one malformed body blank the whole canvas (1.42 lesson)
+      ctx.arc(body.position.x, body.position.y, body.circleRadius, 0, Math.PI * 2);
+    }
     ctx.closePath();
     const isSel = dataId === selectedId;
     if (body.isStatic) ctx.fillStyle = world.isBound(body) ? COLORS.bound : COLORS.static;

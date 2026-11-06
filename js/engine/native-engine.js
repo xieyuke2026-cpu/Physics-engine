@@ -200,6 +200,17 @@ export class NativeEngine {
     if (kind === 'circle') {
       area = Math.PI * desc.radius * desc.radius;
       inertiaPerMass = 0.5 * desc.radius * desc.radius;
+      // Hosts draw EVERY body through body.vertices (the renderer opens
+      // its path at vertices[0]) and Matter circle bodies carry a polygon
+      // approximation — so circles expose one too (10–25 sides, mirroring
+      // Matter's rule). Physics still treats the body as a true circle;
+      // _local only feeds vertices/bounds via _syncShape.
+      const sides = Math.max(10, Math.min(25, Math.ceil(desc.radius)));
+      local = [];
+      for (let i = 0; i < sides; i++) {
+        const a = -Math.PI / 2 + (i * 2 * Math.PI) / sides;
+        local.push({ x: Math.cos(a) * desc.radius, y: Math.sin(a) * desc.radius });
+      }
     } else if (kind === 'rect') {
       const hw = desc.width / 2, hh = desc.height / 2;
       local = [{ x: -hw, y: -hh }, { x: hw, y: -hh }, { x: hw, y: hh }, { x: -hw, y: hh }];

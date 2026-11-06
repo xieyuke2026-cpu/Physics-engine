@@ -4,6 +4,14 @@
 位于 `js/engine/physics-engine.js`，另有 3D 核心 PhysicsEngine3D 1.0.0）。
 格式参考 Keep a Changelog；最新在上。
 
+## [MotionLab 1.42 / PhysicsEngine 1.12.1] — 2026-11-06
+
+### 修复：Native 后端下物体不显示（1.41 线上复验发现）
+- **症状**：切到 Native 后端后物理照常运行，但画布只剩网格、所有物体不可见。Matter 后端不受影响。
+- **根因**：宿主渲染器对**每个**刚体都按 `body.vertices` 多边形路径绘制（开口于 `vertices[0]`）；Matter 的圆形刚体带有顶点多边形近似，而 Native 的圆形刚体 1.41 时 `vertices` 为空数组——渲染器在第一个圆上抛错、整帧绘制中断（物理在绘制前步进，所以「物理在跑、画面全空」）。
+- **修复**：Native 圆形刚体补齐顶点多边形近似（10–25 边，规则同 Matter；物理仍按真圆求解，顶点只供绘制/包围盒）；渲染器另加空顶点兜底（退回整圆弧路径），单个异常刚体不再能清空整幅画布。
+- **防漏检**：新增应用级回归套件 `tests/native-render.mjs`——真实应用以 Native 后端启动、载入钉板，断言绘制调用与零窗口错误（此前引擎套件不渲染、应用冒烟不在 Native 下跑渲染，两边都没盖住）；`tests/native-tests.mjs` 另加圆形顶点契约断言。全量测试 **597 项全过**。
+
 ## [MotionLab 1.41 / PhysicsEngine 1.12.0] — 2026-11-06
 
 ### 自研物理引擎 Native（实验性）
