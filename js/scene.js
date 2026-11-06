@@ -5,6 +5,22 @@ export const SCENE_FORMAT = 'motionlab-scene';
 export const SCENE_VERSION = 2;
 export const BODY_TYPES = ['circle', 'rectangle', 'polygon', 'line'];
 
+/* Import hardening (1.39): scene JSON is data shared between people
+   (files, share links, forum attachments), so its size and every
+   numeric / string field are bounded before anything is built from
+   it. The largest scene we have ever produced (the 796-body stress
+   test) is ~370 KB of JSON, so a 2 MB cap leaves ~5x headroom while
+   keeping a hostile or corrupt file from exhausting the tab during
+   parse, validation or decompression. */
+export const MAX_SCENE_JSON_BYTES = 2 * 1024 * 1024;
+export const MAX_SCENE_NAME_LEN = 128;
+export const MAX_BODY_LABEL_LEN = 64;
+
+/** True when a scene JSON text exceeds the import size cap (UTF-8 bytes). */
+export function sceneJsonTooLarge(text) {
+  return typeof text === 'string' && new TextEncoder().encode(text).length > MAX_SCENE_JSON_BYTES;
+}
+
 export const DEFAULT_SETTINGS = {
   gravityX: 0,
   gravityY: 1,
@@ -37,10 +53,10 @@ export function bodyData(partial = {}) {
     x: num(partial.x, 0),
     y: num(partial.y, 0),
     angle: num(partial.angle, 0),            // radians
-    width: num(partial.width, 64),
-    height: num(partial.height, 64),
-    radius: num(partial.radius, 30),
-    sides: Math.max(3, Math.round(num(partial.sides, 6))),
+    width: Math.min(5000, Math.max(1, num(partial.width, 64))),
+    height: Math.min(5000, Math.max(1, num(partial.height, 64))),
+    radius: Math.min(2500, Math.max(1, num(partial.radius, 30))),
+    sides: Math.min(64, Math.max(3, Math.round(num(partial.sides, 6)))),
     density: num(partial.density, 0.001),
     friction: num(partial.friction, 0.3),
     frictionAir: num(partial.frictionAir, 0.01),
@@ -51,7 +67,7 @@ export function bodyData(partial = {}) {
     lockRotation: partial.lockRotation === true,
     vx: num(partial.vx, 0),
     vy: num(partial.vy, 0),
-    label: typeof partial.label === 'string' ? partial.label : '',
+    label: typeof partial.label === 'string' ? partial.label.slice(0, MAX_BODY_LABEL_LEN) : '',
   };
   if (type === 'line') { d.isStatic = true; d.height = Math.min(d.height, 10); }
   return d;
@@ -134,7 +150,7 @@ export function sceneData(partial = {}) {
   return {
     format: SCENE_FORMAT,
     version: SCENE_VERSION,
-    name: typeof partial.name === 'string' && partial.name.trim() ? partial.name.trim() : 'Untitled Scene',
+    name: typeof partial.name === 'string' && partial.name.trim() ? partial.name.trim().slice(0, MAX_SCENE_NAME_LEN) : 'Untitled Scene',
     settings: { ...DEFAULT_SETTINGS, ...(partial.settings || {}) },
     bodies: Array.isArray(partial.bodies) ? partial.bodies.map(bodyData) : [],
     constraints: Array.isArray(partial.constraints) ? partial.constraints.map(constraintData).filter((c) => c.bodyB) : [],
@@ -173,6 +189,10 @@ export function validateScene(raw) {
   }
   if (raw.format !== SCENE_FORMAT) errors.push(`format 必须为 "${SCENE_FORMAT}"`);
   if (raw.version !== 1 && raw.version !== SCENE_VERSION) errors.push(`version 必须为 1 或 ${SCENE_VERSION}`);
+  if (raw.name !== undefined) {
+    if (typeof raw.name !== 'string') errors.push('name 必须是字符串');
+    else if (raw.name.length > MAX_SCENE_NAME_LEN) errors.push(`name 长度超过上限 ${MAX_SCENE_NAME_LEN}`);
+  }
   if (!Array.isArray(raw.bodies)) {
     errors.push('bodies 必须是数组');
     return { ok: false, errors };
@@ -184,7 +204,19 @@ export function validateScene(raw) {
     for (const k of ['x', 'y']) {
       if (!Number.isFinite(Number(b[k]))) errors.push(`bodies[${i}].${k} 必须是有限数字`);
     }
-    for (const k of ['width', 'height', 'radius', 'density', 'friction', 'restitution', 'magnet']) {
+    if (Math.abs(Number(b.x)) > 100000 || Math.abs(Number(b.y)) > 100000) errors.push(`bodies[${i}] 坐标超出范围 ±100000`);
+    if (b.angle !== undefined && !Number.isFinite(Number(b.angle))) errors.push(`bodies[${i}].angle 必须是有限数字`);
+    for (const k of ['width', 'height']) {
+      if (b[k] !== undefined && !(Number(b[k]) > 0 && Number(b[k]) <= 5000)) errors.push(`bodies[${i}].${k} 超出范围 (0, 5000]`);
+    }
+    if (b.radius !== undefined && !(Number(b.radius) > 0 && Number(b.radius) <= 2500)) errors.push(`bodies[${i}].radius 超出范围 (0, 2500]`);
+    if (b.sides !== undefined && (!Number.isInteger(Number(b.sides)) || Number(b.sides) < 3 || Number(b.sides) > 64)) {
+      errors.push(`bodies[${i}].sides 必须是 3–64 的整数`);
+    }
+    if (b.label !== undefined && (typeof b.label !== 'string' || b.label.length > MAX_BODY_LABEL_LEN)) {
+      errors.push(`bodies[${i}].label 必须是字符串且长度不超过 ${MAX_BODY_LABEL_LEN}`);
+    }
+    for (const k of ['width', 'height', 'radius', 'density', 'friction', 'frictionAir', 'restitution', 'magnet']) {
       if (b[k] !== undefined && !Number.isFinite(Number(b[k]))) errors.push(`bodies[${i}].${k} 必须是有限数字`);
     }
     if (b.density !== undefined && Number(b.density) < 0) errors.push(`bodies[${i}].density 不能为负`);
@@ -243,6 +275,9 @@ export function validateScene(raw) {
         for (const k of ['x', 'y', 'width', 'height', 'density', 'drag', 'vx', 'vy']) {
           if (f[k] !== undefined && !Number.isFinite(Number(f[k]))) errors.push(`fluids[${i}].${k} 必须是有限数字`);
         }
+        if ((f.x !== undefined && Math.abs(Number(f.x)) > 100000) || (f.y !== undefined && Math.abs(Number(f.y)) > 100000)) {
+          errors.push(`fluids[${i}] 坐标超出范围 ±100000`);
+        }
       });
     }
   }
@@ -254,6 +289,9 @@ export function validateScene(raw) {
         if (!w || typeof w !== 'object') { errors.push(`winds[${i}] 不是对象`); return; }
         for (const k of ['x', 'y', 'width', 'height', 'vx', 'vy', 'power', 'gust', 'gustPeriod']) {
           if (w[k] !== undefined && !Number.isFinite(Number(w[k]))) errors.push(`winds[${i}].${k} 必须是有限数字`);
+        }
+        if ((w.x !== undefined && Math.abs(Number(w.x)) > 100000) || (w.y !== undefined && Math.abs(Number(w.y)) > 100000)) {
+          errors.push(`winds[${i}] 坐标超出范围 ±100000`);
         }
       });
     }

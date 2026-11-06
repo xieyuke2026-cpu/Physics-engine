@@ -261,6 +261,7 @@ const DICT = {
   'msg.importFailed': ['导入失败：{err}', 'Import failed: {err}'],
   'msg.importNotJson': ['导入失败：文件不是有效的 JSON', 'Import failed: the file is not valid JSON'],
   'msg.imported': ['已导入场景「{name}」', 'Imported scene "{name}"'],
+  'msg.importTooLarge': ['导入失败：文件超过 2 MB 上限', 'Import failed: the file exceeds the 2 MB limit'],
   'msg.resetConfirm': ['重置 MotionLab 的全部数据？\n将删除场景库（含 3D）、自动保存、设置与偏好，恢复到第一次打开的状态。此操作不可撤销。', 'Reset all MotionLab data?\nThis deletes the scene library (including 3D), autosaves, settings and preferences, returning to a first-run state. This cannot be undone.'],
   'msg.resetDone': ['已重置：全部数据恢复初始', 'Reset complete: all data restored to defaults'],
   'msg.autosaveRestored': ['已恢复上次自动保存的场景', 'Restored your last autosaved scene'],

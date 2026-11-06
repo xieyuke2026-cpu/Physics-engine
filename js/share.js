@@ -10,6 +10,8 @@
    can exceed what some chat apps tolerate in a link, which is a soft
    limit, not an error. */
 
+import { MAX_SCENE_JSON_BYTES } from './scene.js';
+
 function bytesToB64url(bytes) {
   let bin = '';
   const CHUNK = 0x8000;
@@ -47,18 +49,25 @@ export async function encodeScenePayload(scene) {
   return 'r' + bytesToB64url(bytes);
 }
 
-/** Payload string -> parsed scene object, or null on any failure. */
+/** Payload string -> parsed scene object, or null on any failure.
+ *  Size-capped (1.39): a crafted link must not decompress or parse
+ *  into an unbounded JSON text — the decoded bytes obey the same
+ *  2 MB scene cap as file imports. */
 export async function decodeScenePayload(payload) {
   try {
-    if (!payload || payload.length < 2) return null;
+    if (!payload || payload.length < 2 || payload.length > 4000000) return null;
     const tag = payload[0];
     const bytes = b64urlToBytes(payload.slice(1));
     if (tag === 'g') {
       if (typeof DecompressionStream === 'undefined') return null;
       const raw = await gunzipBytes(bytes);
+      if (raw.length > MAX_SCENE_JSON_BYTES) return null;
       return JSON.parse(new TextDecoder().decode(raw));
     }
-    if (tag === 'r') return JSON.parse(new TextDecoder().decode(bytes));
+    if (tag === 'r') {
+      if (bytes.length > MAX_SCENE_JSON_BYTES) return null;
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
     return null;
   } catch { return null; }
 }

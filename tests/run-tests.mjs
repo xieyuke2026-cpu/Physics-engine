@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 globalThis.Matter = require('../vendor/matter.min.js');
 
-const { validateScene, defaultScene, sceneData, bodyData, constraintData, hingeData, fluidData, presetScenes, jitteredScene } = await import('../js/scene.js');
+const { validateScene, defaultScene, sceneData, bodyData, constraintData, hingeData, fluidData, presetScenes, jitteredScene, sceneJsonTooLarge, MAX_SCENE_JSON_BYTES } = await import('../js/scene.js');
 const { PhysicsWorld } = await import('../js/physics.js');
 
 let pass = 0, fail = 0;
@@ -518,6 +518,32 @@ check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b)
   check('v1.25: decoded scene validates and matches',
     !!back && validateScene(back).ok && back.bodies.length === scene.bodies.length && back.winds.length === 1);
   check('v1.25: garbage payload decodes to null', (await decodeScenePayload('g!!!not-base64!!!')) === null);
+}
+
+/* --- v1.39: import hardening (size cap, finite/range audit, string bounds) --- */
+{
+  check('v1.39: sceneJsonTooLarge flags >2MB text', sceneJsonTooLarge('x'.repeat(MAX_SCENE_JSON_BYTES + 1)));
+  check('v1.39: sceneJsonTooLarge passes small text', !sceneJsonTooLarge('{"format":"motionlab-scene"}'));
+  const base = { format: 'motionlab-scene', version: 2, bodies: [{ type: 'circle', x: 10, y: 10, radius: 20 }] };
+  check('v1.39: plain valid scene still passes', validateScene(base).ok);
+  check('v1.39: Infinity angle rejected (what 1e999 parses to)', !validateScene({ ...base, bodies: [{ type: 'circle', x: 0, y: 0, angle: Infinity }] }).ok);
+  check('v1.39: absurd radius rejected (finite but 1e308)', !validateScene({ ...base, bodies: [{ type: 'circle', x: 0, y: 0, radius: 1e308 }] }).ok);
+  check('v1.39: zero width rejected', !validateScene({ ...base, bodies: [{ type: 'rectangle', x: 0, y: 0, width: 0, height: 10 }] }).ok);
+  check('v1.39: oversized width rejected', !validateScene({ ...base, bodies: [{ type: 'rectangle', x: 0, y: 0, width: 6000, height: 10 }] }).ok);
+  check('v1.39: huge position rejected', !validateScene({ ...base, bodies: [{ type: 'circle', x: 1e308, y: 0 }] }).ok);
+  check('v1.39: million-sided polygon rejected', !validateScene({ ...base, bodies: [{ type: 'polygon', x: 0, y: 0, sides: 1000000 }] }).ok);
+  check('v1.39: boundary geometry accepted (r=2500, sides=64)', validateScene({ ...base, bodies: [{ type: 'polygon', x: 0, y: 0, radius: 2500, sides: 64 }] }).ok);
+  check('v1.39: scene name >128 rejected', !validateScene({ ...base, name: 'n'.repeat(129) }).ok);
+  check('v1.39: body label >64 rejected', !validateScene({ ...base, bodies: [{ type: 'circle', x: 0, y: 0, label: 'l'.repeat(65) }] }).ok);
+  check('v1.39: fluid at absurd position rejected', !validateScene({ ...base, fluids: [{ x: 1e308, y: 0, width: 100, height: 100 }] }).ok);
+  check('v1.39: bodyData clamps monster geometry', bodyData({ type: 'polygon', sides: 100000 }).sides === 64
+    && bodyData({ width: 1e9 }).width === 5000 && bodyData({ radius: 1e9 }).radius === 2500);
+  check('v1.39: sceneData truncates long name/label', sceneData({ name: 'n'.repeat(200) }).name.length === 128
+    && bodyData({ label: 'l'.repeat(200) }).label.length === 64);
+  const { decodeScenePayload } = await import('../js/share.js');
+  const bigJson = JSON.stringify({ format: 'motionlab-scene', version: 2, name: 'x'.repeat(MAX_SCENE_JSON_BYTES), bodies: [] });
+  const rawPayload = 'r' + Buffer.from(bigJson, 'utf8').toString('base64url');
+  check('v1.39: oversized share payload decodes to null', (await decodeScenePayload(rawPayload)) === null);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

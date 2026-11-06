@@ -3,7 +3,7 @@
    drawing in render.js, panel DOM in ui.js, persistence in storage.js. */
 
 import { icon, TOOL_ICONS } from './icons.js';
-import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene } from './scene.js';
+import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene, MAX_SCENE_JSON_BYTES, sceneJsonTooLarge } from './scene.js';
 import { Recorder } from './record.js';
 import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';
 import { PhysicsWorld } from './physics.js';
@@ -1603,8 +1603,11 @@ function initChrome() {
   $('fileImport').addEventListener('change', async (e) => {
     const f = e.target.files[0]; e.target.value = '';
     if (!f) return;
+    // Size cap first (1.39): never read or parse an oversized file.
+    if (f.size > MAX_SCENE_JSON_BYTES) { toast(t('msg.importTooLarge'), 4200); return; }
     try {
       const text = await f.text();
+      if (sceneJsonTooLarge(text)) { toast(t('msg.importTooLarge'), 4200); return; }
       const raw = JSON.parse(text);
       const v = validateScene(raw);
       if (!v.ok) { toast(t('msg.importFailed', { err: v.errors.slice(0, 2).join(getLang() === 'en' ? '; ' : '；') }), 4200); return; }
