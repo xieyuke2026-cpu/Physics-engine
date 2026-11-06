@@ -382,3 +382,8 @@ body.no-3d .mode-switch, body.no-3d #navSectionPresets3D, body.no-3d #navSection
 .ai-inputrow textarea{flex:1;resize:none;font:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:none;color:inherit}
 .ai-send{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:0 16px;font-size:13.5px;cursor:pointer}
 .ai-send[disabled]{opacity:.5;cursor:default}
+
+.ai-statusrow{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.ai-statusrow .ai-status{flex:1;border-bottom:none}
+.ai-unload{font-size:11.5px;padding:3px 9px;margin-right:10px;border:1px solid var(--border);border-radius:14px;background:none;color:inherit;cursor:pointer}
+.ai-unload[hidden]{display:none}

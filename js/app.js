@@ -4,7 +4,7 @@
 
 import { icon, TOOL_ICONS } from './icons.js';
 import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene, MAX_SCENE_JSON_BYTES, sceneJsonTooLarge } from './scene.js';
-import { createAssistant } from './ai/assistant.js';
+import { createAssistant } from './ai/assistant.js?v=1.52';
 import { describeSceneSummary } from './ai/actions.js';
 import { Recorder } from './record.js';
 import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';
@@ -2101,6 +2101,7 @@ function boot() {
    The assistant module drives the lab exclusively through these calls;
    generated scenes still pass validateScene() like any import. */
 const aiHost = {
+  version: APP_VERSION,
   listPresets() { return presetScenes().map((p) => ({ key: p.key, name: p.name })); },
   loadPreset(key) {
     const p = presetScenes().find((x) => x.key === key);

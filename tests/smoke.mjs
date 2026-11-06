@@ -198,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.51')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.52')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.12.4')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -212,6 +212,8 @@ check('v1.50: AI panel opens with the local-model greeting',
   !doc.getElementById('aiPanel').hidden && doc.getElementById('aiMessages').textContent.includes('Qwen2.5-0.5B'));
 click(doc.getElementById('aiClose'));
 check('v1.50: AI panel closes', doc.getElementById('aiPanel').hidden);
+check('v1.52: unload-model button exists and starts hidden',
+  !!doc.getElementById('aiUnload') && doc.getElementById('aiUnload').hidden);
 {
   const sel = doc.querySelector('#settingsBody select');
   check('v1.41: settings offers the backend picker (Matter default, Native experimental)',

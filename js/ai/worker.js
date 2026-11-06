@@ -8,6 +8,8 @@ import { pipeline, env, TextStreamer } from 'https://cdn.jsdelivr.net/npm/@huggi
 
 env.allowLocalModels = false;
 env.useBrowserCache = true;
+// Leave CPU headroom for the 60 FPS lab while WASM inference runs.
+if (env.backends?.onnx?.wasm) env.backends.onnx.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
 
 const MODEL = 'onnx-community/Qwen2.5-0.5B-Instruct';
 const HOSTS = ['https://hf-mirror.com/', 'https://huggingface.co/'];
@@ -15,6 +17,13 @@ let generator = null;
 let deviceUsed = null;
 
 async function hasGpuAdapter() {
+  // iOS/iPadOS WebKit: its WebGPU is brand new (iOS 26) and session creation
+  // for this runtime killed the tab outright in Ryan's iPad test (page died
+  // right after download, "ready" never shown). On Apple mobile WebKit we
+  // deliberately take the proven WASM path instead.
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/.test(ua)) return false;
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return false;
   try {
     if (!navigator.gpu) return false;
     const a = await navigator.gpu.requestAdapter();
@@ -62,7 +71,7 @@ onmessage = async (ev) => {
         callback_function: (t) => postMessage({ type: 'token', id: msg.id, text: t }),
       });
       const out = await generator(msg.messages, {
-        max_new_tokens: 420, do_sample: true, temperature: 0.7, top_p: 0.9, streamer,
+        max_new_tokens: 200, do_sample: true, temperature: 0.7, top_p: 0.9, streamer,
       });
       const gt = out && out[0] && out[0].generated_text;
       const text = Array.isArray(gt) ? String(gt[gt.length - 1]?.content || '') : String(gt || '');

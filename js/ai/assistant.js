@@ -22,13 +22,15 @@ const CORE_PROMPT = `你是 MotionLab 的 AI 助手，在用户设备本地运�
 
 /* ---------------- worker brain ---------------- */
 class WorkerBrain {
-  constructor() {
+  constructor(hostVersion) {
+    this.hostVersion = hostVersion || '';
     this.worker = null; this.state = 'idle'; this.device = null; this.respawned = false;
     this.pending = new Map(); this.seq = 0; this.onProgress = null; this.loadWaiters = [];
   }
   ensure() {
     if (this.worker) return;
-    this.worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+    const v = this.hostVersion ? `?v=${this.hostVersion}` : '';
+    this.worker = new Worker(new URL(`./worker.js${v}`, import.meta.url), { type: 'module' });
     this.worker.onmessage = (ev) => {
       const m = ev.data || {};
       if (m.type === 'progress') { this.onProgress && this.onProgress(m); return; }
@@ -62,6 +64,12 @@ class WorkerBrain {
       if (this.state === 'loading') { this.state = 'error'; for (const w of this.loadWaiters.splice(0)) w.reject(new Error('worker failed')); }
     };
   }
+  unload() {
+    if (this.worker) { try { this.worker.terminate(); } catch { /* gone */ } }
+    this.worker = null; this.state = 'idle'; this.device = null; this.respawned = false;
+    for (const p of this.pending.values()) p.reject(new Error('unloaded'));
+    this.pending.clear();
+  }
   load() {
     this.ensure();
     if (this.state === 'ready') return Promise.resolve(this.device);
@@ -83,7 +91,7 @@ export function createAssistant(host) {
   const $ = (id) => document.getElementById(id);
   const panel = $('aiPanel'), msgs = $('aiMessages'), input = $('aiInput'),
     sendBtn = $('aiSend'), status = $('aiStatus'), chips = $('aiChips');
-  const brain = new WorkerBrain();
+  const brain = new WorkerBrain(host.version);
   const history = []; // {role, content} trimmed pairs (assistant side stores cleaned text + execution notes)
   let busy = false, greeted = false;
 
@@ -103,6 +111,14 @@ export function createAssistant(host) {
     div.className = 'ai-note'; div.textContent = text;
     msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight;
   }
+
+  const unloadBtn = $('aiUnload');
+  if (unloadBtn) unloadBtn.addEventListener('click', () => {
+    brain.unload();
+    unloadBtn.hidden = true;
+    setStatus(L('模型已卸载（内存已释放）', 'Model unloaded (memory freed)'));
+    addNote(L('已卸载模型，需要时再提问会重新加载（已缓存，不必再下载）', 'Model unloaded. Ask again to reload it from cache.'));
+  });
 
   brain.onProgress = (p) => {
     if (p.total > 0) setStatus(L(`正在下载模型… ${Math.round((p.loaded / p.total) * 100)}%（仅首次，约 350MB，下完缓存离线可用）`,
@@ -149,11 +165,11 @@ export function createAssistant(host) {
     const bubble = addMsg('assistant', '');
     try {
       if (brain.state !== 'ready') setStatus(L('正在加载模型…', 'Loading model…'));
-      const chunks = retrieve(q, 3);
+      const chunks = retrieve(q, 2);
       const kb = chunks.length ? `\n\n【参考资料】\n${chunks.map((c) => `《${c.title}》${c.text}`).join('\n')}` : '';
       const system = CORE_PROMPT + kb + `\n\n【当前状态】${host.describeScene()}`;
       const messages = [{ role: 'system', content: system },
-        ...history.slice(-6), { role: 'user', content: q }];
+        ...history.slice(-4), { role: 'user', content: q }];
       let streamed = '';
       const raw = await brain.chat(messages, (t) => {
         streamed += t;
@@ -162,6 +178,7 @@ export function createAssistant(host) {
       });
       setStatus(brain.device === 'webgpu' ? L('模型就绪 · WebGPU（本地）', 'Model ready · WebGPU (local)')
         : L('模型就绪 · WASM（本地）', 'Model ready · WASM (local)'));
+      if (unloadBtn) unloadBtn.hidden = false;
       const { actions, text: clean } = extractActions(raw || streamed);
       let note = '';
       for (const a of actions.slice(0, 1)) note = await execute(a);
