@@ -26,7 +26,12 @@ const FEATURE_3D = false;
 const $ = (id) => document.getElementById(id);
 const canvas = $('world');
 
-const world = new PhysicsWorld();
+/* The solver backend is a device preference (1.41), not scene data:
+   scenes stay solver-neutral and can be replayed on either engine. */
+function savedBackend() {
+  try { return localStorage.getItem('motionlab.backend') === 'native' ? 'native' : 'matter'; } catch { return 'matter'; }
+}
+let world = new PhysicsWorld(savedBackend());
 const renderer = new Renderer(canvas);
 const camera = renderer.camera;
 const recorder = new Recorder(canvas); // GIF recording (1.28, record.js)
@@ -1650,8 +1655,23 @@ $('btnDuplicateScene').addEventListener('click', () => {
 });
 
 /* ---------------- settings modal ---------------- */
+/** Switch the solver backend (1.41): persist the choice, rebuild the
+ *  world on the new solver and replay the current scene into it. */
+function setEngineBackend(id) {
+  if (id !== 'matter' && id !== 'native') return;
+  try { localStorage.setItem('motionlab.backend', id); } catch { /* storage unavailable */ }
+  if (world.core.backendId === id) return;
+  const snap = currentScene();
+  world = new PhysicsWorld(id);
+  loadScene(snap);
+  resetHistory();
+  toast(t('msg.backendSwitched', { name: id === 'native' ? 'Native' : 'Matter.js' }));
+}
+
 function openSettings() {
   renderSettings($('settingsBody'), settings, {
+    backendId: world.core.backendId,
+    onEngineBackend(id) { setEngineBackend(id); },
     onUISetting(key, value) {
       settings[key] = value;
       scheduleAutosave();

@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.11.0');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.0');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -668,20 +668,19 @@ function galtonBins(seed) {
     && !pe4.setHingeMotor(pe4.describeHinges()[0].id, NaN));
 }
 
-/* --- v1.11.0: backend registry / interface formalisation --- */
+/* --- v1.11.0/v1.12.0: backend registry; native experimental since 1.12.0 --- */
 {
-  check('backends: registry lists matter (active) + native (planned)',
+  check('backends: registry lists matter (active) + native (experimental)',
     Array.isArray(BACKENDS) && BACKENDS.length === 2
     && BACKENDS[0].id === 'matter' && BACKENDS[0].status === 'active'
-    && BACKENDS[1].id === 'native' && BACKENDS[1].status === 'planned');
+    && BACKENDS[1].id === 'native' && BACKENDS[1].status === 'experimental');
   check('backends: class exposes the same registry', PhysicsEngine.BACKENDS === BACKENDS);
   const def = PhysicsEngine.create();
   check('backends: create() defaults to the matter backend', def instanceof PhysicsEngine && def.backendId === 'matter');
   const exp = PhysicsEngine.create({ backend: 'matter' });
   check('backends: create({backend:"matter"}) works and reports its id', exp instanceof PhysicsEngine && exp.backendId === 'matter');
-  let nativeErr = '';
-  try { PhysicsEngine.create({ backend: 'native' }); } catch (e) { nativeErr = e.message; }
-  check('backends: planned native backend refuses plainly (no silent fallback)', /not available/.test(nativeErr) && /planned/.test(nativeErr), nativeErr);
+  const nat = PhysicsEngine.create({ backend: 'native' });
+  check('backends: create({backend:"native"}) constructs the self-developed engine', nat && nat.backendId === 'native' && !(nat instanceof PhysicsEngine));
   let unknownErr = '';
   try { PhysicsEngine.create({ backend: 'bullet' }); } catch (e) { unknownErr = e.message; }
   check('backends: unknown backend id refuses', /unknown backend/.test(unknownErr), unknownErr);
@@ -689,6 +688,9 @@ function galtonBins(seed) {
   sim.addBody({ kind: 'circle', x: 100, y: 0, radius: 10 });
   for (let i = 0; i < 60; i++) sim.advance(1000 / 60);
   check('backends: a registry-created engine simulates (ball falls)', sim.allBodies()[0].position.y > 10, `y=${sim.allBodies()[0].position.y}`);
+  nat.addBody({ kind: 'circle', x: 100, y: 0, radius: 10 });
+  for (let i = 0; i < 60; i++) nat.advance(1000 / 60);
+  check('backends: the native engine simulates through the same API (ball falls)', nat.allBodies()[0].position.y > 10, `y=${nat.allBodies()[0].position.y}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

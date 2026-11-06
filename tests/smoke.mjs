@@ -198,15 +198,30 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.40')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.11.0')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.41')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.12.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
-check('v1.40: settings shows the backend registry line (Matter current, Native in development)',
-  doc.getElementById('settingsBody').textContent.includes('物理引擎后端')
-  && doc.getElementById('settingsBody').textContent.includes('Matter.js（当前）')
-  && doc.getElementById('settingsBody').textContent.includes('Native（开发中）'));
+{
+  const sel = doc.querySelector('#settingsBody select');
+  check('v1.41: settings offers the backend picker (Matter default, Native experimental)',
+    !!sel && sel.options.length === 2 && sel.value === 'matter'
+    && sel.textContent.includes('Native') && sel.textContent.includes('实验性'),
+    sel ? sel.textContent : 'no select');
+  sel.value = 'native';
+  sel.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(400);
+  check('v1.41: switching to Native persists the choice and keeps the scene',
+    window.localStorage.getItem('motionlab.backend') === 'native'
+    && /物体 [1-9]/.test(doc.getElementById('stCount').textContent),
+    window.localStorage.getItem('motionlab.backend') + ' / ' + doc.getElementById('stCount').textContent);
+  sel.value = 'matter';
+  sel.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(120);
+  check('v1.41: switching back to Matter works',
+    window.localStorage.getItem('motionlab.backend') === 'matter');
+}
 {
   // Stylesheet integrity guard: a truncated rule once left an unclosed block
   // that silently disabled every later rule in real browsers (all of PFLab's

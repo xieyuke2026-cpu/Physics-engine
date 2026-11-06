@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.11.0 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -73,7 +73,17 @@
              multi-pixel anchor errors at 2 iterations (measured on a
              ferris wheel: hub drift 28px, cross error 5.6°); at 4 the
              same machine holds its hub exactly and its cross angle
-     1.11.0 — backend interface formalised: a BACKENDS registry (also
+     1.12.0 — the self-developed Native backend lands (MotionLab 1.41):
+             BACKENDS' native entry moves from planned to experimental
+             and PhysicsEngine.create({ backend: 'native' }) now
+             constructs it (a from-scratch impulse solver in
+             native-engine.js — no physics library inside — honouring
+             this API's full surface: bodies, constraints, hinges with
+             motors, fluids, winds, magnetism, gravitation, sleeping,
+             snapshots, queries, seeded RNG). Matter stays the default
+             and the reference behaviour; native is opt-in and labelled
+             experimental while its feel is validated on real scenes.
+    1.11.0 — backend interface formalised: a BACKENDS registry (also
              PhysicsEngine.BACKENDS) names every solver backend behind
              this API, PhysicsEngine.create({ backend }) constructs
              through the registry, and every instance reports its
@@ -113,6 +123,8 @@
              keeps its gust phase. Steady wind is unchanged (gust = 0)
    ========================================================================== */
 
+import { NativeEngine } from './native-engine.js';
+
 let _M = null;
 function matter() {
   if (_M) return _M;
@@ -138,7 +150,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.11.0';
+export const VERSION = '1.12.0';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -150,9 +162,11 @@ export const VERSION = '1.11.0';
    backend's internals — so backends can be swapped without host
    changes. This registry is the single source of truth: hosts render
    engine pickers from it, and PhysicsEngine.create({ backend })
-   constructs through it. An entry whose status is not 'active' is a
-   published intention, not a usable engine: create() says so plainly
-   instead of silently falling back.
+   constructs through it. Statuses: 'active' backends are the
+   reference behaviour; 'experimental' backends construct normally
+   but hosts should label them as such; a 'planned' entry is a
+   published intention, not a usable engine — create() says so
+   plainly instead of silently falling back.
    ========================================================================== */
 export const BACKENDS = [
   {
@@ -160,8 +174,8 @@ export const BACKENDS = [
     summary: 'The original solver: Matter.js 0.20 rigid-body engine behind the PhysicsEngine API, plus the engine-level force models (gravitation, buoyancy, magnetism, wind).',
   },
   {
-    id: 'native', name: 'Native', status: 'planned', since: null,
-    summary: 'A self-developed solver written for this API (impulse solver, sleeping, stacking stability). In development — targeted at MotionLab 1.41; until it lands, create({ backend: "native" }) throws.',
+    id: 'native', name: 'Native', status: 'experimental', since: '1.12.0',
+    summary: 'A self-developed solver written for this API (sequential impulses, warm starting, sleeping, SAT + face-clipping contacts). Experimental since 1.12.0: covers the full API surface, validated by its own behaviour suite; Matter remains the default.',
   },
 ];
 
@@ -222,13 +236,15 @@ export class PhysicsEngine {
   /**
    * Construct an engine through the backend registry (1.11.0).
    * `opts.backend` names a BACKENDS entry ('matter' when omitted).
-   * A registered-but-not-active backend — and an unknown id — throws
-   * a plain error: silently falling back to another solver would
-   * change simulation results without telling the host.
+   * 'active' and 'experimental' backends construct normally (native
+   * since 1.12.0); a registered-but-planned backend — and an unknown
+   * id — throws a plain error: silently falling back to another
+   * solver would change simulation results without telling the host.
    */
   static create(opts = {}) {
     const backend = opts.backend || 'matter';
     if (backend === 'matter') return new PhysicsEngine(opts);
+    if (backend === 'native') return new NativeEngine(opts);
     const known = BACKENDS.find((b) => b.id === backend);
     if (known) {
       throw new Error(`PhysicsEngine: backend "${backend}" (${known.name}) is registered but not available in ${VERSION} — status: ${known.status}`);

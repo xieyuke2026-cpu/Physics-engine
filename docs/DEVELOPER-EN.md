@@ -15,8 +15,8 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.40 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.11.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| MotionLab (app) | 1.41 | `APP_VERSION` in `js/ui.js` |
+| PhysicsEngine (2D core) | 1.12.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -43,7 +43,7 @@ In the browser (global Matter + module import):
 <script src="vendor/matter.min.js"></script>
 <script type="module">
   import { PhysicsEngine, VERSION } from './js/engine/physics-engine.js';
-  console.log(VERSION); // '1.11.0'
+  console.log(VERSION); // '1.12.0'
 </script>
 ```
 
@@ -114,17 +114,18 @@ Coordinate system: pixels, y grows downward; angles are radians (except
 Behind the public API sits a pluggable solver "backend". The registry is
 the single source of truth: the module exports `BACKENDS` (also
 `PhysicsEngine.BACKENDS`), each entry carrying
-`id / name / status ('active' | 'planned') / since / summary`:
+`id / name / status ('active' | 'experimental' | 'planned') / since / summary`:
 
 | id | Name | Status |
 | --- | --- | --- |
 | `matter` | Matter.js | active (the default, since 1.0.0) |
-| `native` | Native (self-developed) | planned (targeted at MotionLab 1.41) |
+| `native` | Native (self-developed) | experimental (since 1.12.0) |
 
-- Construct through the registry: `PhysicsEngine.create({ backend: 'matter' })` (omitting `backend` means matter); `new PhysicsEngine()` is equivalent.
+- Construct through the registry: `PhysicsEngine.create({ backend: 'matter' })` (omitting `backend` means matter); `new PhysicsEngine()` is equivalent. `create({ backend: 'native' })` returns the self-developed engine (class `NativeEngine` in `native-engine.js`).
 - Every instance reports its solver as `backendId`.
-- Asking for a planned or unknown backend **throws** (the message states the status) — there is no silent fallback: swapping solvers changes simulation results, and the host must know.
-- The backend contract: a backend implements this class's full public surface (body / constraint / hinge management, fluid / wind / magnet regions, fixed-timestep `advance`, snapshots, spatial queries, the seeded RNG). Hosts code against that API only, never against backend internals — when the Native backend lands in 1.41, hosts switch with zero changes.
+- 'active' and 'experimental' backends construct normally (hosts should label experimental ones as such); asking for a planned or unknown backend **throws** (the message states the status) — there is no silent fallback: swapping solvers changes simulation results, and the host must know.
+- The backend contract: a backend implements this class's full public surface (body / constraint / hinge management, fluid / wind / magnet regions, fixed-timestep `advance`, snapshots, spatial queries, the seeded RNG). Hosts code against that API only, never against backend internals — MotionLab 1.41 wires it exactly this way: the Settings backend picker rebuilds the world on the chosen solver and replays the current scene, with zero host-code changes.
+- Native solver notes (1.12.0): sequential impulses with warm starting, SAT + reference-face clipping contacts, sleeping; force models and motors kick once per fixed step (independent of the substep count); the substep count floors at 2 (tall stacks are under-damped at 1); known limits: a 10-high single-column tower still topples, and position correction is linear-only. Its behaviour suite is `tests/native-tests.mjs`.
 
 ### Seeded RNG (1.3.0)
 
@@ -320,6 +321,13 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   `PhysicsEngine.create({ backend })` constructing through it, and
   `backendId` on every instance; unavailable backends throw plainly
   instead of falling back silently; simulation behaviour unchanged
+- 1.12.0 — the self-developed Native backend lands (experimental):
+  `create({ backend: 'native' })` constructs it directly; a
+  from-scratch sequential-impulse solver covering the full public
+  surface (stacking / sleeping / hinge motors / true buoyancy /
+  magnetism / gravitation / gusts / snapshots / seeded RNG), force
+  models kicking once per fixed step and a substep floor of 2; its
+  own 43-check behaviour suite (tests/native-tests.mjs)
 
 ---
 

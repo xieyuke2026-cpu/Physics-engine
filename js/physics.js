@@ -25,12 +25,16 @@ function mlToDesc(d) {
 }
 
 export class PhysicsWorld {
-  constructor() {
+  constructor(backend = 'matter') {
     // Sleeping on: resting stacks (pyramids, settled piles) stop costing CPU.
     // Bodies wake automatically on collision, edits and dragging.
     // substeps 2 = anti-tunnelling: fast bodies cannot jump thin colliders
     // (user dragging stays exempt — it is position-driven by design).
-    this.core = new PhysicsEngine({ enableSleeping: true, substeps: 2 });
+    // The solver is chosen through the registry (1.41): 'matter' is the
+    // default; 'native' is the self-developed experimental backend. The
+    // scene format is identical either way, so worlds can be rebuilt on
+    // the other solver and replayed.
+    this.core = PhysicsEngine.create({ backend, enableSleeping: true, substeps: 2 });
     this.collisionFlash = 0;
     this.core.onCollision(() => { this.collisionFlash = performance.now(); });
   }

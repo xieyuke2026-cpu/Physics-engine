@@ -359,3 +359,6 @@ body.no-3d .mode-switch, body.no-3d #navSectionPresets3D, body.no-3d #navSection
 #updateBar { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 260; display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); padding: 8px 12px; font-size: 13px; box-shadow: 0 4px 18px rgba(20,24,30,.12); }
 #updateBar[hidden] { display: none; }
 @media (max-width: 760px) { .side-launch { width: auto; margin-top: 0; } }
+
+/* ===== 1.41: backend picker (Settings) ===== */
+.switch-row select { height: 32px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: #fff; font-size: 13px; max-width: 62%; }

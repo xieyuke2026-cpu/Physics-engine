@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.40';
+export const APP_VERSION = '1.41';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -473,12 +473,27 @@ export function renderSettings(root, ui, cb) {
   clear.addEventListener('click', () => cb.onClearAll());
   wrap.appendChild(clear);
   wrap.appendChild(title(L('关于', 'About')));
-  // Backend registry (1.40): rendered from the engine's own BACKENDS list —
-  // the picker becomes real when the native backend lands in 1.41.
-  const backendLine = ENGINE_BACKENDS.map((b) => (b.status === 'active'
-    ? `${b.name}${L('（当前）', ' (current)')}`
-    : `${b.name}${L('（开发中）', ' (in development)')}`)).join(' · ');
-  wrap.appendChild(el(`<p class="empty-note">${L('物理引擎后端', 'Physics backend')}: ${backendLine}</p>`));
+  // Backend picker (1.41): rendered from the engine's own BACKENDS
+  // registry — matter is the default, native is the self-developed
+  // experimental solver. Switching rebuilds the world on the chosen
+  // solver and replays the current scene (handled by the app via cb).
+  const backendRow = el('<div class="switch-row"><span>' + L('物理引擎后端', 'Physics backend') + '</span></div>');
+  const backendSel = el('<select aria-label="backend"></select>');
+  for (const b of ENGINE_BACKENDS) {
+    const tag = b.status === 'active'
+      ? L('（默认）', ' (default)')
+      : b.status === 'experimental'
+        ? L('（自研 · 实验性）', ' (self-developed, experimental)')
+        : L('（开发中）', ' (in development)');
+    const opt = el(`<option value="${b.id}">${b.name}${tag}</option>`);
+    if (b.status === 'planned') opt.disabled = true;
+    backendSel.appendChild(opt);
+  }
+  backendSel.value = (cb && cb.backendId) || 'matter';
+  backendSel.addEventListener('change', () => { if (cb.onEngineBackend) cb.onEngineBackend(backendSel.value); });
+  backendRow.appendChild(backendSel);
+  wrap.appendChild(backendRow);
+  wrap.appendChild(el(`<p class="empty-note">${L('切换后端会以当前场景重建世界并重演；Native 为自研求解器（实验性），手感可能与 Matter.js 略有差异。', 'Switching rebuilds the world on the chosen solver and replays the current scene. Native is the self-developed solver (experimental); its feel may differ slightly from Matter.js.')}</p>`));
   const matterVersion = (typeof window !== 'undefined' && window.Matter && window.Matter.version) || '0.20.0';
   wrap.appendChild(el(`<p class="empty-note">${L(`MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。`, `MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · Fully static (GitHub Pages) · no backend, no API key. Shortcuts: Space run/pause · Ctrl+Z/Y undo/redo · Ctrl+S save · Ctrl+D duplicate body · Arrow keys nudge · R rotate 15° · Delete remove.`)}</p>`));
   root.appendChild(wrap);
