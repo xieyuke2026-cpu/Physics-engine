@@ -5,6 +5,7 @@ import { validateScene } from './scene.js';
 import { validateScene3D } from './scene3d.js';
 
 const KEY_SCENES = 'motionlab.scenes.v1';
+const KEY_CHAL = 'motionlab.challenges.v1';
 const KEY_AUTO = 'motionlab.autosave.v1';
 const KEY_SCENES_3D = 'motionlab.scenes3d.v1';
 const KEY_AUTO_3D = 'motionlab.autosave3d.v1';
@@ -127,4 +128,24 @@ export function resetAllData() {
   for (const key of [KEY_SCENES, KEY_AUTO, KEY_SCENES_3D, KEY_AUTO_3D, KEY_UI, KEY_VISITED]) {
     try { localStorage.removeItem(key); } catch {}
   }
+}
+
+/* ---------------- challenge progress (1.50) ----------------
+ * { [challengeId]: {stars, bestPieces, bestSec} } — best values only ever
+ * improve; stars keep the maximum earned. */
+export function loadChallengeProgress() {
+  const obj = readJSON(KEY_CHAL);
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+  return obj;
+}
+
+export function saveChallengeResult(id, { stars, pieces, sec }) {
+  const all = loadChallengeProgress();
+  const prev = all[id] || { stars: 0, bestPieces: null, bestSec: null };
+  all[id] = {
+    stars: Math.max(prev.stars || 0, stars || 0),
+    bestPieces: prev.bestPieces == null ? pieces : Math.min(prev.bestPieces, pieces),
+    bestSec: prev.bestSec == null ? sec : Math.min(prev.bestSec, sec),
+  };
+  return writeJSON(KEY_CHAL, all);
 }

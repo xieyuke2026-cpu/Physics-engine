@@ -4,7 +4,8 @@
 
 import { icon, TOOL_ICONS } from './icons.js';
 import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene, MAX_SCENE_JSON_BYTES, sceneJsonTooLarge } from './scene.js';
-import { Recorder } from './record.js';
+import { createRecording, recordEvent, finalizeRecording, validateReplay, hashBodyStates, statesFromSnapshot, eventsByStep, MAX_REPLAY_STEPS, MAX_REPLAY_BYTES } from './replay.js';
+import { CHALLENGES, challengeById, GoalTracker, pointInZone, starsFor } from './challenges.js';
 import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';
 import { PhysicsWorld } from './physics.js';
 import { PhysicsEngine } from './engine/physics-engine.js';
@@ -34,7 +35,6 @@ function savedBackend() {
 let world = new PhysicsWorld(savedBackend());
 const renderer = new Renderer(canvas);
 const camera = renderer.camera;
-const recorder = new Recorder(canvas); // GIF recording (1.28, record.js)
 
 let settings = { ...DEFAULT_SETTINGS };
 let sceneName = 'Untitled Scene';
@@ -76,6 +76,9 @@ function currentScene() {
 }
 
 function loadScene(scene, { markInitial = true } = {}) {
+  if (playback) teardownPlayback();
+  if (replayRec) cancelReplayRecording();
+  if (challenge) { challenge = null; chalDismissed = false; }
   const s = sceneData(scene);
   sceneName = s.name;
   settings = { ...s.settings };
@@ -186,6 +189,8 @@ function addMagnetAt(x, y, radius = 26) {
     type: 'circle', x, y, radius, isStatic: true, friction: 0.4,
     density: 0.008, magnet: 100, label: 'Magnet N 磁铁',
   }));
+  recEvent('add', { body: world.serializeBody(b) });
+  if (challenge) challenge.added.add(world.dataIdOf(b));
   selectedId = world.dataIdOf(b);
   selectedFluidId = null; selectedWindId = null; selectedHingeId = null;
   refreshPanel(); pushHistorySoon(); scheduleAutosave();
@@ -211,6 +216,7 @@ const panel = new Panel($('panelBody'), {
       case 'isStatic': world.setStatic(b, value); if (!value && staticDragId) { staticDragId = null; panel.staticDragId = null; panel.mode = null; } break;
       case 'lockRotation': world.setLockRotation(b, value); break;
     }
+    recBodyProps(b);
     panel.refreshBody(liveOf(b));
     pushHistorySoon(); scheduleAutosave();
   },
@@ -226,10 +232,12 @@ const panel = new Panel($('panelBody'), {
     if (action === 'stop') world.stopMotion(b);
     else if (action === 'flipX') world.setVelocity(b, -b.velocity.x, b.velocity.y);
     else if (action === 'flipY') world.setVelocity(b, b.velocity.x, -b.velocity.y);
+    recBodyProps(b);
     panel.refreshBody(liveOf(b));
     pushHistorySoon(); scheduleAutosave();
   },
   onSelectBody(id) {
+    if (challenge && challenge.locked.has(id)) { toast(t('chal.locked')); return; }
     if (!world.bodyById(id)) return;
     selectedId = id;
     selectedFluidId = null;
@@ -238,6 +246,9 @@ const panel = new Panel($('panelBody'), {
     refreshPanel();
   },
   onDeleteBody(id) {
+    if (challenge && challenge.locked.has(id)) { toast(t('chal.locked')); return; }
+    recEvent('remove', { id });
+    if (challenge) challenge.added.delete(id);
     world.removeBody(id);
     if (selectedId === id) selectedId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
@@ -250,6 +261,7 @@ const panel = new Panel($('panelBody'), {
     else if (key === 'zero') { settings.gravityEnabled = false; }
     else if (key === 'side') { settings.gravityX = 1; settings.gravityY = 0; settings.gravityEnabled = true; }
     world.applySettings(settings);
+    recSettings();
     panel.selectedId = null; panel.mode = null; // force scene panel rebuild so values show
     refreshPanel(); updateStatus();
     pushHistorySoon(); scheduleAutosave();
@@ -258,6 +270,7 @@ const panel = new Panel($('panelBody'), {
     const b = selectedBody(); if (!b) return;
     const patch = { [key]: key === 'sides' ? Math.round(value) : value };
     const nb = world.resize(b, patch);
+    recBodyProps(nb);
     selectedId = world.dataIdOf(nb);
     panel.selectedId = null; // force form rebuild with new size values
     refreshPanel();
@@ -267,6 +280,7 @@ const panel = new Panel($('panelBody'), {
     if (key === 'seed') value = Math.min(4294967295, Math.max(0, Math.floor(Number(value) || 0)));
     settings[key] = value;
     world.applySettings(settings);
+    recSettings();
     updateStatus();
     pushHistorySoon(); scheduleAutosave();
   },
@@ -298,6 +312,7 @@ const panel = new Panel($('panelBody'), {
       const a = world.random() * Math.PI * 2;
       const m = 2.5 + world.random() * 3.5;
       world.setVelocity(b, b.velocity.x + Math.cos(a) * m, b.velocity.y + Math.sin(a) * m);
+      recBodyProps(b);
       n++;
     }
     if (n) { pushHistorySoon(); scheduleAutosave(); }
@@ -310,11 +325,14 @@ const panel = new Panel($('panelBody'), {
   onBodyRename(name) {
     const b = selectedBody(); if (!b) return;
     world.renameBody(b, name);
+    recBodyProps(b);
     pushHistorySoon(); scheduleAutosave();
     toast(name ? t('msg.renamed', { name }) : t('msg.nameCleared'));
   },
   onAddFluid() {
+    if (challenge && challenge.phase === 'run') { toast(t('chal.needBuild')); return; }
     const f = world.addFluid(fluidData({}));
+    recRegions();
     selectedFluidId = f.id; selectedId = null; selectedWindId = null; selectedHingeId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.fluidAdded'));
@@ -326,16 +344,20 @@ const panel = new Panel($('panelBody'), {
   },
   onDeleteFluid(id) {
     world.removeFluid(id);
+    recRegions();
     if (selectedFluidId === id) selectedFluidId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.fluidDeleted'));
   },
   onFluidProp(id, key, value) {
     world.updateFluid(id, { [key]: value });
+    recRegions();
     pushHistorySoon(); scheduleAutosave();
   },
   onAddWind() {
+    if (challenge && challenge.phase === 'run') { toast(t('chal.needBuild')); return; }
     const w = world.addWind(windData({}));
+    recRegions();
     selectedWindId = w.id; selectedId = null; selectedFluidId = null; selectedHingeId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.windAdded'));
@@ -347,20 +369,23 @@ const panel = new Panel($('panelBody'), {
   },
   onDeleteWind(id) {
     world.removeWind(id);
+    recRegions();
     if (selectedWindId === id) selectedWindId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.windDeleted'));
   },
   onWindProp(id, key, value) {
     world.updateWind(id, { [key]: value });
+    recRegions();
     pushHistorySoon(); scheduleAutosave();
   },
-  onShowScene() { selectedFluidId = null; selectedWindId = null; selectedHingeId = null; refreshPanel(); },
+  onShowScene() { chalDismissed = true; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; refreshPanel(); },
   onHingeProp(id, key, value) {
-    if (key === 'motorSpeed') world.setHingeMotor(id, value);
+    if (key === 'motorSpeed') { world.setHingeMotor(id, value); recEvent('hingeMotor', { id, value }); }
     pushHistorySoon(); scheduleAutosave();
   },
   onDeleteHinge(id) {
+    recEvent('removeHinge', { id });
     world.removeHinge(id);
     if (selectedHingeId === id) selectedHingeId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
@@ -378,10 +403,35 @@ const panel = new Panel($('panelBody'), {
     world.setFriction(b, m.friction);
     world.setRestitution(b, m.restitution);
     world.setFrictionAir(b, m.frictionAir);
+    recBodyProps(b);
     panel.selectedId = null; panel.mode = null; // force form rebuild with new values
     refreshPanel();
     pushHistorySoon(); scheduleAutosave();
     toast(t('msg.materialSet', { name: m.label }));
+  },
+  onOpenChallenges() {
+    if (challenge) { chalDismissed = false; refreshPanel(); return; }
+    const prog = store.loadChallengeProgress();
+    const lang = getLang();
+    const items = CHALLENGES.map((def) => ({
+      id: def.id,
+      title: lang === 'en' ? def.title.en : def.title.zh,
+      brief: lang === 'en' ? def.brief.en : def.brief.zh,
+      stars: (prog[def.id] || {}).stars || 0,
+    }));
+    panel.showChallenges({
+      items,
+      totalStars: items.reduce((s, i) => s + i.stars, 0),
+      maxStars: CHALLENGES.length * 3,
+    });
+  },
+  onEnterChallenge(id) { enterChallenge(id); },
+  onChallengeAction(action) {
+    if (!challenge) return;
+    if (action === 'start') startChallengeRun();
+    else if (action === 'restart') restartChallenge();
+    else if (action === 'next') nextChallenge();
+    else if (action === 'exit') exitChallenge();
   },
 });
 
@@ -434,12 +484,17 @@ function refreshPanel() {
     if (w) { panel.showWind(w); return; }
     selectedWindId = null;
   }
+  if (challenge && !chalDismissed) { panel.showChallenge(challengeVM()); return; }
+  const prog = store.loadChallengeProgress();
+  panel.chalSummary = `★ ${Object.values(prog).reduce((s, p) => s + (p.stars || 0), 0)}/${CHALLENGES.length * 3}`;
   panel.backendId = world.core.backendId; // scene panel's Engine row follows the live backend
   panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)), world.fluids(), world.winds());
 }
 
 function deleteSelected() {
+  if (challenge && selectedId && challenge.locked.has(selectedId)) { toast(t('chal.locked')); return; }
   if (selectedHingeId) {
+    recEvent('removeHinge', { id: selectedHingeId });
     world.removeHinge(selectedHingeId);
     selectedHingeId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
@@ -447,6 +502,8 @@ function deleteSelected() {
     return;
   }
   if (!selectedId) return;
+  recEvent('remove', { id: selectedId });
+  if (challenge) challenge.added.delete(selectedId);
   world.removeBody(selectedId);
   selectedId = null;
   refreshPanel(); pushHistorySoon(); scheduleAutosave();
@@ -454,10 +511,16 @@ function deleteSelected() {
 }
 function duplicateSelected() {
   const b = selectedBody(); if (!b) return;
+  if (challenge) {
+    if (challenge.phase !== 'build') { toast(t('chal.needBuild')); return; }
+    if (challenge.added.size >= challenge.def.budget) { toast(t('chal.budgetOut', { n: challenge.def.budget })); return; }
+  }
   const d = world.serializeBody(b);
   d.id = undefined; // fresh id assigned by bodyData
   d.x += 28; d.y += 28; d.vx = 0; d.vy = 0;
   const nb = world.addBody(bodyData(d));
+  recEvent('add', { body: world.serializeBody(nb) });
+  if (challenge) challenge.added.add(world.dataIdOf(nb));
   selectedId = world.dataIdOf(nb);
   refreshPanel(); pushHistorySoon(); scheduleAutosave();
 }
@@ -472,7 +535,10 @@ function updateTransport() {
   st.textContent = running ? t('st.running') : t('st.paused');
   st.classList.toggle('running', running);
 }
-function setRunning(v) { running = v; if (!v) world.endDrag(); updateTransport(); }
+function setRunning(v) {
+  if (!v && dragRecActive) { recEvent('dragEnd'); dragRecActive = false; }
+  running = v; if (!v) world.endDrag(); updateTransport();
+}
 
 /* ---------------- scene actions ---------------- */
 function saveCurrent() {
@@ -552,6 +618,7 @@ function applyBlast(w) {
   // adapter, which keeps world-boundary bodies out. base/power reproduce the
   // original hand-tuned curve: magnitude 2 + 13 * (1 - distance / radius).
   const hit = world.applyRadialImpulse(w.x, w.y, { radius: BLAST_RADIUS, base: 2, power: 13 });
+  recEvent('blast', { x: w.x, y: w.y, radius: BLAST_RADIUS });
   blastFx = { x: w.x, y: w.y, radius: BLAST_RADIUS, startedAt: performance.now() };
   if (hit) toast(t('msg.blast', { n: hit }));
   scheduleAutosave();
@@ -584,6 +651,7 @@ function handleSpringTap(w) {
     data = constraintData({ bodyA: null, bodyB: world.dataIdOf(b), pointA: start.point, pointB: localOffset(b, w), stiffness: 0.08, damping: 0.05 });
   }
   if (world.addConstraint(data)) {
+    recEvent('addConstraint', { constraint: data });
     pushHistorySoon(); scheduleAutosave();
     toast(t('msg.springCreated'));
   } else toast(t('msg.springFailed'));
@@ -630,6 +698,7 @@ function handleHingeTap(w) {
     motorSpeed: 0,
   });
   const created = world.addHinge(data);
+  if (created) recEvent('addHinge', { hinge: world.hingeById(created.id) || data });
   if (created) {
     selectedHingeId = created.id;
     selectedId = null; selectedFluidId = null; selectedWindId = null;
@@ -695,6 +764,7 @@ canvas.addEventListener('pointerdown', (e) => {
     // hinges first: their pin markers are small targets sitting on bodies
     const hg = pickHinge(w.x, w.y);
     if (hg) {
+      recEvent('removeHinge', { id: hg.id });
       world.removeHinge(hg.id);
       if (selectedHingeId === hg.id) selectedHingeId = null;
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
@@ -704,6 +774,7 @@ canvas.addEventListener('pointerdown', (e) => {
     // springs next: tapping near a spring line removes the spring, not a body
     const seg = pickSpring(w.x, w.y);
     if (seg) {
+      recEvent('removeConstraint', { id: seg.id });
       world.removeConstraint(seg.id);
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
       toast(t('msg.springDeleted'));
@@ -712,6 +783,9 @@ canvas.addEventListener('pointerdown', (e) => {
     const b = world.pick(w.x, w.y);
     if (b) {
       const id = world.dataIdOf(b);
+      if (challenge && challenge.locked.has(id)) { toast(t('chal.locked')); return; }
+      recEvent('remove', { id });
+      if (challenge) challenge.added.delete(id);
       world.removeBody(id);
       if (selectedId === id) selectedId = null;
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
@@ -721,6 +795,7 @@ canvas.addEventListener('pointerdown', (e) => {
     const wn = pickWind(w);
     if (wn) {
       world.removeWind(wn.id);
+      recRegions();
       if (selectedWindId === wn.id) selectedWindId = null;
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
       toast(t('msg.windDeleted'));
@@ -729,6 +804,7 @@ canvas.addEventListener('pointerdown', (e) => {
     const f = pickFluid(w);
     if (f) {
       world.removeFluid(f.id);
+      recRegions();
       if (selectedFluidId === f.id) selectedFluidId = null;
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
       toast(t('msg.fluidDeleted'));
@@ -751,6 +827,12 @@ canvas.addEventListener('pointerdown', (e) => {
   const b = world.pick(w.x, w.y);
   if (b) {
     selectedId = world.dataIdOf(b);
+    if (challenge && challenge.locked.has(selectedId)) {
+      selectedId = null;
+      gesture = { kind: 'none' };
+      toast(t('chal.locked'));
+      return;
+    }
     selectedFluidId = null;
     selectedWindId = null;
     selectedHingeId = null;
@@ -758,7 +840,11 @@ canvas.addEventListener('pointerdown', (e) => {
     if (b.isStatic && staticDragId === selectedId) {
       gesture = { kind: 'drag-static', body: b, offX: w.x - b.position.x, offY: w.y - b.position.y, moved: false };
     } else if (!b.isStatic) {
-      if (running) { world.beginDrag(b, w.x, w.y); dragPoint = { x: w.x, y: w.y, bodyX: b.position.x, bodyY: b.position.y }; }
+      if (running) {
+        world.beginDrag(b, w.x, w.y);
+        dragPoint = { x: w.x, y: w.y, bodyX: b.position.x, bodyY: b.position.y };
+        if (replayRec) { recEvent('dragStart', { id: world.dataIdOf(b), x: w.x, y: w.y }); dragRecActive = true; recLastDrag = { x: w.x, y: w.y }; }
+      }
       gesture = { kind: 'drag-body', body: b, offX: w.x - b.position.x, offY: w.y - b.position.y, moved: false };
     } else if (tool === 'move') {
       gesture = { kind: 'pan', sx: e.clientX, sy: e.clientY, camX: camera.x, camY: camera.y };
@@ -770,6 +856,7 @@ canvas.addEventListener('pointerdown', (e) => {
       // no body hit: a wind or fluid region can still be selected for
       // editing (winds are drawn above fluids, so they win the pick) —
       // and since 1.26 it can be dragged on the canvas to move it.
+      if (challenge) { gesture = { kind: 'none' }; return; }
       const wn = pickWind(w);
       const f = wn ? null : pickFluid(w);
       selectedId = null;
@@ -813,7 +900,14 @@ canvas.addEventListener('pointermove', (e) => {
     panel.refreshBody(liveOf(gesture.body));
   } else if (gesture.kind === 'drag-body') {
     gesture.moved = true;
-    if (running && world.dragging) { world.moveDrag(w.x, w.y); dragPoint = { x: w.x, y: w.y, bodyX: gesture.body.position.x, bodyY: gesture.body.position.y }; }
+    if (running && world.dragging) {
+      world.moveDrag(w.x, w.y);
+      dragPoint = { x: w.x, y: w.y, bodyX: gesture.body.position.x, bodyY: gesture.body.position.y };
+      if (replayRec && dragRecActive && (!recLastDrag || Math.hypot(w.x - recLastDrag.x, w.y - recLastDrag.y) >= 1)) {
+        recEvent('drag', { x: w.x, y: w.y });
+        recLastDrag = { x: w.x, y: w.y };
+      }
+    }
     else if (!running) world.setPosition(gesture.body, w.x - gesture.offX, w.y - gesture.offY);
     panel.refreshBody(liveOf(gesture.body));
   } else if (gesture.kind === 'pan') {
@@ -828,14 +922,22 @@ function endPointer(e) {
   if (gesture.kind === 'pinch') { if (pointers.size < 2) gesture = null; return; }
   if (gesture.kind === 'create') finalizeCreate();
   if (gesture.kind === 'drag-region' && gesture.moved) {
+    recRegions();
     panel.mode = null; // force the region editor to rebuild with the new centre
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
   }
   if (gesture.kind === 'drag-body') {
+    if (replayRec && dragRecActive) { recEvent('dragEnd'); dragRecActive = false; }
     world.endDrag(); dragPoint = null;
-    if (gesture.moved) { pushHistorySoon(); scheduleAutosave(); }
+    if (gesture.moved) {
+      if (replayRec && !running) recBodyProps(gesture.body);
+      pushHistorySoon(); scheduleAutosave();
+    }
   }
-  if (gesture.kind === 'drag-static' && gesture.moved) { pushHistorySoon(); scheduleAutosave(); }
+  if (gesture.kind === 'drag-static' && gesture.moved) {
+    if (replayRec) recBodyProps(gesture.body);
+    pushHistorySoon(); scheduleAutosave();
+  }
   gesture = null;
 }
 canvas.addEventListener('pointerup', endPointer);
@@ -879,7 +981,13 @@ function finalizeCreate() {
   }
   preview = null;
   if (!d) return;
+  if (challenge) {
+    if (challenge.phase !== 'build') { toast(t('chal.needBuild')); return; }
+    if (challenge.added.size >= challenge.def.budget) { toast(t('chal.budgetOut', { n: challenge.def.budget })); return; }
+  }
   const b = world.addBody(d);
+  recEvent('add', { body: world.serializeBody(b) });
+  if (challenge) challenge.added.add(world.dataIdOf(b));
   selectedId = world.dataIdOf(b);
   selectedFluidId = null;
   setTool('select');
@@ -986,12 +1094,13 @@ function setNavView(view) {
   $('navSectionSavedList').hidden = !overview;
   $('navSectionPresetsList').hidden = !overview;
   $('hubInspector').hidden = !overview;
-  $('navSectionSaved').hidden = view === 'presets' || view === 'docs' || overview;
-  $('navSectionSaved3D').hidden = view === 'presets' || view === 'docs' || overview;
-  $('navSectionPresets').hidden = view === 'library' || view === 'docs' || overview;
-  $('navSectionPresets3D').hidden = view === 'library' || view === 'docs' || overview;
+  $('navSectionSaved').hidden = view === 'presets' || view === 'docs' || view === 'challenges' || overview;
+  $('navSectionSaved3D').hidden = view === 'presets' || view === 'docs' || view === 'challenges' || overview;
+  $('navSectionPresets').hidden = view === 'library' || view === 'docs' || view === 'challenges' || overview;
+  $('navSectionPresets3D').hidden = view === 'library' || view === 'docs' || view === 'challenges' || overview;
   $('navSectionDocs').hidden = view !== 'docs';
-  $('navToolbar').style.display = view === 'presets' || view === 'docs' ? 'none' : '';
+  $('navSectionChallenges').hidden = view !== 'challenges';
+  $('navToolbar').style.display = view === 'presets' || view === 'docs' || view === 'challenges' ? 'none' : '';
   $('navTitle').textContent = t(`hub.title.${view}`);
 }
 
@@ -1255,6 +1364,7 @@ function renderSceneNav() {
   if (FEATURE_3D) renderSceneCards3D($('sceneSearch').value.trim());
   renderSceneRows();
   renderPresetRows();
+  renderChallengeRows();
   renderInspector();
 }
 
@@ -1357,10 +1467,37 @@ function renderPresetRows() {
   }
 }
 
+function renderChallengeRows() {
+  const wrap = $('challengeRows');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const prog = store.loadChallengeProgress();
+  const lang = getLang();
+  let total = 0;
+  for (const def of CHALLENGES) {
+    const p = prog[def.id] || { stars: 0 };
+    total += p.stars || 0;
+    const stars = '★'.repeat(p.stars || 0) + '☆'.repeat(3 - (p.stars || 0));
+    wrap.appendChild(hubRow({
+      scene: def.build(),
+      title: `${lang === 'en' ? def.title.en : def.title.zh} · ${stars}`,
+      sub: lang === 'en' ? def.brief.en : def.brief.zh,
+      selected: !!hubSel && hubSel.kind === 'challenge' && hubSel.key === def.id,
+      kind: 'challenge', key: def.id,
+      onSelect: () => selectHubItem('challenge', def.id),
+      onOpen: () => enterChallenge(def.id),
+      openLabel: t('chal.start'),
+    }));
+  }
+  const badge = $('countChallenges');
+  if (badge) badge.textContent = `★${total}`;
+}
+
 function selectHubItem(kind, key) {
   hubSel = { kind, key };
   renderSceneRows();
   renderPresetRows();
+  renderChallengeRows();
   renderInspector();
 }
 
@@ -1744,7 +1881,8 @@ function applyChromeLabels() {
   const scenes = $('btnScenes'); if (scenes) scenes.innerHTML = `${icon('folder', 17)} ${t('tb.projects')}`;
   const nw = $('btnNewScene'); if (nw) nw.innerHTML = `${icon('plus', 16)} ${t('tb.newScene')}`;
   const dup = $('btnDuplicateScene'); if (dup) dup.innerHTML = `${icon('copy', 16)} ${t('tb.dupScene')}`;
-  updateRecBtn();
+  updateReplayBtn();
+  const rp = $('btnReplayPlay'); if (rp) rp.innerHTML = icon('play', 15);
 }
 
 function initChrome() {
@@ -1768,16 +1906,17 @@ function initChrome() {
     b.innerHTML = icon(TOOL_ICONS[b.dataset.tool], 21);
     b.addEventListener('click', () => setTool(b.dataset.tool));
   });
-  $('btnPlay').addEventListener('click', () => setRunning(!running));
-  $('btnPause').addEventListener('click', () => setRunning(false));
+  $('btnPlay').addEventListener('click', () => toggleRun());
+  $('btnPause').addEventListener('click', () => { if (playback) { playback.playing = false; updateReplayBar(); } else setRunning(false); });
   $('btnStep').addEventListener('click', () => {
+    if (playback) { playback.playing = false; stepPlayback(1); updateReplayBar(); return; }
     setRunning(false);
     world.step(1000 / 60, settings.speed);
     const b = selectedBody();
     if (b) panel.refreshBody(liveOf(b));
   });
-  recorder.onAutoStop = () => stopRecording();
-  $('btnRecord').addEventListener('click', () => { recorder.recording ? stopRecording() : startRecording(); });
+  $('btnReplay').addEventListener('click', () => { replayRec ? stopReplayRecording() : startReplayRecording(); });
+  $('btnReplayPlay').addEventListener('click', () => { if (lastReplay) openPlayback(lastReplay); });
   $('btnShot').addEventListener('click', () => {
     renderer.draw(world, {
       selectedId, showGrid: settings.showGrid, showVectors: settings.showVectors,
@@ -1822,11 +1961,20 @@ function initChrome() {
     const f = e.target.files[0]; e.target.value = '';
     if (!f) return;
     // Size cap first (1.39): never read or parse an oversized file.
-    if (f.size > MAX_SCENE_JSON_BYTES) { toast(t('msg.importTooLarge'), 4200); return; }
+    if (f.size > MAX_REPLAY_BYTES) { toast(t('msg.importTooLarge'), 4200); return; }
     try {
       const text = await f.text();
-      if (sceneJsonTooLarge(text)) { toast(t('msg.importTooLarge'), 4200); return; }
       const raw = JSON.parse(text);
+      if (raw && raw.format === 'motionlab-replay') {
+        const rv = validateReplay(raw);
+        if (!rv.ok) { toast(t('msg.replayInvalid'), 4200); return; }
+        lastReplay = rv.replay;
+        updateReplayPlayBtn();
+        openPlayback(rv.replay);
+        toast(t('msg.replayImported', { name: rv.replay.sceneName }));
+        return;
+      }
+      if (sceneJsonTooLarge(text)) { toast(t('msg.importTooLarge'), 4200); return; }
       const v = validateScene(raw);
       if (!v.ok) { toast(t('msg.importFailed', { err: v.errors.slice(0, 2).join(getLang() === 'en' ? '; ' : '；') }), 4200); return; }
       setRunning(false);
@@ -1862,7 +2010,7 @@ function initChrome() {
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); applyHistory(1); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveCurrent(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); }
-    else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); setRunning(!running); }
+    else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); toggleRun(); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedId || selectedHingeId)) { deleteSelected(); }
     else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; staticDragId = null; springStart = null; springCur = null; hingeStart = null; hingeCur = null; refreshPanel(); }
     else if (selectedId && e.key.startsWith('Arrow')) {
@@ -1886,36 +2034,397 @@ function initChrome() {
   window.addEventListener('beforeunload', () => { try { store.saveAutosave(currentScene()); } catch {} });
 }
 
-/* ---------------- GIF recording (1.28) ---------------- */
-function startRecording() {
-  recorder.start();
-  updateRecBtn();
-  toast(t('msg.recStart'));
+/* ---------------- challenge mode (1.50) ---------------- */
+let challenge = null;   // {def, phase, locked:Set, added:Set, steps, tracker, stars}
+let chalDismissed = false; // user asked for scene settings instead of the card
+
+function challengeVM() {
+  const c = challenge;
+  const lang = getLang();
+  const best = store.loadChallengeProgress()[c.def.id];
+  return {
+    id: c.def.id,
+    title: lang === 'en' ? c.def.title.en : c.def.title.zh,
+    brief: lang === 'en' ? c.def.brief.en : c.def.brief.zh,
+    phase: c.phase,
+    budget: c.def.budget,
+    budgetLeft: c.def.budget - c.added.size,
+    statsText: `${fmtT(c.steps / 60)} / ${fmtT(c.def.timeSec)}`,
+    stars: c.stars || 0,
+    isLast: CHALLENGES[CHALLENGES.length - 1].id === c.def.id,
+    bestText: best ? `★${best.stars} · ${best.bestPieces} · ${Number(best.bestSec).toFixed(1)}s` : '—',
+  };
 }
-async function stopRecording() {
-  if (!recorder.recording && !recorder.frameCount) return;
-  const frames = recorder.frameCount;
-  const blob = await recorder.stop();
-  updateRecBtn();
-  if (!blob || !frames) { toast(t('msg.recEmpty')); return; }
+
+function enterChallenge(id) {
+  const def = challengeById(id);
+  if (!def) return;
+  closeSceneNav();
+  loadScene(def.build()); // exits any previous challenge / playback / recording
+  resetHistory();
+  challenge = {
+    def, phase: 'build',
+    locked: new Set(world.allBodies().map((b) => world.dataIdOf(b))),
+    added: new Set(), steps: 0, tracker: new GoalTracker(def.holdSteps), stars: 0,
+  };
+  chalDismissed = false;
+  setRunning(false);
+  refreshPanel();
+  updateChallengeHint();
+  toast(t('chal.started', { name: getLang() === 'en' ? def.title.en : def.title.zh }));
+}
+
+function exitChallenge() {
+  if (!challenge) return;
+  challenge = null; chalDismissed = false;
+  setRunning(false);
+  refreshPanel();
+  hintFor(tool);
+  toast(t('chal.exited'));
+}
+
+function startChallengeRun() {
+  if (!challenge || challenge.phase !== 'build') return;
+  challenge.phase = 'run';
+  challenge.steps = 0;
+  challenge.tracker.reset();
+  setRunning(true);
+  refreshPanel();
+  updateChallengeHint();
+}
+
+function restartChallenge() { if (challenge) enterChallenge(challenge.def.id); }
+
+function nextChallenge() {
+  if (!challenge) return;
+  const i = CHALLENGES.findIndex((c) => c.id === challenge.def.id);
+  if (i >= 0 && i < CHALLENGES.length - 1) enterChallenge(CHALLENGES[i + 1].id);
+}
+
+function winChallenge() {
+  const c = challenge;
+  c.phase = 'won';
+  const sec = c.steps / 60;
+  c.stars = starsFor(c.added.size, sec, c.def.par);
+  store.saveChallengeResult(c.def.id, { stars: c.stars, pieces: c.added.size, sec: Math.round(sec * 10) / 10 });
+  setRunning(false);
+  const z = c.def.zone;
+  blastFx = { x: z.x + z.w / 2, y: z.y + z.h / 2, radius: 130, startedAt: performance.now() };
+  refreshPanel();
+  updateChallengeHint();
+  toast(t('chal.won'), 3000);
+}
+
+function failChallenge(fell) {
+  if (!challenge) return;
+  challenge.phase = 'lost';
+  setRunning(false);
+  refreshPanel();
+  updateChallengeHint();
+  toast(fell ? t('chal.fell') : t('chal.lost'), 3200);
+}
+
+/** One simulation step of goal evaluation (called from the main loop). */
+function stepChallenge() {
+  const c = challenge;
+  c.steps++;
+  const def = c.def;
+  let inside = false;
+  if (def.goalKind === 'target') {
+    const b = world.bodyById(def.targetId);
+    if (!b || b.position.y > (def.lostY || 700)) { failChallenge(true); return; }
+    inside = pointInZone(b.position.x, b.position.y, def.zone);
+  } else {
+    for (const id of c.added) {
+      const b = world.bodyById(id);
+      if (b && pointInZone(b.position.x, b.position.y, def.zone)) { inside = true; break; }
+    }
+  }
+  if (c.tracker.update(inside)) { winChallenge(); return; }
+  if (c.steps >= def.timeSec * 60) { failChallenge(false); return; }
+  if (c.steps % 60 === 0) updateChallengeHint();
+}
+
+function updateChallengeHint() {
+  if (!challenge) return;
+  const lang = getLang();
+  const name = lang === 'en' ? challenge.def.title.en : challenge.def.title.zh;
+  $('stageHint').textContent = lang === 'en'
+    ? `Challenge · ${name} · pieces ${challenge.added.size}/${challenge.def.budget} · ${fmtT(challenge.steps / 60)} / ${fmtT(challenge.def.timeSec)}`
+    : `挑战 · ${name} · 物体 ${challenge.added.size}/${challenge.def.budget} · ${fmtT(challenge.steps / 60)} / ${fmtT(challenge.def.timeSec)}`;
+}
+
+function challengeTargetPos() {
+  if (!challenge || challenge.def.goalKind !== 'target') return null;
+  const b = world.bodyById(challenge.def.targetId);
+  return b ? { x: b.position.x, y: b.position.y, r: b.circleRadius || 18 } : null;
+}
+
+function toggleRun() {
+  if (playback) { togglePlaybackPlay(); return; }
+  if (challenge) {
+    if (challenge.phase === 'build') { startChallengeRun(); return; }
+    if (challenge.phase === 'run') { setRunning(!running); return; }
+    toast(t('chal.needBuild'));
+    return;
+  }
+  setRunning(!running);
+}
+
+/* ---------------- deterministic replay (1.50, replaces GIF) ----------------
+ * Recording captures the engine snapshot plus every user input stamped
+ * with its simulation step (see replay.js). Playback re-steps the same
+ * snapshot with the same inputs and verifies the final state hash, so a
+ * replay either reproduces the run exactly or says so honestly. */
+let replayRec = null;        // active recording (replay.js object)
+let recStartStep = 0;        // world step when the recording started
+let dragRecActive = false;   // a physics drag is being recorded
+let recLastDrag = null;      // last sampled drag target while recording
+let lastReplay = null;       // most recent finished / imported replay
+let playback = null;         // {data, step, playing, speed, acc, byStep, checkpoints}
+let savedLiveScene = null;   // scene JSON restored when playback exits
+let savedPlaybackBackend = null;
+let pbWired = false;
+
+const stepNow = () => Math.round(world.simTime / world.fixedDt);
+const recStep = () => stepNow() - recStartStep;
+const fmtT = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+function recEvent(type, data = {}) {
+  if (!replayRec) return;
+  if (!recordEvent(replayRec, recStep(), { type, ...data })) stopReplayRecording();
+}
+function recBodyProps(body) { if (replayRec && body) recEvent('bodyProps', { body: world.serializeBody(body) }); }
+function recRegions() { if (replayRec) recEvent('regions', { fluids: world.fluids(), winds: world.winds() }); }
+function recSettings() { if (replayRec) recEvent('settings', { settings: { ...settings } }); }
+
+function startReplayRecording() {
+  if (playback) exitPlayback();
+  replayRec = createRecording({
+    backend: world.core.backendId, sceneName,
+    initial: world.snapshot(), settings: { ...settings }, appVersion: APP_VERSION,
+  });
+  recStartStep = stepNow();
+  dragRecActive = false; recLastDrag = null;
+  updateReplayBtn();
+  toast(t('msg.replayRecStart'), 3200);
+}
+
+function stopReplayRecording() {
+  if (!replayRec) return;
+  const rec = replayRec; replayRec = null;
+  if (dragRecActive) dragRecActive = false;
+  finalizeRecording(rec, recStep(), hashBodyStates(statesFromSnapshot(world.snapshot())));
+  updateReplayBtn();
+  if (rec.steps < 10) { toast(t('msg.replayTooShort')); return; }
+  lastReplay = rec;
+  updateReplayPlayBtn();
+  const blob = new Blob([JSON.stringify(rec)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${(sceneName || 'motionlab').replace(/[\\/:*?"<>|]/g, '_')}.gif`;
+  a.download = `${(sceneName || 'motionlab').replace(/[\\/:*?"<>|]/g, '_')}.replay.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  toast(t('msg.recDone', { n: frames }));
+  toast(t('msg.replaySaved', { sec: (rec.steps / 60).toFixed(1) }), 3200);
 }
-function updateRecBtn() {
-  const btn = $('btnRecord');
+
+function cancelReplayRecording() {
+  if (!replayRec) return;
+  replayRec = null; dragRecActive = false;
+  updateReplayBtn();
+  toast(t('msg.replayDiscarded'));
+}
+
+function updateReplayBtn() {
+  const btn = $('btnReplay');
   if (!btn) return;
-  if (recorder.recording) {
-    const s = Math.floor(recorder.elapsed);
-    btn.innerHTML = `${icon('stop', 15)}<span>${t('rec.stop')} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</span>`;
+  if (replayRec) {
+    btn.innerHTML = `${icon('stop', 15)}<span>${t('replay.stop')} ${fmtT(recStep() / 60)}</span>`;
     btn.classList.add('recording');
   } else {
-    btn.innerHTML = `${icon('record', 15)}<span>${t('rec.label')}</span>`;
+    btn.innerHTML = `${icon('record', 15)}<span>${t('replay.label')}</span>`;
     btn.classList.remove('recording');
   }
+}
+
+function updateReplayPlayBtn() {
+  const btn = $('btnReplayPlay');
+  if (btn) btn.hidden = !lastReplay;
+}
+
+/* ----- playback ----- */
+function teardownPlayback() {
+  playback = null; savedLiveScene = null; savedPlaybackBackend = null;
+  const bar = $('replayBar'); if (bar) bar.hidden = true;
+}
+
+function exitPlayback() {
+  if (!playback) return;
+  const restore = savedLiveScene;
+  const back = savedPlaybackBackend;
+  world.endDrag();
+  teardownPlayback();
+  if (back && world.core.backendId !== back) world = new PhysicsWorld(back);
+  if (restore) { try { loadScene(JSON.parse(restore)); } catch { /* keep current world */ } }
+  refreshPanel();
+}
+
+function openPlayback(rec) {
+  const v = validateReplay(rec);
+  if (!v.ok) { toast(t('msg.replayInvalid'), 3600); return; }
+  if (replayRec) cancelReplayRecording();
+  if (!playback) {
+    savedLiveScene = JSON.stringify(currentScene());
+    savedPlaybackBackend = world.core.backendId;
+  }
+  setRunning(false);
+  if (world.core.backendId !== v.replay.backend) world = new PhysicsWorld(v.replay.backend);
+  if (v.replay.settings) {
+    settings = { ...settings, ...v.replay.settings };
+    world.applySettings(settings);
+    updateStatus();
+  }
+  world.loadSnapshot(JSON.parse(JSON.stringify(v.replay.initial)));
+  playback = {
+    data: v.replay, step: 0, playing: false, speed: 1, acc: 0,
+    byStep: eventsByStep(v.replay.events),
+    checkpoints: new Map([[0, v.replay.initial]]),
+  };
+  wirePlaybackBar();
+  $('replayBar').hidden = false;
+  $('pbVerdict').textContent = '';
+  $('pbVerdict').className = 'pb-verdict';
+  updateReplayBar();
+  refreshPanel();
+}
+
+function applyReplayEvent(ev) {
+  switch (ev.type) {
+    case 'add': world.addBody(bodyData(ev.body)); break;
+    case 'remove': world.removeBody(ev.id); break;
+    case 'addConstraint': world.addConstraint(constraintData(ev.constraint)); break;
+    case 'removeConstraint': world.removeConstraint(ev.id); break;
+    case 'addHinge': world.addHinge(hingeData(ev.hinge)); break;
+    case 'removeHinge': world.removeHinge(ev.id); break;
+    case 'hingeMotor': world.setHingeMotor(ev.id, ev.value); break;
+    case 'settings':
+      settings = { ...settings, ...ev.settings };
+      world.applySettings(settings); updateStatus();
+      break;
+    case 'regions': {
+      for (const f of world.fluids()) world.removeFluid(f.id);
+      for (const w of world.winds()) world.removeWind(w.id);
+      for (const f of ev.fluids || []) world.addFluid(fluidData(f));
+      for (const w of ev.winds || []) world.addWind(windData(w));
+      break;
+    }
+    case 'bodyProps': applyBodyProps(ev.body); break;
+    case 'blast': world.applyRadialImpulse(ev.x, ev.y, { radius: ev.radius, base: 2, power: 13 }); break;
+    case 'dragStart': { const b = world.bodyById(ev.id); if (b) world.beginDrag(b, ev.x, ev.y); break; }
+    case 'drag': if (world.dragging) world.moveDrag(ev.x, ev.y); break;
+    case 'dragEnd': world.endDrag(); break;
+  }
+}
+
+function applyBodyProps(d) {
+  if (!d || !d.id) return;
+  const b = world.bodyById(d.id); if (!b) return;
+  if (d.width !== undefined && d.height !== undefined) {
+    const cur = world.serializeBody(b);
+    if (cur.width !== d.width || cur.height !== d.height || cur.radius !== d.radius || cur.sides !== d.sides) {
+      world.resize(b, { width: d.width, height: d.height, radius: d.radius, sides: d.sides });
+    }
+  }
+  const nb = world.bodyById(d.id) || b;
+  world.setPosition(nb, d.x, d.y);
+  world.setAngleDeg(nb, (d.angle || 0) * 180 / Math.PI);
+  world.setVelocity(nb, d.vx || 0, d.vy || 0);
+  world.setDensity(nb, d.density); world.setFriction(nb, d.friction);
+  world.setFrictionAir(nb, d.frictionAir); world.setRestitution(nb, d.restitution);
+  world.setStatic(nb, !!d.isStatic); world.setLockRotation(nb, !!d.lockRotation);
+  world.setMagnet(nb, d.magnet || 0);
+  if (d.label !== undefined && (nb.label || '') !== d.label) world.renameBody(nb, d.label);
+}
+
+/** Advance the player by n recorded steps, applying inputs at their steps. */
+function stepPlayback(n) {
+  if (!playback) return;
+  for (let i = 0; i < n && playback.step < playback.data.steps; i++) {
+    const evs = playback.byStep.get(playback.step);
+    if (evs) for (const ev of evs) applyReplayEvent(ev);
+    world.stepOnce();
+    playback.step++;
+    if (playback.step % 300 === 0) playback.checkpoints.set(playback.step, world.snapshot());
+  }
+  if (playback.step >= playback.data.steps) finishPlayback();
+}
+
+function advancePlayback(dt) {
+  playback.acc += dt * playback.speed;
+  let n = 0;
+  while (playback.acc >= world.fixedDt && n < 8) {
+    stepPlayback(1);
+    playback.acc -= world.fixedDt;
+    n++;
+    if (!playback || !playback.playing) break;
+  }
+  updateReplayBar();
+}
+
+function finishPlayback() {
+  if (!playback) return;
+  playback.playing = false;
+  const mine = hashBodyStates(statesFromSnapshot(world.snapshot()));
+  const el = $('pbVerdict');
+  if (playback.data.finalHash && mine === playback.data.finalHash) {
+    el.textContent = t('replay.exact');
+    el.className = 'pb-verdict ok';
+  } else if (playback.data.finalHash) {
+    el.textContent = t('replay.diverged');
+    el.className = 'pb-verdict warn';
+  }
+  updateReplayBar();
+}
+
+function scrubPlayback(target) {
+  if (!playback) return;
+  target = Math.max(0, Math.min(playback.data.steps, Math.floor(Number(target) || 0)));
+  playback.playing = false;
+  if (target < playback.step) {
+    let cp = 0;
+    for (const k of playback.checkpoints.keys()) if (k <= target && k > cp) cp = k;
+    world.endDrag();
+    world.loadSnapshot(JSON.parse(JSON.stringify(playback.checkpoints.get(cp))));
+    playback.step = cp;
+  }
+  if (target > playback.step) stepPlayback(target - playback.step);
+  updateReplayBar();
+}
+
+function togglePlaybackPlay() {
+  if (!playback) return;
+  if (playback.step >= playback.data.steps && !playback.playing) scrubPlayback(0);
+  playback.playing = !playback.playing;
+  updateReplayBar();
+}
+
+function updateReplayBar() {
+  if (!playback) return;
+  const seek = $('pbSeek');
+  seek.max = playback.data.steps;
+  if (document.activeElement !== seek) seek.value = playback.step;
+  $('pbTime').textContent = `${fmtT(playback.step / 60)} / ${fmtT(playback.data.steps / 60)}`;
+  $('btnPbPlay').innerHTML = icon(playback.playing ? 'pause' : 'play', 15);
+}
+
+function wirePlaybackBar() {
+  if (pbWired) return;
+  pbWired = true;
+  $('btnPbPlay').addEventListener('click', togglePlaybackPlay);
+  $('btnPbExit').addEventListener('click', exitPlayback);
+  $('btnPbExit').innerHTML = t('replay.exit');
+  $('pbSeek').addEventListener('input', (e) => scrubPlayback(Number(e.target.value)));
+  $('pbSpeed').addEventListener('change', (e) => { if (playback) playback.speed = Number(e.target.value) || 1; });
 }
 
 /* ---------------- status + main loop ---------------- */
@@ -1932,6 +2441,7 @@ setInterval(() => {
   updateStatus();
   const b = selectedBody();
   if (b) panel.refreshBody(liveOf(b));
+  if (challenge && panel.mode === 'challenge') panel.updateChallengeStats(challengeVM());
 }, 250);
 
 let lastT = performance.now(), fpsFrames = 0, fpsT = performance.now();
@@ -1941,12 +2451,15 @@ function loop(now) {
   fpsFrames++;
   if (now - fpsT >= 500) {
     $('stFps').textContent = `FPS ${Math.round(fpsFrames * 1000 / (now - fpsT))}`;
-    if (recorder.recording) updateRecBtn();
+    if (replayRec) updateReplayBtn();
     fpsFrames = 0; fpsT = now;
   }
   // Fixed-timestep accumulator lives in the engine core: stable physics at
   // any display refresh rate, with spiral-of-death protection built in.
-  if (running) world.advance(dt, settings.speed);
+  if (playback) { if (playback.playing) advancePlayback(dt); }
+  else if (running) world.advance(dt, settings.speed);
+  if (replayRec && recStep() >= MAX_REPLAY_STEPS) stopReplayRecording();
+  if (challenge && running && challenge.phase === 'run') stepChallenge();
   const anchor = springAnchorWorld();
   const hAnchor = hingeAnchorWorld();
   renderer.draw(world, {
@@ -1965,9 +2478,10 @@ function loop(now) {
     blast: blastFx && (now - blastFx.startedAt) < 400
       ? { x: blastFx.x, y: blastFx.y, radius: blastFx.radius, age: (now - blastFx.startedAt) / 1000 }
       : null,
+    goalZone: challenge ? { ...challenge.def.zone, won: challenge.phase === 'won' } : null,
+    goalTarget: challengeTargetPos(),
   });
   if (blastFx && now - blastFx.startedAt >= 400) blastFx = null;
-  if (recorder.recording) recorder.capture();
 }
 
 /* ---------------- landing (first visit) ---------------- */

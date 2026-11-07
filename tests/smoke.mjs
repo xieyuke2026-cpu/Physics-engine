@@ -198,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.49')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.50')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.12.4')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -381,19 +381,22 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
     wx1 > wx0 + 35 && wy1 > 315, `wx ${wx0} -> ${wx1}, wy -> ${wy1}`);
 }
 
-/* ---- v1.28: layout groups, record button, hinge tool ---- */
+/* ---- v1.28: layout groups, hinge tool ---- */
 {
   check('v1.28: tool rail has four group captions',
     doc.querySelectorAll('#toolrail .rail-cap').length === 4,
     `caps=${doc.querySelectorAll('#toolrail .rail-cap').length}`);
-  const recBtn = doc.getElementById('btnRecord');
-  check('v1.28: record button exists with a label', !!recBtn && recBtn.textContent.trim().length > 0);
+  const recBtn = doc.getElementById('btnReplay');
+  check('v1.50: replay button exists with a label', !!recBtn && recBtn.textContent.trim().length > 0);
+  check('v1.50: GIF record button is gone', !doc.getElementById('btnRecord'));
   click(recBtn);
   await wait(60);
-  check('v1.28: record button enters recording state', recBtn.classList.contains('recording'));
+  check('v1.50: replay button enters recording state', recBtn.classList.contains('recording'));
   click(recBtn);
   await wait(200);
-  check('v1.28: record button leaves recording state after stop', !recBtn.classList.contains('recording'));
+  check('v1.50: replay button leaves recording state after stop', !recBtn.classList.contains('recording'));
+  const rBar = doc.getElementById('replayBar');
+  check('v1.50: replay transport bar exists and starts hidden', !!rBar && rBar.hidden);
 
   // hinge flow on a paused scene: two fresh circles, pin them, drive, delete
   click(doc.getElementById('btnPause'));

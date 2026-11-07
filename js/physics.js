@@ -58,6 +58,16 @@ export class PhysicsWorld {
   advance(elapsedMs, speed = 1) { return this.core.advance(elapsedMs, speed); }
   stepOnce() { this.core.stepOnce(); }
 
+  /* ---------- deterministic replay support (1.50) ---------- */
+  /** Simulated milliseconds elapsed on the core clock (rides snapshots). */
+  get simTime() { return this.core.simTime; }
+  /** The core's fixed timestep in ms (1000/60). */
+  get fixedDt() { return this.core.fixedDt; }
+  /** Full engine-state snapshot (bodies, constraints, RNG, clock). */
+  snapshot() { return this.core.snapshot(); }
+  /** Restore a snapshot produced by snapshot() on either backend. */
+  loadSnapshot(data) { this.core.load(data); }
+
   clearBodies() { this.core.clear(); }
 
   addBody(data) { return this.core.addBody(mlToDesc(bodyData(data))); }

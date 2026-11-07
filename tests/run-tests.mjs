@@ -246,18 +246,105 @@ for (const p of presets) {
   const anch = wl.hingeAnchors();
   check('adapter hingeAnchors resolves the pin point', anch.length === 1 && Math.abs(anch[0].x - 60) < 30);
 }
+/* --- v1.50: deterministic replay (format, validation, hashing) --- */
 {
-  const { buildPalette, quantize, encodeGIF } = await import('../js/record.js');
-  const pal = buildPalette();
-  check('GIF palette has 256 RGB entries', pal.length === 768 && pal[0] === 250 && pal[27] === 47 && pal[28] === 109 && pal[29] === 179);
-  const rgba = new Uint8Array([250, 250, 250, 255, 47, 109, 179, 255]);
-  const idx = quantize(rgba, pal);
-  check('quantize maps exact brand colours to their palette slots', idx[0] === 0 && idx[1] === 9);
-  const frame = { indices: new Uint8Array(64 * 48).fill(3), delayCs: 8 };
-  const gif = encodeGIF([frame, frame], 64, 48, pal);
-  const head = String.fromCharCode(...gif.slice(0, 6));
-  const asText = Buffer.from(gif).toString('latin1');
-  check('encodeGIF emits a looping GIF89a stream', head === 'GIF89a' && gif[gif.length - 1] === 0x3b && asText.includes('NETSCAPE2.0') && gif.length > 100);
+  const { createRecording, recordEvent, finalizeRecording, validateReplay, hashBodyStates, eventsByStep } =
+    await import('../js/replay.js');
+  const rec = createRecording({ backend: 'matter', sceneName: 'T', initial: { bodies: [] }, appVersion: '1.50' });
+  check('replay: recording carries the format marker', rec.format === 'motionlab-replay' && rec.version === 1 && rec.backend === 'matter');
+  check('replay: recordEvent rejects unknown types', recordEvent(rec, 5, { type: 'nope' }) === false && rec.events.length === 0);
+  recordEvent(rec, 10, { type: 'blast', x: 1, y: 2, radius: 90 });
+  recordEvent(rec, 4, { type: 'blast', x: 3, y: 4, radius: 90 });
+  check('replay: out-of-order events clamp to the last step', rec.events.length === 2 && rec.events[1].step === 10);
+  finalizeRecording(rec, 600, 'abcd1234');
+  const v = validateReplay(JSON.parse(JSON.stringify(rec)));
+  check('replay: a finished recording validates', v.ok && v.replay.steps === 600 && v.replay.events.length === 2);
+  check('replay: validateReplay rejects a foreign format', !validateReplay({ format: 'motionlab-scene' }).ok);
+  check('replay: validateReplay rejects out-of-order events',
+    !validateReplay({ format: 'motionlab-replay', version: 1, steps: 10, initial: { bodies: [] }, events: [{ step: 5, type: 'blast' }, { step: 2, type: 'blast' }] }).ok);
+  check('replay: validateReplay rejects steps beyond the cap',
+    !validateReplay({ format: 'motionlab-replay', version: 1, steps: 60 * 181, initial: { bodies: [] }, events: [] }).ok);
+  check('replay: validateReplay rejects an event past the end',
+    !validateReplay({ format: 'motionlab-replay', version: 1, steps: 10, initial: { bodies: [] }, events: [{ step: 11, type: 'blast' }] }).ok);
+  check('replay: eventsByStep groups by step', eventsByStep(rec.events).get(10).length === 2);
+  const h1 = hashBodyStates([{ id: 'a', x: 1.0004, y: 2, angle: 0 }]);
+  const h2 = hashBodyStates([{ id: 'a', x: 1.0001, y: 2, angle: 0 }]);
+  const h3 = hashBodyStates([{ id: 'a', x: 1.01, y: 2, angle: 0 }]);
+  check('replay: hash ignores sub-millimetre noise but catches divergence', h1 === h2 && h1 !== h3, `${h1} ${h2} ${h3}`);
+}
+
+/* --- v1.50: replay determinism proof on BOTH backends ---
+   Record: snapshot a live world, then run 480 steps with scripted inputs
+   (add body, gravity change, radial blast, a physics drag). Replay: load
+   the snapshot into a FRESH world and re-apply the same inputs at the
+   same steps. The final state hashes must be identical. */
+{
+  const { hashBodyStates, statesFromSnapshot } = await import('../js/replay.js');
+  const bounce = presets.find((p) => p.key === 'bounce').scene;
+  function runScript(backend, replayMode) {
+    const scene = JSON.parse(JSON.stringify(bounce));
+    const seedWorld = new PhysicsWorld(backend);
+    seedWorld.loadScene(scene);
+    const initial = JSON.parse(JSON.stringify(seedWorld.snapshot()));
+    const w = replayMode ? new PhysicsWorld(backend) : seedWorld;
+    if (replayMode) w.loadSnapshot(initial);
+    let settings = { ...scene.settings };
+    const target = w.allBodies().find((b) => !b.isStatic);
+    const targetId = w.dataIdOf(target);
+    const script = new Map();
+    const at = (s, e) => { if (!script.has(s)) script.set(s, []); script.get(s).push(e); };
+    at(60, { type: 'add', body: bodyData({ id: 'extra-ball', type: 'circle', x: 640, y: 80, radius: 15, restitution: 0.6 }) });
+    at(150, { type: 'settings', settings: { ...settings, gravityX: 0.4 } });
+    at(240, { type: 'blast', x: 640, y: 300, radius: 120 });
+    at(300, { type: 'dragStart', id: targetId });
+    for (let s = 301; s <= 330; s++) at(s, { type: 'drag', dx: 2, dy: -1 });
+    at(331, { type: 'dragEnd' });
+    const apply = (e) => {
+      if (e.type === 'add') w.addBody(bodyData(e.body));
+      else if (e.type === 'settings') { settings = { ...e.settings }; w.applySettings(settings); }
+      else if (e.type === 'blast') w.applyRadialImpulse(e.x, e.y, { radius: e.radius, base: 2, power: 13 });
+      else if (e.type === 'dragStart') { const b = w.bodyById(e.id); dragPt = { x: b.position.x, y: b.position.y }; w.beginDrag(b, dragPt.x, dragPt.y); }
+      else if (e.type === 'drag') { dragPt.x += e.dx; dragPt.y += e.dy; w.moveDrag(dragPt.x, dragPt.y); }
+      else if (e.type === 'dragEnd') w.endDrag();
+    };
+    let dragPt = null;
+    for (let s = 0; s < 480; s++) {
+      const evs = script.get(s);
+      if (evs) for (const e of evs) apply(e);
+      w.stepOnce();
+    }
+    return hashBodyStates(statesFromSnapshot(w.snapshot()));
+  }
+  for (const backend of ['matter', 'native']) {
+    const live = runScript(backend, false);
+    const replayed = runScript(backend, true);
+    check(`replay: ${backend} re-stepping reproduces the run exactly`, live === replayed, `${live} vs ${replayed}`);
+  }
+}
+
+/* --- v1.50: challenge definitions + goal logic --- */
+{
+  const { CHALLENGES, GoalTracker, pointInZone, starsFor } = await import('../js/challenges.js');
+  check('challenges: six levels ship', CHALLENGES.length === 6, `n=${CHALLENGES.length}`);
+  for (const def of CHALLENGES) {
+    const built = def.build();
+    const v = validateScene(JSON.parse(JSON.stringify(built)));
+    check(`challenges: ${def.id} setup validates as a scene`, v.ok, v.ok ? '' : v.errors.join(';'));
+    check(`challenges: ${def.id} budget and time are sane`, def.budget >= 1 && def.timeSec >= 30);
+    if (def.goalKind === 'target') {
+      check(`challenges: ${def.id} target body exists in its setup`, built.bodies.some((b) => b.id === def.targetId));
+    }
+  }
+  const tr = new GoalTracker(3);
+  check('challenges: the goal needs CONSECUTIVE steps inside',
+    tr.update(true) === false && tr.update(true) === false && tr.update(false) === false
+    && tr.update(true) === false && tr.update(true) === false && tr.update(true) === true);
+  check('challenges: stars = win + piece par + time par',
+    starsFor(2, 20, { pieces: 2, sec: 25 }) === 3 && starsFor(3, 20, { pieces: 2, sec: 25 }) === 2
+    && starsFor(3, 30, { pieces: 2, sec: 25 }) === 1 && starsFor(9, 99, { pieces: 2, sec: 25 }) === 1);
+  check('challenges: pointInZone is inclusive of the near edges only',
+    pointInZone(10, 10, { x: 10, y: 10, w: 5, h: 5 }) && pointInZone(15, 15, { x: 10, y: 10, w: 5, h: 5 })
+    && !pointInZone(16, 10, { x: 10, y: 10, w: 5, h: 5 }));
 }
 
 /* --- v1.29: ferris wheel regression (Ryan's video: the cross folded shut) ---

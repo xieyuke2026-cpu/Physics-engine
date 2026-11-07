@@ -362,3 +362,25 @@ body.no-3d .mode-switch, body.no-3d #navSectionPresets3D, body.no-3d #navSection
 
 /* ===== 1.41: backend picker (Settings) ===== */
 .switch-row select { height: 32px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: #fff; font-size: 13px; max-width: 62%; }
+
+/* Replay transport bar (1.50): sits above the status bar while a replay
+   is open. Same flat chrome as the top bar; the verdict chip reports the
+   final-hash check (green = exact reproduction, amber = diverged). */
+#replayBar{display:flex;align-items:center;gap:10px;padding:6px 12px;background:var(--panel,#fff);border-top:1px solid var(--line,#e3e3e6)}
+#replayBar[hidden]{display:none}
+#replayBar #pbSeek{flex:1;accent-color:#2f6db3}
+#replayBar .pb-time{font-variant-numeric:tabular-nums;color:#555;font-size:12px;white-space:nowrap}
+#replayBar .pb-verdict{font-size:12px;white-space:nowrap}
+#replayBar .pb-verdict.ok{color:#1d7a35}
+#replayBar .pb-verdict.warn{color:#b3271e}
+#replayBar #pbSpeed{font-size:12px}
+
+/* Challenge mode (1.50): panel list rows, the active-challenge card and
+   the scene panel's entry button. Flat chrome like the rest of the app. */
+.chal-entry{margin:6px 0 2px}
+.chal-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.chal-row-stars{color:#2f6db3;letter-spacing:2px}
+.chal-brief{margin:2px 0 6px}
+.chal-name{font-size:15px;font-weight:600;margin:4px 0 2px}
+.chal-won{font-size:22px;color:#2f6db3;letter-spacing:4px;margin:8px 0 2px}
+.chal-btns{gap:8px}

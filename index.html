@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.49">
+<link rel="stylesheet" href="css/style.css?v=1.50">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -47,7 +47,8 @@
     </div>
     <div class="tb-sep lab2d-only"></div>
     <div class="tb-group lab2d-only">
-      <button id="btnRecord" class="tb-btn wide rec-btn" data-i18n-title="tb.title.record" title="录制 GIF：录下画布动画并导出"></button>
+      <button id="btnReplay" class="tb-btn wide rec-btn" data-i18n-title="tb.title.replay" title="录制回放：逐步记录这次运行，可精确重播"></button>
+      <button id="btnReplayPlay" class="tb-btn icon" data-i18n-title="tb.title.replayPlay" title="播放最近的回放" hidden></button>
     </div>
     <div class="tb-spacer"></div>
     <div class="tb-group lab2d-only">
@@ -98,6 +99,20 @@
     <aside id="panel">
       <div id="panelBody"></div>
     </aside>
+  </div>
+
+  <!-- ===== Replay transport (1.50) ===== -->
+  <div id="replayBar" hidden>
+    <button id="btnPbPlay" class="tb-btn icon" title="播放 / 暂停回放"></button>
+    <input id="pbSeek" type="range" min="0" max="100" value="0" step="1" aria-label="回放进度">
+    <span id="pbTime" class="pb-time">0:00 / 0:00</span>
+    <span id="pbVerdict" class="pb-verdict"></span>
+    <select id="pbSpeed" aria-label="回放速度">
+      <option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option>
+      <option value="2">2×</option>
+    </select>
+    <button id="btnPbExit" class="tb-btn wide"></button>
   </div>
 
   <!-- ===== Status bar ===== -->
@@ -194,6 +209,7 @@
         <button class="side-item active" data-view="overview"><span class="side-ic" data-ic="grid"></span><span data-i18n-text="hub.nav.overview">概览</span></button>
         <button class="side-item" data-view="library"><span class="side-ic" data-ic="folder"></span><span data-i18n-text="hub.nav.library">场景库</span><span class="side-count" id="countLibrary"></span></button>
         <button class="side-item" data-view="presets"><span class="side-ic" data-ic="layers"></span><span data-i18n-text="hub.nav.presets">实验预设</span><span class="side-count" id="countPresets">14</span></button>
+        <button class="side-item" data-view="challenges"><span class="side-ic" data-ic="flag"></span><span data-i18n-text="hub.nav.challenges">挑战模式</span><span class="side-count" id="countChallenges"></span></button>
         <button class="side-item" data-view="docs"><span class="side-ic" data-ic="code"></span><span data-i18n-text="hub.nav.docs">开发者文档</span></button>
       </nav>
       <button id="btnSidePF" class="side-item side-launch" data-i18n-title="hub.pfTitle" title="打开 PFLab 平台格斗实验室"><span class="side-ic" data-ic="gamepad"></span><span data-i18n-text="hub.pfLaunch">PFLab 平台格斗</span></button>
@@ -246,6 +262,10 @@
         <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.presets">2D 实验预设</span></div>
         <div id="presetRows" class="scene-rows"></div>
       </section>
+      <section id="navSectionChallenges" hidden>
+        <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.challenges">物理挑战</span></div>
+        <div id="challengeRows" class="scene-rows"></div>
+      </section>
       <section id="navSectionDocs" hidden>
         <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.sec.docs">开发者文档 · 通用物理引擎 PhysicsEngine</span></div>
         <div class="docs" data-lang="zh">
@@ -296,6 +316,7 @@
             <li><b>在实验室里直接用</b>（1.23 起，1.25/1.26 扩充）：点画布空白处，右侧「场景属性」面板的「世界效应」一节可调万有引力 G、添加并编辑流体与风场区域；流体/风场区域在画布上可以直接拖动改位置。左侧工具栏的「磁铁」工具（或世界效应一节的按钮）能直接放固定磁铁，点选任意物体后还可改名、在「材质」一节设磁性，或一键套用泡沫/木头/橡胶/冰/铁材质预设；顶部「分享」按钮把整个场景压进一条链接，对方打开即进入该场景；「我的项目」主页工具栏有「导入场景」入口；另有「万有引力轨道」「浮力池」「磁铁阵列」「风洞实验」「材质实验室」「磁铁秋千」「马达风车」「摩天轮」等预设可直接载入体验</li>
             <li><b>机械与录制</b>（1.28）：左侧工具栏新增「铰链」工具——先在第一个物体上点铰接点，再点第二个物体即可铰接（点空白 = 固定铰座）；点选画布上的铰链圆点可设马达转速或删除。顶部「录制」按钮把画布动画录成循环 GIF 导出（最长 20 秒），发帖、做演示素材不用再录屏</li>
             <li><b>失去支撑会醒来</b>（1.44）：睡着的物体每 15 步自动检查支撑——删掉睡塔的底层、拖走支撑物，上面睡着的物体会被唤醒并掉落，不再悬空（Matter 与 Native 双引擎）；被弹簧/铰链挂住、浸在流体里都算有支撑，零重力时不检查</li>
+            <li><b>挑战与确定性回放</b>（1.50）：主界面侧栏新增「挑战模式」——6 个关卡、限定搭建预算、目标区连续停稳判定与三星评级（<code>js/challenges.js</code>，无 DOM）。原 GIF 录制被<b>确定性回放</b>取代：录制 = 起始引擎快照 + 按模拟步编号的全部操作事件，导出 <code>.replay.json</code> 后可变速/拖动重播，结尾自动校验状态哈希（<code>js/replay.js</code>）；同一脚本在 Matter 与 Native 双后端的实况与重演哈希逐位一致，已由 Node 测试证明。注意引擎快照不含重力，回放文件单独携带场景设置</li>
             <li><b>Native 大场景健壮性</b>（1.43）：修复 Native 在大场景中途崩溃冻结（碰撞裁剪对精确对齐的堆叠不再出错，796 物体极限压测可完整跑完）；休眠判定平滑化让大堆积更快静下来；场景属性的「引擎」一行改为显示当前后端、切换即更新</li>
             <li><b>Native 物体不显示已修</b>（1.42）：Native 的圆形物体补齐顶点多边形（宿主契约：每个刚体必须暴露非空 vertices），修好 1.41 里 Native 下画布只剩网格的问题</li>
             <li><b>主界面工作台</b>（1.40）：主界面改版为工作台式布局（深色侧栏 + 场景/预设列表 + 右侧详情检查器）；后端接口同时正式化为注册表（见上「后端注册表」）</li>
@@ -388,6 +409,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
             <li><b>Use it right in the lab</b> (1.23, expanded in 1.25/1.26): with nothing selected, the Scene panel's "World Effects" section sets gravitation G and adds/edits fluid and wind regions; fluid and wind regions can be dragged on the canvas to move them. The Magnet tool in the left rail (or the button in World Effects) places a fixed magnet directly; select any body to rename it, set its magnetism in the Material section, or apply a one-tap material preset (foam / wood / rubber / ice / iron). The top-bar Share button packs a whole scene into a link that opens right into that scene, and the My Projects home has its own Import Scene entry. The "Orbital Gravitation", "Buoyancy Pool", "Magnet Array", "Wind Tunnel", "Materials Lab" and "Magnet Swing" and "Motor Windmill" / "Ferris Wheel" presets load ready-made demos.</li>
             <li><b>Machinery &amp; recording</b> (1.28): the left rail gains a Hinge tool — tap the pin point on a first body, then a second body to hinge them (empty space = fixed mount); tap a hinge pin marker on the canvas to set its motor speed or delete it. The top-bar Record button captures the canvas animation as a looping GIF (up to 20 s) — no screen recording needed for posts and demos</li>
             <li><b>Sleepers wake when support vanishes</b> (1.44): sleeping bodies re-check their support every 15 steps — delete the base of a sleeping tower or drag a support away and the bodies above wake and fall instead of hovering (both backends); being hung from a spring/hinge or immersed in a fluid counts as support, and zero gravity skips the check</li>
+            <li><b>Challenges &amp; deterministic replay</b> (1.50): the home sidebar gains Challenge Mode — 6 levels, fixed building budgets, hold-in-zone goal tracking and 3-star ratings (<code>js/challenges.js</code>, DOM-free). GIF recording is replaced by <b>deterministic replay</b>: a recording is the starting engine snapshot plus every input stamped by simulation step; the exported <code>.replay.json</code> replays with scrub/speed controls and a final state-hash verdict (<code>js/replay.js</code>). The same scripted run reproduces bit-identical hashes live vs replayed on BOTH backends, proven by Node tests. Note: engine snapshots omit gravity, so replay files carry the scene settings separately</li>
             <li><b>Native large-scene robustness</b> (1.43): fixed Native crashing and freezing mid-run in large scenes (contact clipping no longer fails on exactly-aligned stacks — the 796-body stress scene runs to completion); a smoothed sleep metric settles big piles faster; the scene panel's Engine row now shows the live backend and follows switching</li>
             <li><b>Native bodies render again</b> (1.42): Native circles now expose a vertices polygon (host contract: every body must expose non-empty vertices), fixing 1.41's grid-only canvas under Native</li>
             <li><b>Workbench home hub</b> (1.40): the home hub is now a workbench (dark sidebar + scene/preset list + right-hand inspector); the backend interface was formalised into the registry at the same time (see "Backend registry" above)</li>
@@ -440,11 +462,11 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.49</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.50</span></div>
           <div class="whatsnew-card">
-            <p data-i18n-text="hub.whatsnew.b1">示例「流体蔓延 · 水坝决口」手感调校：按实测把涌浪从堆高 27px / 晃 8.4 秒压到 19px / 5.6 秒——留一点涌浪，去掉果冻感</p>
-            <p data-i18n-text="hub.whatsnew.b2">调校只动示例页的通量参数（k 0.22→0.28、阻尼 0.992→0.988），模型单测 8 项复跑全过（全量 628 项）</p>
-            <p data-i18n-text="hub.whatsnew.b3">引擎与应用行为与 1.48 一致；下一个 Release 仍等 1.50</p>
+            <p data-i18n-text="hub.whatsnew.b1">挑战模式上线：6 个物理挑战（滚进家门、断桥、叠高高、顺风车、磁引力、漏斗归位）——限定搭建预算，把目标送进蓝色虚线区赢星星；主界面侧栏新增「挑战模式」</p>
+            <p data-i18n-text="hub.whatsnew.b2">确定性回放取代 GIF 录制：顶栏「录制回放」逐步记录你的每次操作，导出的回放可在播放条里精确重播，结尾自动核对状态哈希</p>
+            <p data-i18n-text="hub.whatsnew.b3">回放机制在 Matter 与自研 Native 双后端都通过确定性验证；全量测试 661 项全过。GIF 录制随之移除</p>
           </div>
         </section>
       </aside>
@@ -517,6 +539,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.49"></script>
+<script type="module" src="js/app.js?v=1.50"></script>
 </body>
 </html>

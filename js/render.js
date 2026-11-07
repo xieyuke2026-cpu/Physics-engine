@@ -74,7 +74,7 @@ export class Renderer {
 
   draw(world, opts) {
     const { ctx, view, camera } = this;
-    const { selectedId = null, selectedFluidId = null, selectedWindId = null, selectedHingeId = null, hinges = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null } = opts;
+    const { selectedId = null, selectedFluidId = null, selectedWindId = null, selectedHingeId = null, hinges = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null, goalZone = null, goalTarget = null } = opts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (this._cacheOff || !this._blitBackdrop(showGrid)) {
       ctx.fillStyle = '#fafafa';
@@ -99,6 +99,18 @@ export class Renderer {
       world.forEachWind((w) => this._wind(w, w.id === selectedWindId));
     } else if (typeof world.winds === 'function') {
       for (const w of world.winds()) this._wind(w, w.id === selectedWindId);
+    }
+    // challenge goal zone (1.50): dashed accent area under the bodies
+    if (goalZone) {
+      ctx.beginPath();
+      ctx.rect(goalZone.x, goalZone.y, goalZone.w, goalZone.h);
+      ctx.fillStyle = goalZone.won ? 'rgba(29,122,53,0.13)' : 'rgba(47,109,179,0.07)';
+      ctx.fill();
+      ctx.strokeStyle = goalZone.won ? '#1d7a35' : COLORS.accent;
+      ctx.lineWidth = 1.6 / camera.zoom;
+      ctx.setLineDash([8 / camera.zoom, 6 / camera.zoom]);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     // fetch the body list ONCE per frame into a reused array (allBodies()
     // copies; this allocates nothing and trails/vectors reuse the list)
@@ -131,6 +143,15 @@ export class Renderer {
       ctx.strokeStyle = `rgba(47,109,179,${(1 - t) * 0.55})`;
       ctx.lineWidth = 2.5 / camera.zoom;
       ctx.stroke();
+    }
+    if (goalTarget) {
+      ctx.beginPath();
+      ctx.arc(goalTarget.x, goalTarget.y, (goalTarget.r || 18) + 7, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(47,109,179,0.65)';
+      ctx.lineWidth = 1.6 / camera.zoom;
+      ctx.setLineDash([4 / camera.zoom, 4 / camera.zoom]);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     if (springPreview) {
       ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 1.3 / camera.zoom;

@@ -46,8 +46,14 @@ await wait(300);
 
 /* --- v1.5: hub is the home page, with a sidebar --- */
 check('home: hub is shown on boot (return visit)', !doc.getElementById('sceneNav').hidden);
-check('home: sidebar has four views', doc.querySelectorAll('.side-item[data-view]').length === 4);
+check('home: sidebar has five views (1.50 adds challenges)', doc.querySelectorAll('.side-item[data-view]').length === 5);
 const viewBtn = (v) => doc.querySelector(`.side-item[data-view="${v}"]`);
+check('v1.50: challenges view shows only the challenges section', (() => {
+  click(viewBtn('challenges'));
+  const vis = (id) => !doc.getElementById(id).hidden;
+  return vis('navSectionChallenges') && !vis('navSectionSaved') && !vis('navSectionPresets') && !vis('navSectionDocs')
+    && doc.querySelectorAll('#challengeRows > *').length >= 6;
+})());
 click(viewBtn('presets'));
 await wait(60);
 check('sidebar: presets view hides saved + current sections',
@@ -151,7 +157,7 @@ check('workbench: selecting a preset row retargets the inspector',
   && doc.getElementById('inspBody').textContent.includes('载入并运行'));
 check('workbench: whats-new card sits in the inspector column',
   doc.getElementById('navWhatsNew').textContent.includes('本版更新')
-  && doc.getElementById('navWhatsNew').textContent.includes('流体蔓延'));
+  && doc.getElementById('navWhatsNew').textContent.includes('挑战模式'));
 
 // search filters cards
 const search = doc.getElementById('sceneSearch');
