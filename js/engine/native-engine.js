@@ -211,6 +211,7 @@ export class NativeEngine {
       vx: num(partial.vx, 0), vy: num(partial.vy, 0),
       va: num(partial.va, 0),
       sleeping: partial.sleeping === true,
+      noSleep: partial.noSleep === true,
       userData: partial.userData && typeof partial.userData === 'object' ? { ...partial.userData } : {},
     };
     let local = null, area = 0, inertiaPerMass = 0;
@@ -1419,7 +1420,8 @@ export class NativeEngine {
         b._motion = Math.max(inst, (b._motion || 0) * 0.9);
         const driven = b === dragBody || (drivenSet !== null && drivenSet.has(b));
         const slow = b._motion < 0.1 && b._supportAge <= 45;
-        if (!driven && slow) {
+        // noSleep (1.12.7): flagged bodies (dominoes) never enter sleep.
+        if (!driven && slow && !(b.plugin && b.plugin.pe && b.plugin.pe.desc.noSleep)) {
           b.sleepCounter++;
           if (b.sleepCounter >= 30) {
             b.isSleeping = true;

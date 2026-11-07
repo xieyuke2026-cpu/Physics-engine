@@ -112,5 +112,16 @@ renderer.camera.x += 25;
 renderer.draw(world, { showGrid: false });
 check('pan reuses the bitmap too', offCalls() === beforePan, `off=${offCalls()} vs ${beforePan}`);
 
+// frame 9 (1.55 regression): settle after the pan, then RESIZE a static
+// body in place — same id, pose and type, only bigger. Before 1.55 the
+// static signature ignored size, the bake never invalidated, and the
+// static kept rendering at its old size while physics used the new one.
+renderer.draw(world, { showGrid: false });
+const beforeResize = offCalls();
+s1.bounds.max.x += 24;
+s1.vertices[1].x += 24; s1.vertices[2].x += 24;
+renderer.draw(world, { showGrid: false });
+check('static resize (same pose) rebakes', offCalls() > beforeResize, `off=${offCalls()} vs ${beforeResize}`);
+
 console.log(`\nrender-tests: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

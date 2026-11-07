@@ -289,6 +289,24 @@ function poolWorld() {
   check('snapshot fidelity: restored pile tracks the original for 300 steps', pileSame);
 }
 
+/* --- v1.12.7: noSleep descriptor flag (twin) --- */
+{
+  const e = new NativeEngine({ enableSleeping: true });
+  e.addBody({ kind: 'rect', x: 200, y: 580, width: 600, height: 40, isStatic: true });
+  const flagged = e.addBody({ kind: 'rect', x: 160, y: 500, width: 32, height: 32, noSleep: true });
+  const plain = e.addBody({ kind: 'rect', x: 280, y: 500, width: 32, height: 32 });
+  check('noSleep: descriptor round-trips through describeBody', e.describeBody(flagged).noSleep === true && e.describeBody(plain).noSleep === false);
+  step(e, 400);
+  check('noSleep: flagged body stays awake at rest while the plain twin sleeps',
+    flagged.isSleeping === false && plain.isSleeping === true,
+    `flagged=${flagged.isSleeping} plain=${plain.isSleeping}`);
+  const e2 = new NativeEngine({ enableSleeping: true });
+  e2.load(JSON.parse(JSON.stringify(e.snapshot())));
+  const flagged2 = e2.allBodies().find((b) => e2.describeBody(b).noSleep === true);
+  step(e2, 400);
+  check('noSleep: survives snapshot -> load (still awake after 400 more steps)', !!flagged2 && flagged2.isSleeping === false);
+}
+
 /* --- a mini Galton board: many circle/polygon contacts stay finite --- */
 {
   const e = new NativeEngine({ enableSleeping: true });

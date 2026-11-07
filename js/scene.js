@@ -65,6 +65,7 @@ export function bodyData(partial = {}) {
     isStatic: partial.isStatic === true || type === 'line',
     isBound: partial.isBound === true,       // ground / walls that belong to the scene frame
     lockRotation: partial.lockRotation === true,
+    noSleep: partial.noSleep === true,
     vx: num(partial.vx, 0),
     vy: num(partial.vy, 0),
     label: typeof partial.label === 'string' ? partial.label.slice(0, MAX_BODY_LABEL_LEN) : '',
@@ -366,13 +367,20 @@ export function presetScenes() {
   }
 
   // Dominoes — a row of thin blocks; the first one is already tipping.
+  // Tuned 1.55 (the cascade used to stall on the default backend):
+  // dense tiles (0.004 — the strike carries momentum instead of a
+  // quasi-static lean), spacing 52, low air drag, and noSleep: with
+  // sleep enabled, a leaning tile's motion decays under the sleep
+  // threshold mid-push and the whole row froze leaning (measured:
+  // tile 1 asleep at 42°, tile 2 at 2.6°, nothing else ever moved).
   {
     const bodies = frameBodies();
     const n = 11, w = 16, h = 96;
     for (let i = 0; i < n; i++) {
       bodies.push(bodyData({
-        type: 'rectangle', x: 190 + i * 62, y: GROUND_TOP - h / 2, width: w, height: h,
-        angle: i === 0 ? 0.22 : 0, restitution: 0.05, friction: 0.35, label: 'Domino',
+        type: 'rectangle', x: 190 + i * 52, y: GROUND_TOP - h / 2, width: w, height: h,
+        angle: i === 0 ? 0.22 : 0, restitution: 0.05, friction: 0.35, frictionAir: 0.002,
+        density: 0.004, noSleep: true, label: 'Domino',
       }));
     }
     bodies.push(bodyData({ type: 'circle', x: 118, y: GROUND_TOP - 18, radius: 18, vx: 6, restitution: 0.3, label: 'Ball' }));

@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.6');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.7');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -318,6 +318,28 @@ function galtonBins(seed) {
     if (!pileSame) break;
   }
   check('snapshot fidelity: restored pile tracks the original for 300 steps', pileSame);
+}
+
+/* --- v1.12.7: noSleep descriptor flag ---
+   A flagged body never enters sleep (Matter: sleepThreshold Infinity).
+   Exists for slow-instability bodies (dominoes): a leaning tile's
+   motion decays under the sleep threshold mid-push and froze the
+   cascade in a lean-to pose. */
+{
+  const e = new PhysicsEngine({ enableSleeping: true });
+  e.addBody({ kind: 'rect', x: 200, y: 580, width: 600, height: 40, isStatic: true });
+  const flagged = e.addBody({ kind: 'rect', x: 160, y: 500, width: 32, height: 32, noSleep: true });
+  const plain = e.addBody({ kind: 'rect', x: 280, y: 500, width: 32, height: 32 });
+  check('noSleep: descriptor round-trips through describeBody', e.describeBody(flagged).noSleep === true && e.describeBody(plain).noSleep === false);
+  for (let i = 0; i < 400; i++) e.advance(1000 / 60, 1);
+  check('noSleep: flagged body stays awake at rest while the plain twin sleeps',
+    flagged.isSleeping === false && plain.isSleeping === true,
+    `flagged=${flagged.isSleeping} plain=${plain.isSleeping}`);
+  const e2 = new PhysicsEngine({ enableSleeping: true });
+  e2.load(JSON.parse(JSON.stringify(e.snapshot())));
+  const flagged2 = e2.allBodies().find((b) => e2.describeBody(b).noSleep === true);
+  for (let i = 0; i < 400; i++) e2.advance(1000 / 60, 1);
+  check('noSleep: survives snapshot -> load (still awake after 400 more steps)', !!flagged2 && flagged2.isSleeping === false);
 }
 
 /* --- v1.4.0: stability hardening --- */

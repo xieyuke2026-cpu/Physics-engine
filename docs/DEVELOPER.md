@@ -14,8 +14,8 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.54 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.12.6 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| MotionLab（应用） | 1.55 | `js/ui.js` 的 `APP_VERSION` |
+| PhysicsEngine（2D 核心） | 1.12.7 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -277,6 +277,7 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
   'native' })` 直接构造；从零编写的顺序冲量求解器覆盖全部公开接口
   （堆叠/休眠/铰链马达/真实浮力/磁力/引力/阵风/快照/种子随机），力模型
   按固定步踢一次、子步下限 2；专属行为测试 43 项（tests/native-tests.mjs）
+- 1.12.7 — 新增 `noSleep` 描述符：标记的物体双后端永不入睡（Matter 走 `sleepThreshold: Infinity`，Native 在睡眠遍中跳过）。为多米诺这类「慢速不稳定」物体而设——倾倒中的牌运动量衰减到睡眠阈值以下会被中途冻住。场景格式经 `bodyData` 透传；新增双后端测试各 3 项。
 - 1.12.6 — 快照保真修复：`describeBody` 新增 `va`（角速度）与 `sleeping` 字段，`addBody` 双后端均恢复二者——此前快照恢复会静默清零自旋并唤醒全部睡眠体，使热身后录制的回放与实况分家（牛顿摆实测 >14 px）。求解行为不变；新增双后端快照保真测试各 5 项。
 - 1.12.5 — 性能优化（行为不变）：孤儿唤醒探测（双后端）改走均匀网格候选对（原 O(睡眠体×全体），约 800 物体时占步进总时间约 31%）；Native 接触排序/热启动键改数字键、求解器临时向量复用、支撑标记改步内戳记、形状同步跳过睡眠体。
 - 1.12.4 — 双引擎 API 对齐：Native 补齐 `wake` / `setMaxSpeed` / `maxSpeed` / `clearFluids` / `clearWinds` / `dragBody`，`dragging` 两后端统一为布尔；新增 parity 与带框世界回归测试，求解行为不变。

@@ -368,6 +368,33 @@ for (const p of presets) {
   }
 }
 
+/* --- v1.55: the domino preset must actually cascade on BOTH backends ---
+   Regression for the stall Ryan reported: on the default backend the
+   row froze leaning (tile 1 asleep at 42°, tile 2 at 2.6°) because
+   sleep swallowed the slow push, and the strike itself was a
+   quasi-static lean at the default density. The preset now ships
+   dense noSleep tiles at spacing 52; under stock app conditions
+   (sleeping enabled) all 11 must be down within 1200 steps. */
+{
+  const domino = presets.find((p) => p.key === 'domino').scene;
+  for (const backend of ['matter', 'native']) {
+    const w = new PhysicsWorld(backend);
+    w.loadScene(JSON.parse(JSON.stringify(domino)));
+    let fallen = 0;
+    for (let i = 0; i < 1200; i++) {
+      w.advance(1000 / 60, 1);
+      if (i % 10 === 0) {
+        const doms = w.snapshot().bodies.filter((b) => b.label === 'Domino');
+        fallen = doms.filter((b) => Math.abs(b.angle) > 0.8).length;
+        if (fallen === doms.length) break;
+      }
+    }
+    const doms = w.snapshot().bodies.filter((b) => b.label === 'Domino');
+    fallen = doms.filter((b) => Math.abs(b.angle) > 0.8).length;
+    check(`dominoes: ${backend} cascade completes (11/11 down)`, fallen === 11, `fallen=${fallen}`);
+  }
+}
+
 /* --- v1.50: challenge definitions + goal logic --- */
 {
   const { CHALLENGES, GoalTracker, pointInZone, starsFor } = await import('../js/challenges.js');

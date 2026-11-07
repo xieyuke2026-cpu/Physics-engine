@@ -15,6 +15,7 @@ function mlToDesc(d) {
     radius: d.radius, sides: d.sides,
     density: d.density, friction: d.friction, frictionAir: d.frictionAir,
     restitution: d.restitution, isStatic: d.isStatic, lockRotation: d.lockRotation,
+    noSleep: d.noSleep === true,
     magnet: d.magnet,
     vx: d.vx, vy: d.vy, label: d.label,
     // The scene label doubles as the engine-level body name (1.4.0), so
@@ -164,7 +165,7 @@ export class PhysicsWorld {
       sides: ud.sides !== undefined ? ud.sides : d.sides,
       density: d.density, friction: d.friction, frictionAir: d.frictionAir,
       restitution: d.restitution, isStatic: d.isStatic, magnet: d.magnet,
-      isBound: ud.isBound === true, lockRotation: d.lockRotation,
+      isBound: ud.isBound === true, lockRotation: d.lockRotation, noSleep: d.noSleep === true,
       // A rename done through the engine wins over the creation label.
       vx: d.vx, vy: d.vy, label: d.name || d.label,
     });

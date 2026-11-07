@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.6 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.7 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -83,6 +83,11 @@
              snapshots, queries, seeded RNG). Matter stays the default
              and the reference behaviour; native is opt-in and labelled
              experimental while its feel is validated on real scenes.
+    1.12.7 — noSleep descriptor flag (MotionLab 1.55): a body created
+             with noSleep: true never enters sleep on either backend
+             (Matter: sleepThreshold Infinity; Native: the sleep pass
+             skips it). For slow-instability bodies (dominoes), whose
+             leaning motion decays under the sleep threshold mid-push.
     1.12.6 — snapshot fidelity (MotionLab 1.54): describeBody now
              carries angular velocity (va) and the sleeping flag, and
              addBody restores both (both backends) — previously a
@@ -191,7 +196,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.6';
+export const VERSION = '1.12.7';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -460,6 +465,7 @@ export class PhysicsEngine {
       vx: num(partial.vx, 0), vy: num(partial.vy, 0),
       va: num(partial.va, 0),
       sleeping: partial.sleeping === true,
+      noSleep: partial.noSleep === true,
       label: typeof partial.label === 'string' ? partial.label : '',
       name: typeof partial.name === 'string' ? partial.name : '',
       userData: partial.userData && typeof partial.userData === 'object' ? partial.userData : {},
@@ -469,6 +475,10 @@ export class PhysicsEngine {
       frictionAir: desc.frictionAir, restitution: desc.restitution,
       isStatic: desc.isStatic, label: desc.label || kind,
       ...(desc.lockRotation ? { inertia: Infinity } : {}),
+      // noSleep (1.12.7): never enter sleep — for bodies whose whole job
+      // is a slow instability (dominoes): Matter's motion threshold put
+      // a leaning domino to sleep mid-push and froze the cascade.
+      ...(desc.noSleep ? { sleepThreshold: Infinity } : {}),
     };
     let body;
     if (kind === 'circle') body = Bodies.circle(desc.x, desc.y, desc.radius, opts);

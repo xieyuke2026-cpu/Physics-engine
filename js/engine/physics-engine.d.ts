@@ -48,6 +48,8 @@ export interface BodyDescriptor {
   va?: number;
   /** Start asleep (snapshot restore); ignored for static bodies. */
   sleeping?: boolean;
+  /** Never enter sleep (for slow-instability bodies like dominoes). */
+  noSleep?: boolean;
   /** Display name; look bodies up with `getBodyByName`. */
   name?: string;
   /** Signed magnet strength; 0 / undefined = unmagnetised. */

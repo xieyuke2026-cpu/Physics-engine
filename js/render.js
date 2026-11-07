@@ -225,6 +225,12 @@ export class Renderer {
       const id = String(world.dataIdOf(b));
       for (let i = 0; i < id.length; i++) mix(id.charCodeAt(i));
       mix((b.position.x * 2) | 0); mix((b.position.y * 2) | 0); mix((b.angle * 1000) | 0);
+      // Size belongs in the signature too (1.55): resizing a static body
+      // keeps its id/pose/type, so without the bounds extent + vertex
+      // count the bake never invalidated and the static kept drawing at
+      // its OLD size while physics already used the new one.
+      mix(((b.bounds.max.x - b.bounds.min.x) * 2) | 0); mix(((b.bounds.max.y - b.bounds.min.y) * 2) | 0);
+      mix(b.vertices ? b.vertices.length : 0);
       const t = String(world.typeOf(b));
       for (let i = 0; i < t.length; i++) mix(t.charCodeAt(i));
       mix(typeof world.magnetOf === 'function' ? world.magnetOf(b) : 0);

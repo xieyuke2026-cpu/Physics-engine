@@ -989,7 +989,18 @@ function finalizeCreate() {
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const before = toWorld(e);
-  camera.zoom *= e.deltaY < 0 ? 1.1 : 0.9;
+  // Proportional zoom (1.55): the old sign-only step (×1.1 / ×0.9 per
+  // event, ignoring magnitude) made trackpads unusable — a pinch or a
+  // two-finger scroll fires dozens of small-delta events per second,
+  // each worth a full 10% jump. Scale by the actual delta instead:
+  // deltaMode normalises line/page units to pixels; ctrlKey marks a
+  // trackpad pinch, whose deltas are small and get a larger gain.
+  // A mouse notch (~100 px) still lands near the old ×1.17 / ×0.85.
+  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+  const delta = e.deltaY * unit;
+  const gain = e.ctrlKey ? 0.006 : 0.0016;
+  const f = Math.min(2, Math.max(0.5, Math.exp(-delta * gain)));
+  camera.zoom *= f;
   camera.clampZoom();
   const after = toWorld(e);
   camera.x += before.x - after.x; camera.y += before.y - after.y;
