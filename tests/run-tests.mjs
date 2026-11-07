@@ -322,6 +322,52 @@ for (const p of presets) {
   }
 }
 
+/* --- v1.54: replay determinism for a WARM recording (the cradle case) ---
+   The 1.50 proof above snapshots a cold scene. Real use presses record
+   while the scene is already running: the live solver then carries
+   warm-start state a snapshot cannot serialize, and the run diverged
+   from its own replay (Newton's cradle warmed 300 steps: >2 px with no
+   inputs at all, >14 px with a drag — live-verified failure in 1.52/1.53).
+   The app now reloads the captured snapshot at record start (1.54), so
+   the recorded run and the replay start from the same rebuilt state. */
+{
+  const { hashBodyStates, statesFromSnapshot } = await import('../js/replay.js');
+  const cradle = presets.find((p) => p.key === 'cradle').scene;
+  function drive(world) {
+    const balls = world.allBodies().filter((b) => !b.isStatic);
+    const ball = balls.reduce((a, b) => (a.position.x < b.position.x ? a : b));
+    const id = world.dataIdOf(ball);
+    const x0 = ball.position.x, y0 = ball.position.y;
+    for (let s = 0; s < 900; s++) {
+      if (s === 120) { const b = world.bodyById(id); if (b) world.beginDrag(b, x0, y0); }
+      if (s > 120 && s <= 200) world.moveDrag(x0 - 160 * Math.sin(((s - 120) / 80) * Math.PI * 0.5), y0 - 60 * Math.sin(((s - 120) / 80) * Math.PI));
+      if (s === 201) world.endDrag();
+      world.stepOnce();
+    }
+    return hashBodyStates(statesFromSnapshot(world.snapshot()));
+  }
+  function runWarm(backend, replayMode) {
+    const scene = JSON.parse(JSON.stringify(cradle));
+    const w = new PhysicsWorld(backend);
+    w.loadScene(scene);
+    for (let i = 0; i < 300; i++) w.advance(1000 / 60, 1); // warm-up: already running when record is pressed
+    const initial = JSON.parse(JSON.stringify(w.snapshot()));
+    if (replayMode) {
+      const fresh = new PhysicsWorld(backend);
+      fresh.loadScene(scene);
+      fresh.loadSnapshot(initial);
+      return drive(fresh);
+    }
+    w.loadSnapshot(JSON.parse(JSON.stringify(initial))); // 1.54 record-start reload
+    return drive(w);
+  }
+  for (const backend of ['matter', 'native']) {
+    const live = runWarm(backend, false);
+    const replayed = runWarm(backend, true);
+    check(`replay: ${backend} warm recording (record-start reload) reproduces exactly`, live === replayed, `${live} vs ${replayed}`);
+  }
+}
+
 /* --- v1.50: challenge definitions + goal logic --- */
 {
   const { CHALLENGES, GoalTracker, pointInZone, starsFor } = await import('../js/challenges.js');

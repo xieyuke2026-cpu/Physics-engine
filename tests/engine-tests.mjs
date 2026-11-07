@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.5');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.6');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -273,6 +273,51 @@ function galtonBins(seed) {
   const pe2 = new PhysicsEngine({});
   pe2.load(JSON.parse(JSON.stringify(pe.snapshot())));
   check('names: name survives snapshot -> load', pe2.getBodyByName('knight') !== null && pe2.getBodiesByName('coin').length === 2);
+}
+
+/* --- v1.12.6: snapshot fidelity — spin + sleep state round-trip ---
+   Before 1.12.6, describeBody/addBody dropped angular velocity and the
+   sleeping flag: a snapshot restored mid-motion silently zeroed both,
+   and a replay recorded after warm-up diverged from its own recording. */
+{
+  const e1 = new PhysicsEngine({});
+  const ball = e1.addBody({ kind: 'circle', x: 200, y: 100, radius: 20, vx: 2, frictionAir: 0 });
+  Matter.Body.setAngularVelocity(ball, 0.3);
+  for (let i = 0; i < 30; i++) e1.advance(1000 / 60, 1);
+  const snap = JSON.parse(JSON.stringify(e1.snapshot()));
+  check('snapshot fidelity: snapshot carries va + sleeping fields',
+    typeof snap.bodies[0].va === 'number' && snap.bodies[0].sleeping === false);
+  const e2 = new PhysicsEngine({});
+  e2.load(snap);
+  const rb = e2.allBodies()[0];
+  check('snapshot fidelity: angular velocity restored on load',
+    Math.abs(rb.angularVelocity - ball.angularVelocity) < 1e-12, `va=${rb.angularVelocity} vs ${ball.angularVelocity}`);
+  let identical = true;
+  for (let i = 0; i < 300; i++) {
+    e1.advance(1000 / 60, 1); e2.advance(1000 / 60, 1);
+    const d1 = e1.describeBody(ball), d2 = e2.describeBody(rb);
+    if (Math.abs(d1.x - d2.x) > 1e-9 || Math.abs(d1.y - d2.y) > 1e-9 || Math.abs(d1.angle - d2.angle) > 1e-9) { identical = false; break; }
+  }
+  check('snapshot fidelity: spinning flight stays bit-identical for 300 steps', identical);
+
+  const p1 = new PhysicsEngine({ enableSleeping: true });
+  p1.addBody({ kind: 'rect', x: 200, y: 400, width: 600, height: 40, isStatic: true });
+  for (let i = 0; i < 6; i++) p1.addBody({ kind: 'rect', x: 200, y: 300 - i * 34, width: 32, height: 32 });
+  for (let i = 0; i < 600; i++) p1.advance(1000 / 60, 1);
+  const asleepBefore = p1.allBodies().filter((b) => b.isSleeping && !b.isStatic).length;
+  const p2 = new PhysicsEngine({ enableSleeping: true });
+  p2.load(JSON.parse(JSON.stringify(p1.snapshot())));
+  const asleepAfter = p2.allBodies().filter((b) => b.isSleeping && !b.isStatic).length;
+  check('snapshot fidelity: sleeping bodies come back asleep',
+    asleepBefore > 0 && asleepAfter === asleepBefore, `${asleepBefore} -> ${asleepAfter}`);
+  let pileSame = true;
+  for (let i = 0; i < 300; i++) {
+    p1.advance(1000 / 60, 1); p2.advance(1000 / 60, 1);
+    const a = p1.snapshot().bodies, b = p2.snapshot().bodies;
+    for (let j = 0; j < a.length; j++) if (Math.abs(a[j].x - b[j].x) > 1e-9 || Math.abs(a[j].y - b[j].y) > 1e-9) { pileSame = false; break; }
+    if (!pileSame) break;
+  }
+  check('snapshot fidelity: restored pile tracks the original for 300 steps', pileSame);
 }
 
 /* --- v1.4.0: stability hardening --- */

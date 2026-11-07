@@ -44,6 +44,10 @@ export interface BodyDescriptor {
   /** Initial velocity (px per fixed step). */
   vx?: number;
   vy?: number;
+  /** Initial angular velocity (radians per fixed step). */
+  va?: number;
+  /** Start asleep (snapshot restore); ignored for static bodies. */
+  sleeping?: boolean;
   /** Display name; look bodies up with `getBodyByName`. */
   name?: string;
   /** Signed magnet strength; 0 / undefined = unmagnetised. */

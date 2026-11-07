@@ -15,8 +15,8 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.53 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.12.5 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| MotionLab (app) | 1.54 | `APP_VERSION` in `js/ui.js` |
+| PhysicsEngine (2D core) | 1.12.6 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -331,6 +331,7 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   magnetism / gravitation / gusts / snapshots / seeded RNG), force
   models kicking once per fixed step and a substep floor of 2; its
   own 43-check behaviour suite (tests/native-tests.mjs)
+- 1.12.6 — snapshot-fidelity fix: `describeBody` now carries `va` (angular velocity) and `sleeping`, and `addBody` restores both on both backends — previously a snapshot restore silently zeroed spin and woke every sleeper, so a replay recorded after warm-up diverged from its own run (Newton's cradle: >14 px measured). Solver behaviour unchanged; 5 new fidelity checks per backend suite.
 - 1.12.5 — performance pass (behaviour unchanged): the orphan-sleeper probe (both backends) now finds candidate pairs through a uniform grid instead of O(sleepers x bodies) scans (~31% of all step time at ~800 bodies); Native gets numeric contact-sort / warm-start keys, shared solver scratch vectors, stamp-based support marking, and shape sync that skips sleeping bodies.
 - 1.12.4 — dual-engine API parity: Native gains `wake` / `setMaxSpeed` / `maxSpeed` / `clearFluids` / `clearWinds` / `dragBody`, and `dragging` is boolean on both backends; new parity and framed-world regression tests; solver behaviour unchanged.
 - 1.12.3 — orphan-sleeper wake (both backends): a support probe every 15 steps wakes sleepers whose support is gone (deleting a tower base or dragging a support away no longer leaves bodies hovering); support = touching chain to a non-sleeping body, constraint/hinge attachment, or fluid overlap; zero gravity opts out.

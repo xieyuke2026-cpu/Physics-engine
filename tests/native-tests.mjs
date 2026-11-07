@@ -247,6 +247,48 @@ function poolWorld() {
     `(${pa.position.x.toFixed(1)},${pa.position.y.toFixed(1)}) vs (${pb.position.x.toFixed(1)},${pb.position.y.toFixed(1)})`);
 }
 
+/* --- v1.12.6: snapshot fidelity — spin + sleep state round-trip (twin) --- */
+{
+  const e1 = new NativeEngine({});
+  const ball = e1.addBody({ kind: 'circle', x: 200, y: 100, radius: 20, vx: 2, frictionAir: 0 });
+  ball.angularVelocity = 0.3;
+  step(e1, 30);
+  const snap = JSON.parse(JSON.stringify(e1.snapshot()));
+  check('snapshot fidelity: snapshot carries va + sleeping fields',
+    typeof snap.bodies[0].va === 'number' && snap.bodies[0].sleeping === false);
+  const e2 = new NativeEngine({});
+  e2.load(snap);
+  const rb = e2.allBodies()[0];
+  check('snapshot fidelity: angular velocity restored on load',
+    Math.abs(rb.angularVelocity - ball.angularVelocity) < 1e-12, `va=${rb.angularVelocity} vs ${ball.angularVelocity}`);
+  let identical = true;
+  for (let i = 0; i < 300; i++) {
+    e1.advance(1000 / 60, 1); e2.advance(1000 / 60, 1);
+    const d1 = e1.describeBody(ball), d2 = e2.describeBody(rb);
+    if (Math.abs(d1.x - d2.x) > 1e-9 || Math.abs(d1.y - d2.y) > 1e-9 || Math.abs(d1.angle - d2.angle) > 1e-9) { identical = false; break; }
+  }
+  check('snapshot fidelity: spinning flight stays bit-identical for 300 steps', identical);
+
+  const p1 = new NativeEngine({ enableSleeping: true });
+  p1.addBody({ kind: 'rect', x: 200, y: 400, width: 600, height: 40, isStatic: true });
+  for (let i = 0; i < 6; i++) p1.addBody({ kind: 'rect', x: 200, y: 300 - i * 34, width: 32, height: 32 });
+  step(p1, 600);
+  const asleepBefore = p1.allBodies().filter((b) => b.isSleeping && !b.isStatic).length;
+  const p2 = new NativeEngine({ enableSleeping: true });
+  p2.load(JSON.parse(JSON.stringify(p1.snapshot())));
+  const asleepAfter = p2.allBodies().filter((b) => b.isSleeping && !b.isStatic).length;
+  check('snapshot fidelity: sleeping bodies come back asleep',
+    asleepBefore > 0 && asleepAfter === asleepBefore, `${asleepBefore} -> ${asleepAfter}`);
+  let pileSame = true;
+  for (let i = 0; i < 300; i++) {
+    p1.advance(1000 / 60, 1); p2.advance(1000 / 60, 1);
+    const a = p1.snapshot().bodies, b = p2.snapshot().bodies;
+    for (let j = 0; j < a.length; j++) if (Math.abs(a[j].x - b[j].x) > 1e-9 || Math.abs(a[j].y - b[j].y) > 1e-9) { pileSame = false; break; }
+    if (!pileSame) break;
+  }
+  check('snapshot fidelity: restored pile tracks the original for 300 steps', pileSame);
+}
+
 /* --- a mini Galton board: many circle/polygon contacts stay finite --- */
 {
   const e = new NativeEngine({ enableSleeping: true });

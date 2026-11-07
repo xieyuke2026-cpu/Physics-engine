@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.53">
+<link rel="stylesheet" href="css/style.css?v=1.54">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -321,6 +321,7 @@
             <li><b>性能优化与界面整理</b>（1.51 / 引擎 1.12.5）：性能剖析发现每 15 步的孤儿唤醒探测（1.44）在约 800 物体时占 Matter 后端步进总时间约 31%——其候选对查找是 O(睡眠体×全体）。现双后端均改走均匀网格（触碰判定与支撑语义不变）：777 物体压测单步平均 4.9→3.5 ms、95 分位尖峰 25→10 ms。Native 另去掉接触排序/热启动键的模板字符串（改数字键）、求解器临时向量复用、支撑标记改步内戳记、解算后形状同步跳过睡眠体。回放检查点经实测仅约 0.4 ms，不是瓶颈，未动。界面：实验室场景属性面板移除挑战入口与实验室内挑战列表，挑战模式只从主界面侧栏进入，挑战卡「全部挑战」直达主界面挑战视图</li>
             <li><b>回放拖动修复与视频录制</b>（1.52）：回放进度条拖动改为异步追赶——<code>scrubPlayback</code> 只记目标步，主循环每帧以约 16 ms 预算步进追赶并逐帧渲染（回退时先恢复最近检查点）；检查点间隔 300→120 步（3 分钟回放上限下最多 90 个，约 780 物体时实测单个快照约 323 KB JSON 等价）。新增 <code>js/video.js</code>：<code>canvas.captureStream</code> + <code>MediaRecorder</code> 实时录制，MIME 按 mp4 → webm 顺序探测（<code>pickVideoMime</code> 纯函数可测），最长 60 秒；视频为实时录制（帧率随现场），确定性回放仍是无损格式。能力缺失时按钮如实 toast 不支持（冒烟在 jsdom 无 MediaRecorder 环境下覆盖此路径）</li>
             <li><b>代码清理</b>（1.53）：全仓审计后删除确认无引用的残留——<code>i18n.js</code> 的 <code>hasStoredLang</code>、<code>icons.js</code> 的 <code>TOOL_LABELS</code>（工具名已由 i18n 提供）、<code>lab3d.js</code> 的 <code>lab3DIsRunning</code>、<code>pf-stage.js</code> 的 <code>WORLD_SIZE</code>（及其连带的 <code>WORLD</code> 导入）、<code>storage.js</code> 的 <code>clearAutosave</code>/<code>clearVisited</code>（职能已被 <code>resetAllData</code> 覆盖）；CSS 删除旧场景选择弹窗（<code>.scene-item</code> 等）与 1.51 移除的实验室挑战列表（<code>.chal-row</code> 等）共 11 条失效规则。内部使用但仅误标导出的格式常量（<code>SCENE_FORMAT</code> 等）属模块公共 API，保留。引擎、格式与行为不变</li>
+            <li><b>回放热录制偏差修复</b>（1.54 / 引擎 1.12.6）：线上复验发现——场景已运行一段时间（求解器带热状态）后再录制的回放在双后端均报「有偏差」，Node 复现定责：① 引擎快照此前不保存角速度与睡眠状态，<code>describeBody</code>/<code>addBody</code> 已补 <code>va</code> 与 <code>sleeping</code> 的往返（双后端同修，金字塔睡眠堆恢复后 300 步逐位一致）；② 接触对热启动冲量等状态无法序列化，故 <code>startReplayRecording</code> 在截取起始快照后立即将其重载回实况世界，使录制与回放从同一重建状态出发——热身 300 步的牛顿摆 + 拖拽脚本在双后端均恢复逐位一致。已知边界：回放中途拖动进度条触发的检查点恢复仍会丢失热状态，刚性场景拖动后判定可能报偏差；不中断的完整播放保证精确复现</li>
             <li><b>Native 大场景健壮性</b>（1.43）：修复 Native 在大场景中途崩溃冻结（碰撞裁剪对精确对齐的堆叠不再出错，796 物体极限压测可完整跑完）；休眠判定平滑化让大堆积更快静下来；场景属性的「引擎」一行改为显示当前后端、切换即更新</li>
             <li><b>Native 物体不显示已修</b>（1.42）：Native 的圆形物体补齐顶点多边形（宿主契约：每个刚体必须暴露非空 vertices），修好 1.41 里 Native 下画布只剩网格的问题</li>
             <li><b>主界面工作台</b>（1.40）：主界面改版为工作台式布局（深色侧栏 + 场景/预设列表 + 右侧详情检查器）；后端接口同时正式化为注册表（见上「后端注册表」）</li>
@@ -417,6 +418,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
             <li><b>Performance pass &amp; UI tidy-up</b> (1.51 / engine 1.12.5): profiling found the every-15-steps orphan-sleeper probe (1.44) eating ~31% of all step time on the Matter backend at ~800 bodies — its candidate search was O(sleepers x bodies). Both backends now use a uniform grid (touch predicate and support semantics unchanged): on a 777-body stress scene the average step went 4.9→3.5 ms and the p95 spike 25→10 ms. Native also drops template-string contact-sort / warm-start keys for numeric keys, reuses solver scratch vectors, marks support with a per-substep stamp, and skips sleeping bodies in the post-solve shape sync. Replay checkpoints measured ~0.4 ms — not a bottleneck, left alone. UI: the lab Scene Properties panel loses its Challenge entry and the in-lab challenge list; Challenge Mode is entered only from the home hub, and the card's "All challenges" goes straight there</li>
             <li><b>Replay scrub fix &amp; video recording</b> (1.52): the replay seek bar is now asynchronous — <code>scrubPlayback</code> only records the target step and the frame loop catches up with a ~16 ms-per-frame stepping budget, rendering as it goes (backward seeks restore the nearest checkpoint first); checkpoint spacing tightened 300 → 120 steps (at most ~90 for a max-length 3-minute replay; one snapshot of ~780 bodies measures ~323 KB JSON-equivalent). New <code>js/video.js</code>: real-time recording via <code>canvas.captureStream</code> + <code>MediaRecorder</code>, MIME probed mp4 → webm (<code>pickVideoMime</code> is a pure, tested helper), 60 s cap. Video is a live capture (frame rate follows the scene); deterministic replay remains the lossless format. Without MediaRecorder the button honestly toasts "unsupported" (the jsdom smoke covers that path)</li>
             <li><b>Code cleanup</b> (1.53): a whole-repo audit removed provably unreferenced leftovers — <code>hasStoredLang</code> (i18n.js), <code>TOOL_LABELS</code> (icons.js; tool names come from i18n now), <code>lab3DIsRunning</code> (lab3d.js), <code>WORLD_SIZE</code> (pf-stage.js, plus its now-unused <code>WORLD</code> import), <code>clearAutosave</code>/<code>clearVisited</code> (storage.js; superseded by <code>resetAllData</code>) — and 11 dead CSS rules for the old scene-picker dialog (<code>.scene-item</code> etc.) and the lab challenge list removed in 1.51 (<code>.chal-row</code> etc.). Internally used format constants (<code>SCENE_FORMAT</code> and kin) are module public API and stay. Engine, formats and behaviour unchanged</li>
+            <li><b>Warm-recording replay divergence fixed</b> (1.54 / engine 1.12.6): live verification found that a replay recorded after the scene had already been running (solver warm) reported "diverged" on both backends. Node reproduction assigned the causes: (1) engine snapshots did not carry angular velocity or sleep state — <code>describeBody</code>/<code>addBody</code> now round-trip <code>va</code> and <code>sleeping</code> on both backends (a restored sleeping pile tracks the original bit-for-bit for 300 steps); (2) contact-pair warm-start impulses cannot be serialized, so <code>startReplayRecording</code> now reloads the captured snapshot into the live world, making the recorded run and its replay start from the same rebuilt state — a Newton's cradle warmed for 300 steps plus a scripted drag reproduces bit-identically on both backends again. Known limit: a checkpoint restore triggered by scrubbing mid-playback still loses warm-start state, so the verdict can report divergence after a scrub on stiff scenes; an uninterrupted full playback is guaranteed exact</li>
             <li><b>Native large-scene robustness</b> (1.43): fixed Native crashing and freezing mid-run in large scenes (contact clipping no longer fails on exactly-aligned stacks — the 796-body stress scene runs to completion); a smoothed sleep metric settles big piles faster; the scene panel's Engine row now shows the live backend and follows switching</li>
             <li><b>Native bodies render again</b> (1.42): Native circles now expose a vertices polygon (host contract: every body must expose non-empty vertices), fixing 1.41's grid-only canvas under Native</li>
             <li><b>Workbench home hub</b> (1.40): the home hub is now a workbench (dark sidebar + scene/preset list + right-hand inspector); the backend interface was formalised into the registry at the same time (see "Backend registry" above)</li>
@@ -469,11 +471,11 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.53</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.54</span></div>
           <div class="whatsnew-card">
-            <p data-i18n-text="hub.whatsnew.b1">代码清理：删除 6 处已无引用的函数/导出与 11 条失效样式（旧场景弹窗、实验室挑战列表的残留），功能与行为不变</p>
-            <p data-i18n-text="hub.whatsnew.b2">性能复核：正常实验的引擎步进、渲染与主循环逐项比对无回归；同一场景实测步进比 1.50 时代全面更快</p>
-            <p data-i18n-text="hub.whatsnew.b3">全量测试 671 项全过；引擎未动（仍 1.12.5）</p>
+            <p data-i18n-text="hub.whatsnew.b1">回放判定修复：场景运行一阵后再录制、回放报「有偏差」的 bug 已修——录制开始先把起始快照重载为统一基准，引擎快照也补上了角速度与睡眠状态</p>
+            <p data-i18n-text="hub.whatsnew.b2">已知边界：回放中途拖动进度条后，牛顿摆这类刚性场景的判定仍可能报偏差；不拖动完整播放保证精确复现</p>
+            <p data-i18n-text="hub.whatsnew.b3">全量测试 683 项全过；引擎 PhysicsEngine 1.12.6（快照保真修复）</p>
           </div>
         </section>
       </aside>
@@ -546,6 +548,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.53"></script>
+<script type="module" src="js/app.js?v=1.54"></script>
 </body>
 </html>

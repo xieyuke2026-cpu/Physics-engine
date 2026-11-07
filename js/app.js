@@ -2198,6 +2198,16 @@ function startReplayRecording() {
     backend: world.core.backendId, sceneName,
     initial: world.snapshot(), settings: { ...settings }, appVersion: APP_VERSION,
   });
+  // Determinism anchor (1.54): reload the captured snapshot into the live
+  // world, so the recorded run and every later playback start from the
+  // SAME rebuilt state. A snapshot cannot carry solver warm-start state
+  // (contact-pair impulses, sleep counters), so without this a recording
+  // started mid-motion — the normal case: press record while the scene
+  // is already running — diverged from its own replay (Newton's cradle,
+  // warmed up 5 s, no inputs at all: >2 px after 21 s; with a drag,
+  // >14 px). The reload is visually invisible: positions, velocities,
+  // spin and sleep state all round-trip (engine 1.12.6).
+  world.loadSnapshot(JSON.parse(JSON.stringify(replayRec.initial)));
   recStartStep = stepNow();
   dragRecActive = false; recLastDrag = null;
   updateReplayBtn();

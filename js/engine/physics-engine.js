@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.5 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.6 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -83,6 +83,13 @@
              snapshots, queries, seeded RNG). Matter stays the default
              and the reference behaviour; native is opt-in and labelled
              experimental while its feel is validated on real scenes.
+    1.12.6 — snapshot fidelity (MotionLab 1.54): describeBody now
+             carries angular velocity (va) and the sleeping flag, and
+             addBody restores both (both backends) — previously a
+             snapshot restored mid-motion silently zeroed spin and woke
+             every sleeper, so a replay recorded after the scene had
+             warmed up diverged from its own recording. Solver behaviour
+             otherwise unchanged.
     1.12.5 — performance pass (MotionLab 1.51), no behaviour change:
              the orphan-sleeper probe (both backends) finds candidate
              pairs through a uniform grid instead of O(sleepers x bodies)
@@ -184,7 +191,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.5';
+export const VERSION = '1.12.6';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -451,6 +458,8 @@ export class PhysicsEngine {
       lockRotation: partial.lockRotation === true,
       magnet: Math.min(100, Math.max(-100, num(partial.magnet, 0))),
       vx: num(partial.vx, 0), vy: num(partial.vy, 0),
+      va: num(partial.va, 0),
+      sleeping: partial.sleeping === true,
       label: typeof partial.label === 'string' ? partial.label : '',
       name: typeof partial.name === 'string' ? partial.name : '',
       userData: partial.userData && typeof partial.userData === 'object' ? partial.userData : {},
@@ -469,6 +478,12 @@ export class PhysicsEngine {
     body.plugin.pe = { id: desc.id, kind, desc };
     if (Number.isFinite(body.inertia)) body._peInertia0 = body.inertia;
     if (!desc.isStatic && (desc.vx || desc.vy)) Body.setVelocity(body, { x: desc.vx, y: desc.vy });
+    // Snapshot fidelity (1.12.6): spin and sleep state round-trip too.
+    // Before this, a snapshot restored mid-motion silently zeroed both —
+    // a replay recorded after the scene had warmed up diverged from its
+    // own recording (Newton's cradle: >14 px after 21 s).
+    if (!desc.isStatic && Number.isFinite(desc.va) && desc.va !== 0) Body.setAngularVelocity(body, desc.va);
+    if (!desc.isStatic && desc.sleeping) this.M.Sleeping.set(body, true);
     Composite.add(this.world, body);
     this._byId.set(desc.id, body);
     if (desc.lockRotation) this._locked.add(body);
@@ -608,7 +623,8 @@ export class PhysicsEngine {
       ...d,
       userData: { ...d.userData },
       x: body.position.x, y: body.position.y, angle: body.angle,
-      vx: body.velocity.x, vy: body.velocity.y,
+      vx: body.velocity.x, vy: body.velocity.y, va: body.angularVelocity,
+      sleeping: body.isSleeping === true,
       density: body.density, friction: body.friction, frictionAir: body.frictionAir,
       restitution: body.restitution, isStatic: body.isStatic,
       lockRotation: rec.desc.lockRotation === true,

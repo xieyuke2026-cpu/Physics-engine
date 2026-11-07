@@ -209,6 +209,8 @@ export class NativeEngine {
       name: typeof partial.name === 'string' ? partial.name : '',
       magnet: Math.min(100, Math.max(-100, num(partial.magnet, 0))),
       vx: num(partial.vx, 0), vy: num(partial.vy, 0),
+      va: num(partial.va, 0),
+      sleeping: partial.sleeping === true,
       userData: partial.userData && typeof partial.userData === 'object' ? { ...partial.userData } : {},
     };
     let local = null, area = 0, inertiaPerMass = 0;
@@ -246,12 +248,16 @@ export class NativeEngine {
       id: desc.id,
       plugin: { pe: { id: desc.id, kind, desc } },
       position: { x: desc.x, y: desc.y },
-      velocity: { x: desc.vx, y: desc.vy },
+      // Snapshot fidelity (1.12.6): spin and sleep state round-trip too
+      // (twin of the Matter facade). A sleeping body is restored in the
+      // exact state this engine's own sleep transition produces: zeroed
+      // velocities, sleepCounter at threshold, no residual motion.
+      velocity: desc.sleeping && !desc.isStatic ? { x: 0, y: 0 } : { x: desc.vx, y: desc.vy },
       angle: desc.angle,
-      angularVelocity: 0,
+      angularVelocity: desc.isStatic || desc.sleeping ? 0 : (Number.isFinite(desc.va) ? desc.va : 0),
       isStatic: desc.isStatic,
-      isSleeping: false,
-      sleepCounter: 0,
+      isSleeping: !desc.isStatic && desc.sleeping === true,
+      sleepCounter: !desc.isStatic && desc.sleeping === true ? 30 : 0,
       _motion: 0,
       _supportAge: 9999,
       density: desc.density,
@@ -373,7 +379,8 @@ export class NativeEngine {
       ...d,
       userData: { ...d.userData },
       x: body.position.x, y: body.position.y, angle: body.angle,
-      vx: body.velocity.x, vy: body.velocity.y,
+      vx: body.velocity.x, vy: body.velocity.y, va: body.angularVelocity,
+      sleeping: body.isSleeping === true,
       density: body.density, friction: body.friction, frictionAir: body.frictionAir,
       restitution: body.restitution, isStatic: body.isStatic,
       lockRotation: rec.desc.lockRotation === true,
