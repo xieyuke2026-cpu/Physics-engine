@@ -411,4 +411,3 @@ export function setLab3DActive(v) {
 export function lab3DLoadScene(scene, opts) { loadScene(scene, opts); }
 export function lab3DCurrentName() { return sceneName; }
 export function lab3DRename(name) { sceneName = name; scheduleAutosave(); }
-export function lab3DIsRunning() { return running; }

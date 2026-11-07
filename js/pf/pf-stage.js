@@ -2,7 +2,7 @@
    No DOM, no physics imports: the same data drives the physics adapter,
    the renderer and the blast-zone test, so they can never disagree. */
 
-import { WORLD, BLAST } from './pf-config.js';
+import { BLAST } from './pf-config.js';
 
 /* The main platform is a solid physics body. The two floating platforms are
    one-way (jump up through them, land on top): solid-body corner contacts
@@ -38,4 +38,3 @@ export function isOffStage(x, y) {
   return x < STAGE_SPAN.left - 10 || x > STAGE_SPAN.right + 10 || y > STAGE_SPAN.top + 30;
 }
 
-export const WORLD_SIZE = { width: WORLD.width, height: WORLD.height };

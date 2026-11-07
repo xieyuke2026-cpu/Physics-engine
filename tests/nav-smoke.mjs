@@ -157,7 +157,7 @@ check('workbench: selecting a preset row retargets the inspector',
   && doc.getElementById('inspBody').textContent.includes('载入并运行'));
 check('workbench: whats-new card sits in the inspector column',
   doc.getElementById('navWhatsNew').textContent.includes('本版更新')
-  && doc.getElementById('navWhatsNew').textContent.includes('录制视频'));
+  && doc.getElementById('navWhatsNew').textContent.includes('代码清理'));
 
 // search filters cards
 const search = doc.getElementById('sceneSearch');

@@ -58,7 +58,3 @@ export const TOOL_ICONS = {
   select: 'select', move: 'move', circle: 'circle', rectangle: 'rectangle',
   polygon: 'polygon', triangle: 'triangle', line: 'line', magnet: 'magnet', spring: 'spring', hinge: 'hinge', blast: 'burst', delete: 'trash',
 };
-export const TOOL_LABELS = {
-  select: '选择', move: '移动', circle: '圆形', rectangle: '矩形',
-  polygon: '多边形', triangle: '三角形', line: '线段', magnet: '磁铁', spring: '弹簧', hinge: '铰链', blast: '冲击波', delete: '删除',
-};

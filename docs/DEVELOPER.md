@@ -14,7 +14,7 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.52 | `js/ui.js` 的 `APP_VERSION` |
+| MotionLab（应用） | 1.53 | `js/ui.js` 的 `APP_VERSION` |
 | PhysicsEngine（2D 核心） | 1.12.5 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |

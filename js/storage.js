@@ -64,8 +64,6 @@ export function loadAutosave() {
   return v.ok ? v.scene : null;
 }
 
-export function clearAutosave() { try { localStorage.removeItem(KEY_AUTO); } catch {} }
-
 /* ---------------- 3D library (kept fully separate from 2D) ---------------- */
 export function loadScenes3D() {
   const obj = readJSON(KEY_SCENES_3D);
@@ -120,8 +118,6 @@ export function loadVisited() {
 export function saveVisited() {
   try { localStorage.setItem(KEY_VISITED, '1'); } catch { /* private mode: landing reappears, harmless */ }
 }
-export function clearVisited() { try { localStorage.removeItem(KEY_VISITED); } catch {} }
-
 /** Factory reset: remove EVERY MotionLab key (2D + 3D libraries, both
  *  autosaves, UI prefs, visited flag) so the next boot is a true first run. */
 export function resetAllData() {

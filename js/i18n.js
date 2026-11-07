@@ -24,7 +24,6 @@ function readStored() {
 let current = readStored() || 'en'; // first run: English primary (see header)
 
 export function getLang() { return current; }
-export function hasStoredLang() { return readStored() !== null; }
 
 /** Boot-time resolution: a stored choice wins; nothing stored means the
  *  first-run default (English). Called once by app.js boot(). */
@@ -209,9 +208,9 @@ const DICT = {
   'hub.emptySaved': ['暂无已保存场景。在实验室里点顶部「保存」，或用上方「复制当前场景」，就会出现在这里。', 'No saved scenes yet. Use Save in the lab, or "Duplicate Scene" above, and they will appear here.'],
   'hub.inspector': ['场景详情', 'Details'],
   'hub.whatsnew': ['本版更新', "What's New"],
-  'hub.whatsnew.b1': ['回放拖进度条修复：以前拖动是每个输入事件同步重演最多 300 步，极限场景一拖就冻（实测掉到 2 FPS）。现在拖动只记目标位置，主循环每帧用约 16 ms 预算追赶步进、边追边渲染；检查点从每 300 步加密到 120 步', 'Replay scrubbing fixed: dragging used to re-step up to 300 steps synchronously per input event — on extreme scenes it froze solid (2 FPS measured). Now a drag only records the target; the frame loop catches up with a ~16 ms-per-frame stepping budget, rendering as it goes. Checkpoints also tightened from every 300 steps to 120'],
-  'hub.whatsnew.b2': ['新增「录制视频」：顶栏按钮把画布实时录成视频文件——浏览器给 MP4 就录 MP4（Safari/WebKit 原生 H.264），否则录 WebM，最长 60 秒。视频是实时录制、帧率随现场性能；需要精确复现时仍用确定性回放', 'New "Record video": the top-bar button captures the canvas to a video file in real time — MP4 when the browser offers it (Safari/WebKit record H.264 natively), WebM otherwise, up to 60 seconds. Video is a live capture (frame rate follows the scene); for exact reproduction, deterministic replay remains the tool'],
-  'hub.whatsnew.b3': ['全量测试 671 项全过；引擎未动（仍 1.12.5）。老浏览器若缺少 MediaRecorder，点录制视频会如实提示不支持', '671 checks pass in total; the engine is untouched (still 1.12.5). On a browser without MediaRecorder, the video button honestly reports that recording is unsupported'],
+  'hub.whatsnew.b1': ['代码清理：删掉全仓审计确认已无引用的残留——6 处死函数/导出（旧的 hasStoredLang、TOOL_LABELS、clearAutosave 等）与 11 条失效样式（旧场景弹窗、1.51 移除的实验室挑战列表），功能与行为不变', 'Code cleanup: an audit of the whole repo found and removed 6 unreferenced functions/exports (the old hasStoredLang, TOOL_LABELS, clearAutosave and friends) and 11 dead style rules (the old scene dialog and the lab challenge list removed in 1.51). No feature or behaviour change'],
+  'hub.whatsnew.b2': ['性能复核：正常实验走的引擎步进、渲染与主循环已和前几版逐项比对，没有变慢的代码混进来——同一场景实测，现在的步进耗时比 1.50 时代全面更低（796 物体静置段平均 2.90 → 0.78 ms/步）', 'Performance re-check: the engine stepping, renderer and main loop behind normal experiments were compared piece by piece against recent versions — nothing slower slipped in. On identical scenes, stepping now measures faster across the board than in the 1.50 era (796-body settled pile: 2.90 → 0.78 ms per step on average)'],
+  'hub.whatsnew.b3': ['全量测试 671 项全过；引擎未动（仍 1.12.5）', 'All 671 checks pass; the engine is untouched (still 1.12.5)'],
   'hub.rel.now': ['刚刚', 'just now'],
   'hub.rel.min': ['{n} 分钟前', '{n} min ago'],
   'hub.rel.hour': ['{n} 小时前', '{n} hr ago'],

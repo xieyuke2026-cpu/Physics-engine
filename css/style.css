@@ -283,14 +283,7 @@ svg{display:block}
 .modal-backdrop[hidden]{display:none}
 .modal{background:#fff;border:1px solid var(--border-strong);border-radius:8px;width:520px;max-width:100%;max-height:84dvh;overflow-y:auto;padding:16px}
 .modal-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:600;margin-bottom:12px}
-.modal-actions{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.scene-list{display:flex;flex-direction:column;gap:6px}
-.scene-item{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;min-height:52px}
-.scene-item.current{border-color:var(--accent);background:var(--accent-soft)}
-.scene-meta{flex:1;min-width:0}
-.scene-name{font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .scene-sub{font-size:11px;color:var(--muted);font-family:var(--mono)}
-.scene-item .tb-btn.icon{width:38px;height:38px}
 .preset-card{cursor:pointer}
 .preset-card:hover{border-color:var(--accent)}
 .obj-list{display:flex;flex-direction:column}
@@ -375,12 +368,8 @@ body.no-3d .mode-switch, body.no-3d #navSectionPresets3D, body.no-3d #navSection
 #replayBar .pb-verdict.warn{color:#b3271e}
 #replayBar #pbSpeed{font-size:12px}
 
-/* Challenge mode (1.50): panel list rows, the active-challenge card and
-   the scene panel's entry button. Flat chrome like the rest of the app. */
-.chal-entry{margin:6px 0 2px}
-.chal-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
-.chal-row-stars{color:#2f6db3;letter-spacing:2px}
-.chal-brief{margin:2px 0 6px}
+/* Challenge mode (1.50): the active-challenge card shown in the lab
+   panel while a run is in progress. Flat chrome like the rest of the app. */
 .chal-name{font-size:15px;font-weight:600;margin:4px 0 2px}
 .chal-won{font-size:22px;color:#2f6db3;letter-spacing:4px;margin:8px 0 2px}
 .chal-btns{gap:8px}

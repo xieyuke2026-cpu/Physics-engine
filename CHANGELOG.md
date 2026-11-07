@@ -652,3 +652,34 @@ Ryan 两点反馈：① 想直接录 MP4/视频（不要只有回放文件）；
   `videoSupported` + 纯函数 `pickVideoMime`/`videoExt` 均有单测；
   jsdom 冒烟覆盖不支持路径与按钮状态）。
 - 全量测试 661 → **671 项全过**（逻辑 +8 视频助手、冒烟 +2 视频按钮）。
+
+## MotionLab 1.53 / PhysicsEngine 1.12.5（2026-11-07）
+
+Ryan 反馈：回放拖动已不卡（1.52 在 iPad 实测确认），但正常实验反而卡；
+并要求顺手清理仓库里的冗余、残留与无用代码。引擎未动。
+
+- **正常实验卡顿核查（结论：无代码回归）**：将 1.50 / 1.51 / 1.52 三版
+  逐文件比对——正常实验路径上的 `js/physics.js`、`js/render.js`、
+  `js/scene.js` 与 `css/style.css` 自 1.50 起逐字节未变；`js/app.js`
+  主循环的正常分支与 1.51 逐字节一致（1.52 的改动只在回放与录像路径）；
+  双引擎文件与 1.51 逐字节一致。Node A/B 实测（同一带框场景脚本，
+  引擎 1.50 vs 当前）：415 物体静置段平均步进 0.79 → 0.31 ms，
+  796 物体 2.90 → 0.78 ms、p95 33.5 → 3.4 ms，孤儿探测总耗时
+  7.3 s → 0.67 s（每 3600 步）——1.51 的性能改造在数据上全面更快。
+  iPad 侧卡顿待 Ryan 补充信息后继续定位（当前嫌疑：多标签页残留、
+  Native 后端、极限场景的画布重绘上限）。
+- **代码清理（全仓审计后保守删除）**：删除经全仓引用扫描确认零引用
+  的 6 处死代码——`i18n.js` 的 `hasStoredLang`、`icons.js` 的
+  `TOOL_LABELS`（工具名已由 i18n 提供）、`lab3d.js` 的
+  `lab3DIsRunning`、`pf/pf-stage.js` 的 `WORLD_SIZE`（连同其唯一
+  支撑的 `WORLD` 导入）、`storage.js` 的 `clearAutosave` /
+  `clearVisited`（职能已被 `resetAllData` 覆盖）；CSS 删除 11 条
+  失效规则：旧场景选择弹窗的 `.modal-actions` / `.scene-list` /
+  `.scene-item`（含 `.current` 与内部按钮规则）/ `.scene-meta` /
+  `.scene-name`，以及 1.51 移除实验室挑战列表后残留的 `.chal-entry` /
+  `.chal-row` / `.chal-row-stars` / `.chal-brief`（挑战卡仍在用的
+  `.chal-name` / `.chal-won` / `.chal-btns` 保留）。仅文件内使用但
+  构成模块公共 API 的格式常量（`SCENE_FORMAT`、`REPLAY_FORMAT` 等）
+  与内部类（`Camera`）保留不动；3D 隐藏功能、examples 参考实现、
+  历史更新日志中的旧功能记述均不属于残留，不动。
+- 全量测试仍 **671 项全过**（清理前后同为 671）。
