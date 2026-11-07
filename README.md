@@ -1,7 +1,7 @@
 # MotionLab — 2D Physics Sandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.12.4-blue.svg)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.12.5-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
 ![Tests](https://img.shields.io/badge/tests-661%20passing-brightgreen.svg)
 

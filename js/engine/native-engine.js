@@ -47,6 +47,12 @@ const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 /** Per-step gravity velocity gain at gravity 1 (matches the Matter
  *  backend's measured ≈0.28 px/step per step: g · 0.001 · (1000/60)²). */
 const GRAVITY_STEP = 0.001 * (1000 / 60) * (1000 / 60);
+// Shared scratch vectors for the contact solver (1.12.5): _solveContact
+// runs 10 iterations x every contact x every substep; allocating two
+// objects per call was a steady GC drip at high body counts. Safe: the
+// solver is strictly sequential and nothing re-enters it mid-call.
+const _scratchVa = { x: 0, y: 0 };
+const _scratchVb = { x: 0, y: 0 };
 
 /* ---------------- polygon helpers (local, centroid-relative) ------------- */
 function polyAreaInertia(verts) {
@@ -266,6 +272,7 @@ export class NativeEngine {
       _local: local,
       _inertiaPerMass: inertiaPerMass,
     };
+    body._ord = (this._ordSeq = (this._ordSeq || 0) + 1);
     this._byId.set(desc.id, body);
     if (desc.magnet !== 0) this._magnets.add(body);
     this._syncShape(body);
@@ -992,24 +999,58 @@ export class NativeEngine {
       min: { x: f.x - f.width / 2, y: f.y - f.height / 2 },
       max: { x: f.x + f.width / 2, y: f.y + f.height / 2 },
     }));
-    const all = [...this._byId.values()];
+    // 1.12.5: uniform-grid candidate lookup, twin of the Matter facade's
+    // probe — same touch predicate and support rules, no O(sleepers x
+    // bodies) scans at high body counts.
+    const CELL = 96;
+    const cells = new Map();
+    for (const b of this._byId.values()) {
+      const bd = b.bounds;
+      const x0 = Math.floor((bd.min.x - 3) / CELL), x1 = Math.floor((bd.max.x + 3) / CELL);
+      const y0 = Math.floor((bd.min.y - 3) / CELL), y1 = Math.floor((bd.max.y + 3) / CELL);
+      for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+        const key = cx * 100000 + cy;
+        let cell = cells.get(key);
+        if (!cell) cells.set(key, (cell = []));
+        cell.push(b);
+      }
+    }
+    const near = (bd, fn) => {
+      const stamp = (this._probeSeq = (this._probeSeq || 0) + 1);
+      const x0 = Math.floor((bd.min.x - 3) / CELL), x1 = Math.floor((bd.max.x + 3) / CELL);
+      const y0 = Math.floor((bd.min.y - 3) / CELL), y1 = Math.floor((bd.max.y + 3) / CELL);
+      for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+        const cell = cells.get(cx * 100000 + cy);
+        if (!cell) continue;
+        for (const o of cell) {
+          if (o._peProbe === stamp) continue;
+          o._peProbe = stamp;
+          if (fn(o)) return true;
+        }
+      }
+      return false;
+    };
     const queue = [];
     for (const s of sleepers) {
       const id = s.plugin.pe.id;
       if (supported.has(id)) { queue.push(s); continue; }
       let ok = fluidBounds.some((fb) => touch(s.bounds, fb));
-      if (!ok) for (const o of all) { if (o !== s && !o.isSleeping && touch(s.bounds, o.bounds)) { ok = true; break; } }
+      if (!ok) ok = near(s.bounds, (o) => o !== s && !o.isSleeping && touch(s.bounds, o.bounds));
       if (ok) { supported.add(id); queue.push(s); }
     }
     for (let i = 0; i < queue.length; i++) {
       const cur = queue[i];
-      for (const s of sleepers) {
-        const id = s.plugin.pe.id;
-        if (!supported.has(id) && touch(cur.bounds, s.bounds)) { supported.add(id); queue.push(s); }
-      }
+      near(cur.bounds, (o) => {
+        if (o.isSleeping && !o.isStatic) {
+          const id = o.plugin.pe.id;
+          if (!supported.has(id) && touch(cur.bounds, o.bounds)) { supported.add(id); queue.push(o); }
+        }
+        return false;
+      });
     }
     for (const s of sleepers) if (!supported.has(s.plugin.pe.id)) this._wake(s);
   }
+
 
   _applyPairForces(scale) {
     const arr = [...this._byId.values()];
@@ -1286,7 +1327,10 @@ export class NativeEngine {
     // the carried velocity with a fresh delta solve.
     const cacheSeen = new Set();
     for (const c of contacts) {
-      const key = `${c.a.plugin.pe.id}|${c.b.plugin.pe.id}|${Math.round(c.px / 8)},${Math.round(c.py / 8)}`;
+      // 1.12.5: numeric warm-start key (was a template string per contact
+      // per substep). Quantised point folded in with fixed strides; the
+      // key only steers warm-start matching, so range spill is harmless.
+      const key = ((c._oa * 8192 + c._ob) * 4096 + (Math.round(c.px / 8) + 2048)) * 4096 + (Math.round(c.py / 8) + 2048);
       c._cacheKey = key;
       cacheSeen.add(key);
       const warm = warmStart ? this._contactCache.get(key) : null;
@@ -1329,7 +1373,10 @@ export class NativeEngine {
       for (const key of this._contactCache.keys()) if (!cacheSeen.has(key)) this._contactCache.delete(key);
     }
     for (const b of this._byId.values()) {
-      if (!b.isStatic) this._syncShape(b);
+      // 1.12.5: sleeping bodies cannot have moved during this substep
+      // (integration, impulses and position correction all skip them,
+      // and host-side moves call _syncShape themselves) — skip them.
+      if (!b.isStatic && !b.isSleeping) this._syncShape(b);
     }
     // Sleeping bookkeeping — Matter-style SMOOTHED motion: the metric is
     // an exponentially decaying max of v² + ω², so a single solver nudge
@@ -1342,16 +1389,28 @@ export class NativeEngine {
     // its launch motion still unwound in the smoothed metric) cannot
     // fall asleep mid-flight.
     if (this.enableSleeping) {
-      const supported = new Set();
-      for (const c of contacts) { supported.add(c.a); supported.add(c.b); }
+      // 1.12.5: support is marked with a per-substep stamp on the bodies
+      // themselves (was: a fresh Set with ~2 entries per contact, rebuilt
+      // every substep), and motor-driven bodies are resolved once per
+      // substep instead of scanning every hinge for every body.
+      const stamp = (this._supportStamp = (this._supportStamp || 0) + 1);
+      for (const c of contacts) { c.a._supportStamp = stamp; c.b._supportStamp = stamp; }
+      let drivenSet = null;
+      if (this._hinges.size) {
+        for (const hg of this._hinges.values()) {
+          if (hg.motorSpeed === 0) continue;
+          if (hg.bodyA) { const A = this._byId.get(hg.bodyA); if (A) (drivenSet || (drivenSet = new Set())).add(A); }
+          if (hg.bodyB) { const B = this._byId.get(hg.bodyB); if (B) (drivenSet || (drivenSet = new Set())).add(B); }
+        }
+      }
       for (const b of this._byId.values()) {
         if (b.isStatic) continue;
-        if (supported.has(b)) b._supportAge = 0; else b._supportAge = (b._supportAge ?? 9999) + 1;
+        if (b._supportStamp === stamp) b._supportAge = 0; else b._supportAge = (b._supportAge ?? 9999) + 1;
         if (b.isSleeping) continue;
         const inst = b.velocity.x * b.velocity.x + b.velocity.y * b.velocity.y
           + b.angularVelocity * b.angularVelocity;
         b._motion = Math.max(inst, (b._motion || 0) * 0.9);
-        const driven = b === dragBody || this._isMotorDriven(b);
+        const driven = b === dragBody || (drivenSet !== null && drivenSet.has(b));
         const slow = b._motion < 0.1 && b._supportAge <= 45;
         if (!driven && slow) {
           b.sleepCounter++;
@@ -1389,7 +1448,7 @@ export class NativeEngine {
   _solveContact(c, h, first) {
     const ima = this._invM(c.a), imb = this._invM(c.b);
     if (ima + imb <= 0) return;
-    const va = { x: 0, y: 0 }, vb = { x: 0, y: 0 };
+    const va = _scratchVa, vb = _scratchVb;
     this._pointVel(c.a, c.rax, c.ray, va);
     this._pointVel(c.b, c.rbx, c.rby, vb);
     const vn = (vb.x - va.x) * c.nx + (vb.y - va.y) * c.ny;
@@ -1517,6 +1576,7 @@ export class NativeEngine {
             const raCt = rax * ty - ray * tx, rbCt = rbx * ty - rby * tx;
             const kt = ima + imb + iia * raCt * raCt + iib * rbCt * rbCt;
             contacts.push({
+              _oa: a._ord, _ob: b._ord,
               a, b, nx: f.nx, ny: f.ny, pen: f.pen, px: f.px, py: f.py,
               rax, ray, rbx, rby,
               imN: kn > 0 ? 1 / kn : 0, imT: kt > 0 ? 1 / kt : 0,
@@ -1531,12 +1591,11 @@ export class NativeEngine {
     // Deterministic solve order (pair, then point): sequential impulses
     // are order-sensitive, and a stable order keeps micro-asymmetries
     // from random-walking resting stacks apart.
-    contacts.sort((c1, c2) => {
-      const k1 = `${c1.a.plugin.pe.id}|${c1.b.plugin.pe.id}`;
-      const k2 = `${c2.a.plugin.pe.id}|${c2.b.plugin.pe.id}`;
-      if (k1 !== k2) return k1 < k2 ? -1 : 1;
-      return (c1.px - c2.px) || (c1.py - c2.py);
-    });
+    // 1.12.5: numeric insertion-order keys instead of template-string
+    // keys built per comparison (the string sort measured ~18% of step
+    // time at ~800 bodies). Same deterministic contract: pair order,
+    // then contact point.
+    contacts.sort((c1, c2) => (c1._oa - c2._oa) || (c1._ob - c2._ob) || (c1.px - c2.px) || (c1.py - c2.py));
     return contacts;
   }
 

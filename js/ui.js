@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.50';
+export const APP_VERSION = '1.51';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -112,11 +112,6 @@ export class Panel {
     this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('场景属性 Scene', 'Scene Properties')));
-    if (this.cb.onOpenChallenges) {
-      const chalBtn = el(`<button class="btn block chal-entry">${L('挑战模式', 'Challenges')}${this.chalSummary ? ` · ${this.chalSummary}` : ''}</button>`);
-      chalBtn.addEventListener('click', () => this.cb.onOpenChallenges());
-      r.appendChild(chalBtn);
-    }
     const ro = el(`<div class="readonly-grid"><span>${L('物体数量', 'Bodies')}</span><b data-ro="count">${list.length}</b>
       <span>${L('引擎', 'Engine')}</span><b data-ro="engine">${this.engineLabel()}</b><span>${L('格式', 'Format')}</span><b>motionlab-scene v2</b></div>`);
     r.appendChild(ro);
@@ -462,28 +457,10 @@ export class Panel {
   }
 
   /* ---------------- challenge mode (1.50) ----------------
-   * The list view and the active-challenge card. All state lives in the
-   * app; the panel only renders view models and reports button taps via
-   * cb.onEnterChallenge(id) / cb.onChallengeAction(action). */
-
-  showChallenges(vm) {
-    this.mode = 'challenges'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null;
-    const r = this.root; r.innerHTML = '';
-    r.appendChild(title(L('挑战模式 Challenges', 'Challenge Mode')));
-    r.appendChild(el(`<p class="empty-note">${L('每关有固定的搭建预算：把目标送进蓝色虚线区并停稳一会儿，超时或目标掉出舞台都会失败。进度只保存在这台设备上。', 'Each level gives you a fixed building budget: get the target into the dashed zone and keep it there briefly. Running out of time — or losing the target off the stage — fails the run. Progress is saved on this device only.')}</p>`));
-    r.appendChild(el(`<div class="readonly-grid"><span>${L('总星数', 'Total stars')}</span><b>${vm.totalStars} / ${vm.maxStars}</b></div>`));
-    for (const item of vm.items) {
-      const stars = '★'.repeat(item.stars) + '☆'.repeat(3 - item.stars);
-      const row = el(`<button class="btn block chal-row"><span class="chal-row-name">${item.title}</span><span class="chal-row-stars">${stars}</span></button>`);
-      row.addEventListener('click', () => this.cb.onEnterChallenge(item.id));
-      r.appendChild(row);
-      r.appendChild(el(`<p class="empty-note chal-brief">${item.brief}</p>`));
-    }
-    const back = el(`<button class="btn block">${L('返回场景属性', 'Back to Scene Properties')}</button>`);
-    back.addEventListener('click', () => this.cb.onShowScene());
-    r.appendChild(back);
-    this._collectInputs();
-  }
+   * The active-challenge card. All state lives in the app; the panel
+   * only renders the view model and reports button taps via
+   * cb.onChallengeAction(action). The challenge LIST lives in the hub's
+   * own Challenges view (1.51) — the lab panel hosts no entry/list. */
 
   showChallenge(vm) {
     const sig = `${vm.id}|${vm.phase}|${vm.budgetLeft}|${vm.stars}|${vm.isLast}`;

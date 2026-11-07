@@ -410,22 +410,14 @@ const panel = new Panel($('panelBody'), {
     toast(t('msg.materialSet', { name: m.label }));
   },
   onOpenChallenges() {
-    if (challenge) { chalDismissed = false; refreshPanel(); return; }
-    const prog = store.loadChallengeProgress();
-    const lang = getLang();
-    const items = CHALLENGES.map((def) => ({
-      id: def.id,
-      title: lang === 'en' ? def.title.en : def.title.zh,
-      brief: lang === 'en' ? def.brief.en : def.brief.zh,
-      stars: (prog[def.id] || {}).stars || 0,
-    }));
-    panel.showChallenges({
-      items,
-      totalStars: items.reduce((s, i) => s + i.stars, 0),
-      maxStars: CHALLENGES.length * 3,
-    });
+    // 1.51: Challenge Mode has its own interface — the hub's Challenges
+    // view. The lab hosts no entry and no list; the challenge card's
+    // "All challenges" button lands here and routes back to the hub.
+    if (challenge) exitChallenge();
+    chalDismissed = false;
+    openSceneNav();
+    setNavView('challenges');
   },
-  onEnterChallenge(id) { enterChallenge(id); },
   onChallengeAction(action) {
     if (!challenge) return;
     if (action === 'start') startChallengeRun();
@@ -485,8 +477,6 @@ function refreshPanel() {
     selectedWindId = null;
   }
   if (challenge && !chalDismissed) { panel.showChallenge(challengeVM()); return; }
-  const prog = store.loadChallengeProgress();
-  panel.chalSummary = `★ ${Object.values(prog).reduce((s, p) => s + (p.stars || 0), 0)}/${CHALLENGES.length * 3}`;
   panel.backendId = world.core.backendId; // scene panel's Engine row follows the live backend
   panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)), world.fluids(), world.winds());
 }

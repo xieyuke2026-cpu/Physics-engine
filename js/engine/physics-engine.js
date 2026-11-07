@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.4 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.5 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -83,6 +83,15 @@
              snapshots, queries, seeded RNG). Matter stays the default
              and the reference behaviour; native is opt-in and labelled
              experimental while its feel is validated on real scenes.
+    1.12.5 — performance pass (MotionLab 1.51), no behaviour change:
+             the orphan-sleeper probe (both backends) finds candidate
+             pairs through a uniform grid instead of O(sleepers x bodies)
+             scans — it measured ~31% of all step time at ~800 bodies;
+             Native: numeric contact-sort and warm-start keys (were
+             template strings built per contact per substep), shared
+             solver scratch vectors, support marking by per-substep
+             stamp, motor-driven set resolved once per substep, and the
+             post-solve shape sync skips sleeping bodies.
     1.12.4 — API parity (MotionLab 1.47): Native gains wake /
              setMaxSpeed / maxSpeed / clearFluids / clearWinds /
              dragBody, and `dragging` is boolean on both backends
@@ -175,7 +184,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.4';
+export const VERSION = '1.12.5';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -948,23 +957,61 @@ export class PhysicsEngine {
       min: { x: f.x - f.width / 2, y: f.y - f.height / 2 },
       max: { x: f.x + f.width / 2, y: f.y + f.height / 2 },
     }));
+    // 1.12.5: candidate pairs come from a uniform grid over grown bounds
+    // instead of O(sleepers x bodies) scans. At ~800 bodies (nearly all
+    // asleep at rest) the naive probe measured ~31% of ALL step time.
+    // Semantics unchanged: the touch predicate and the support rules are
+    // identical; the grid only prunes pairs that cannot touch (touching
+    // grown bounds always share a cell both were inserted into).
+    const CELL = 96;
+    const cells = new Map();
+    for (const b of arr) {
+      const bd = b.bounds;
+      const x0 = Math.floor((bd.min.x - 3) / CELL), x1 = Math.floor((bd.max.x + 3) / CELL);
+      const y0 = Math.floor((bd.min.y - 3) / CELL), y1 = Math.floor((bd.max.y + 3) / CELL);
+      for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+        const key = cx * 100000 + cy;
+        let cell = cells.get(key);
+        if (!cell) cells.set(key, (cell = []));
+        cell.push(b);
+      }
+    }
+    const near = (bd, fn) => {
+      const stamp = (this._probeSeq = (this._probeSeq || 0) + 1);
+      const x0 = Math.floor((bd.min.x - 3) / CELL), x1 = Math.floor((bd.max.x + 3) / CELL);
+      const y0 = Math.floor((bd.min.y - 3) / CELL), y1 = Math.floor((bd.max.y + 3) / CELL);
+      for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+        const cell = cells.get(cx * 100000 + cy);
+        if (!cell) continue;
+        for (const o of cell) {
+          if (o._peProbe === stamp) continue;
+          o._peProbe = stamp;
+          if (fn(o)) return true;
+        }
+      }
+      return false;
+    };
     const queue = [];
     for (const s of sleepers) {
       const id = s.plugin.pe.id;
       if (supported.has(id)) { queue.push(s); continue; }
       let ok = fluidBounds.some((fb) => touch(s.bounds, fb));
-      if (!ok) for (const o of arr) { if (o !== s && (o.isStatic || !o.isSleeping) && touch(s.bounds, o.bounds)) { ok = true; break; } }
+      if (!ok) ok = near(s.bounds, (o) => o !== s && (o.isStatic || !o.isSleeping) && touch(s.bounds, o.bounds));
       if (ok) { supported.add(id); queue.push(s); }
     }
     for (let i = 0; i < queue.length; i++) {
       const cur = queue[i];
-      for (const s of sleepers) {
-        const id = s.plugin.pe.id;
-        if (!supported.has(id) && touch(cur.bounds, s.bounds)) { supported.add(id); queue.push(s); }
-      }
+      near(cur.bounds, (o) => {
+        if (o.isSleeping && !o.isStatic) {
+          const id = o.plugin.pe.id;
+          if (!supported.has(id) && touch(cur.bounds, o.bounds)) { supported.add(id); queue.push(o); }
+        }
+        return false;
+      });
     }
     for (const s of sleepers) if (!supported.has(s.plugin.pe.id)) this.M.Sleeping.set(s, false);
   }
+
 
   /** Change the anti-tunnelling substep count (1..8). */
   setSubsteps(n) { this.substeps = Math.max(1, Math.min(8, Math.round(num(n, 1)))); }
