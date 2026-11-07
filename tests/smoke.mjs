@@ -198,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.51')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.52')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.12.5')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -397,6 +397,12 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   check('v1.50: replay button leaves recording state after stop', !recBtn.classList.contains('recording'));
   const rBar = doc.getElementById('replayBar');
   check('v1.50: replay transport bar exists and starts hidden', !!rBar && rBar.hidden);
+  const vidBtn = doc.getElementById('btnVideo');
+  check('v1.52: video record button exists and is labelled', !!vidBtn && vidBtn.textContent.includes('录制视频'));
+  click(vidBtn);
+  await wait(80);
+  check('v1.52: without MediaRecorder the video button toasts unsupported and never enters recording state',
+    !vidBtn.classList.contains('recording') && doc.body.textContent.includes('不支持视频录制'));
 
   // hinge flow on a paused scene: two fresh circles, pin them, drive, delete
   click(doc.getElementById('btnPause'));

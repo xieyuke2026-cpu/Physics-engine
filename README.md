@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.12.5-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-661%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-671%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -63,7 +63,7 @@ Interactive · Responsive · Lightweight——黑白灰为主、低饱和蓝为�
 - 点按放置或拖拽定尺寸创建；运行中物理拖拽可投掷物体；静态物体可开启「拖动静态」直接改位。
 - 画布缩放（滚轮 / 捏合 / 按钮）与平移；播放 / 暂停 / 单步；Undo / Redo；快捷键（空格播放、Delete 删除、Ctrl+D 复制、方向键微调、R 旋转）。
 - 属性面板：名称（可重命名）、位置/尺寸/角度、密度/摩擦/空气阻力/弹性、材质一键预设（泡沫/木头/橡胶/冰/铁）与磁性设置、实时读数（速率/动能/角速度/动量）；未选中时是场景属性（重力、世界效应区域的添加与编辑、随机种子、物体列表）。
-- 导出：画布截图 PNG；**确定性回放**（1.50，取代 GIF 录制）：按模拟步逐步记录一次运行与全部操作，导出 `.replay.json` 后可精确重播并自动校验最终状态哈希。
+- 导出：画布截图 PNG；**确定性回放**（1.50，取代 GIF 录制）：按模拟步逐步记录一次运行与全部操作，导出 `.replay.json` 后可精确重播并自动校验最终状态哈希；**视频录制**（1.52）：顶栏把画布实时录成视频文件（优先 MP4、否则 WebM，最长 60 秒）——视频用于分享，回放用于精确复现。
 
 ### 挑战模式（1.50）
 
@@ -122,6 +122,7 @@ js/physics.js         薄适配层：MotionLab 场景格式 ⇄ 通用引擎描�
 js/render.js          Canvas 渲染器 + 相机（静态层/背景层离屏缓存、视口裁剪）
 js/replay.js          确定性回放：格式、校验与状态哈希（无 DOM 依赖，可单测）
 js/challenges.js      挑战模式：6 个关卡定义、目标判定与星级（无 DOM 依赖，可单测）
+js/video.js           视频录制：captureStream + MediaRecorder（MP4 优先/WebM 兜底）
 js/ui.js              右侧属性面板与设置弹窗
 js/storage.js         localStorage：场景库、自动保存、UI 设置（损坏数据自动回退）
 js/app.js             应用装配：工具与指针交互、历史记录、场景管理、主循环

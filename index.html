@@ -11,7 +11,7 @@
 <meta property="og:title" content="MotionLab — 2D Physics Sandbox">
 <meta property="og:description" content="A browser-based 2D physics sandbox and a reusable open-source physics core: gravitation, fluid buoyancy, magnetism, hinges & motors, seeded RNG, platform-fighter lab. Open and play — no build, no backend.">
 <meta property="og:url" content="https://xieyuke2026-cpu.github.io/Physics-engine/">
-<link rel="stylesheet" href="css/style.css?v=1.51">
+<link rel="stylesheet" href="css/style.css?v=1.52">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6db3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='2.2'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='4.2' transform='rotate(-24 12 12)'/%3E%3C/svg%3E">
 </head>
 <!-- no-3d: structural guard while FEATURE_3D=false (js/app.js). The CSS rules
@@ -49,6 +49,7 @@
     <div class="tb-group lab2d-only">
       <button id="btnReplay" class="tb-btn wide rec-btn" data-i18n-title="tb.title.replay" title="录制回放：逐步记录这次运行，可精确重播"></button>
       <button id="btnReplayPlay" class="tb-btn icon" data-i18n-title="tb.title.replayPlay" title="播放最近的回放" hidden></button>
+      <button id="btnVideo" class="tb-btn wide rec-btn" data-i18n-title="tb.title.video" title="录制视频：把画布实时录成视频（优先 MP4）"></button>
     </div>
     <div class="tb-spacer"></div>
     <div class="tb-group lab2d-only">
@@ -318,6 +319,7 @@
             <li><b>失去支撑会醒来</b>（1.44）：睡着的物体每 15 步自动检查支撑——删掉睡塔的底层、拖走支撑物，上面睡着的物体会被唤醒并掉落，不再悬空（Matter 与 Native 双引擎）；被弹簧/铰链挂住、浸在流体里都算有支撑，零重力时不检查</li>
             <li><b>挑战与确定性回放</b>（1.50）：主界面侧栏新增「挑战模式」——6 个关卡、限定搭建预算、目标区连续停稳判定与三星评级（<code>js/challenges.js</code>，无 DOM）。原 GIF 录制被<b>确定性回放</b>取代：录制 = 起始引擎快照 + 按模拟步编号的全部操作事件，导出 <code>.replay.json</code> 后可变速/拖动重播，结尾自动校验状态哈希（<code>js/replay.js</code>）；同一脚本在 Matter 与 Native 双后端的实况与重演哈希逐位一致，已由 Node 测试证明。注意引擎快照不含重力，回放文件单独携带场景设置</li>
             <li><b>性能优化与界面整理</b>（1.51 / 引擎 1.12.5）：性能剖析发现每 15 步的孤儿唤醒探测（1.44）在约 800 物体时占 Matter 后端步进总时间约 31%——其候选对查找是 O(睡眠体×全体）。现双后端均改走均匀网格（触碰判定与支撑语义不变）：777 物体压测单步平均 4.9→3.5 ms、95 分位尖峰 25→10 ms。Native 另去掉接触排序/热启动键的模板字符串（改数字键）、求解器临时向量复用、支撑标记改步内戳记、解算后形状同步跳过睡眠体。回放检查点经实测仅约 0.4 ms，不是瓶颈，未动。界面：实验室场景属性面板移除挑战入口与实验室内挑战列表，挑战模式只从主界面侧栏进入，挑战卡「全部挑战」直达主界面挑战视图</li>
+            <li><b>回放拖动修复与视频录制</b>（1.52）：回放进度条拖动改为异步追赶——<code>scrubPlayback</code> 只记目标步，主循环每帧以约 16 ms 预算步进追赶并逐帧渲染（回退时先恢复最近检查点）；检查点间隔 300→120 步（3 分钟回放上限下最多 90 个，约 780 物体时实测单个快照约 323 KB JSON 等价）。新增 <code>js/video.js</code>：<code>canvas.captureStream</code> + <code>MediaRecorder</code> 实时录制，MIME 按 mp4 → webm 顺序探测（<code>pickVideoMime</code> 纯函数可测），最长 60 秒；视频为实时录制（帧率随现场），确定性回放仍是无损格式。能力缺失时按钮如实 toast 不支持（冒烟在 jsdom 无 MediaRecorder 环境下覆盖此路径）</li>
             <li><b>Native 大场景健壮性</b>（1.43）：修复 Native 在大场景中途崩溃冻结（碰撞裁剪对精确对齐的堆叠不再出错，796 物体极限压测可完整跑完）；休眠判定平滑化让大堆积更快静下来；场景属性的「引擎」一行改为显示当前后端、切换即更新</li>
             <li><b>Native 物体不显示已修</b>（1.42）：Native 的圆形物体补齐顶点多边形（宿主契约：每个刚体必须暴露非空 vertices），修好 1.41 里 Native 下画布只剩网格的问题</li>
             <li><b>主界面工作台</b>（1.40）：主界面改版为工作台式布局（深色侧栏 + 场景/预设列表 + 右侧详情检查器）；后端接口同时正式化为注册表（见上「后端注册表」）</li>
@@ -412,6 +414,7 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
             <li><b>Sleepers wake when support vanishes</b> (1.44): sleeping bodies re-check their support every 15 steps — delete the base of a sleeping tower or drag a support away and the bodies above wake and fall instead of hovering (both backends); being hung from a spring/hinge or immersed in a fluid counts as support, and zero gravity skips the check</li>
             <li><b>Challenges &amp; deterministic replay</b> (1.50): the home sidebar gains Challenge Mode — 6 levels, fixed building budgets, hold-in-zone goal tracking and 3-star ratings (<code>js/challenges.js</code>, DOM-free). GIF recording is replaced by <b>deterministic replay</b>: a recording is the starting engine snapshot plus every input stamped by simulation step; the exported <code>.replay.json</code> replays with scrub/speed controls and a final state-hash verdict (<code>js/replay.js</code>). The same scripted run reproduces bit-identical hashes live vs replayed on BOTH backends, proven by Node tests. Note: engine snapshots omit gravity, so replay files carry the scene settings separately</li>
             <li><b>Performance pass &amp; UI tidy-up</b> (1.51 / engine 1.12.5): profiling found the every-15-steps orphan-sleeper probe (1.44) eating ~31% of all step time on the Matter backend at ~800 bodies — its candidate search was O(sleepers x bodies). Both backends now use a uniform grid (touch predicate and support semantics unchanged): on a 777-body stress scene the average step went 4.9→3.5 ms and the p95 spike 25→10 ms. Native also drops template-string contact-sort / warm-start keys for numeric keys, reuses solver scratch vectors, marks support with a per-substep stamp, and skips sleeping bodies in the post-solve shape sync. Replay checkpoints measured ~0.4 ms — not a bottleneck, left alone. UI: the lab Scene Properties panel loses its Challenge entry and the in-lab challenge list; Challenge Mode is entered only from the home hub, and the card's "All challenges" goes straight there</li>
+            <li><b>Replay scrub fix &amp; video recording</b> (1.52): the replay seek bar is now asynchronous — <code>scrubPlayback</code> only records the target step and the frame loop catches up with a ~16 ms-per-frame stepping budget, rendering as it goes (backward seeks restore the nearest checkpoint first); checkpoint spacing tightened 300 → 120 steps (at most ~90 for a max-length 3-minute replay; one snapshot of ~780 bodies measures ~323 KB JSON-equivalent). New <code>js/video.js</code>: real-time recording via <code>canvas.captureStream</code> + <code>MediaRecorder</code>, MIME probed mp4 → webm (<code>pickVideoMime</code> is a pure, tested helper), 60 s cap. Video is a live capture (frame rate follows the scene); deterministic replay remains the lossless format. Without MediaRecorder the button honestly toasts "unsupported" (the jsdom smoke covers that path)</li>
             <li><b>Native large-scene robustness</b> (1.43): fixed Native crashing and freezing mid-run in large scenes (contact clipping no longer fails on exactly-aligned stacks — the 796-body stress scene runs to completion); a smoothed sleep metric settles big piles faster; the scene panel's Engine row now shows the live backend and follows switching</li>
             <li><b>Native bodies render again</b> (1.42): Native circles now expose a vertices polygon (host contract: every body must expose non-empty vertices), fixing 1.41's grid-only canvas under Native</li>
             <li><b>Workbench home hub</b> (1.40): the home hub is now a workbench (dark sidebar + scene/preset list + right-hand inspector); the backend interface was formalised into the registry at the same time (see "Backend registry" above)</li>
@@ -464,11 +467,11 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
           <div id="inspBody"></div>
         </section>
         <section id="navWhatsNew">
-          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.51</span></div>
+          <div class="panel-title"><span class="dot"></span><span data-i18n-text="hub.whatsnew">本版更新</span><span class="whatsnew-ver">1.52</span></div>
           <div class="whatsnew-card">
-            <p data-i18n-text="hub.whatsnew.b1">引擎性能优化（PhysicsEngine 1.12.5）：「孤儿唤醒」探测改走空间网格（原先约占 Matter 步进时间三成）；777 物体压测单步平均 4.9→3.5 ms、卡顿尖峰 25→10 ms</p>
-            <p data-i18n-text="hub.whatsnew.b2">Native 后端同步瘦身：数字排序/缓存键、临时向量复用、睡眠物体跳过形状同步；2 倍速回放的极限场景应有可感缓解</p>
-            <p data-i18n-text="hub.whatsnew.b3">界面整理：场景属性面板不再放挑战模式入口，挑战只从主界面「挑战模式」进入。全量测试 661 项全过</p>
+            <p data-i18n-text="hub.whatsnew.b1">回放拖进度条修复：改为异步预算追赶（每帧约 16 ms 步进、边追边渲染），不再一拖就冻；检查点加密到每 120 步</p>
+            <p data-i18n-text="hub.whatsnew.b2">新增「录制视频」：画布实时录成视频（优先 MP4、否则 WebM，最长 60 秒）；精确复现仍用确定性回放</p>
+            <p data-i18n-text="hub.whatsnew.b3">全量测试 671 项全过；引擎未动（仍 1.12.5）</p>
           </div>
         </section>
       </aside>
@@ -541,6 +544,6 @@ PFEngine.tune({ attack: { damage: 9 } });</pre>
 
 <script src="vendor/matter.min.js"></script>
 <script src="vendor/three.min.js"></script>
-<script type="module" src="js/app.js?v=1.51"></script>
+<script type="module" src="js/app.js?v=1.52"></script>
 </body>
 </html>

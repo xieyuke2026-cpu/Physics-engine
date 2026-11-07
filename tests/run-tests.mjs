@@ -633,5 +633,21 @@ check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b)
   check('v1.39: oversized share payload decodes to null', (await decodeScenePayload(rawPayload)) === null);
 }
 
+
+/* --- v1.52: video recording helpers (pure) --- */
+{
+  const { pickVideoMime, videoExt, videoSupported, VIDEO_MIME_CANDIDATES } = await import('../js/video.js');
+  check('video: mp4 preferred when supported', pickVideoMime((m) => m.includes('mp4') || m.includes('webm')) === VIDEO_MIME_CANDIDATES[0]);
+  check('video: falls back to webm when mp4 refused', pickVideoMime((m) => m.includes('webm')) === 'video/webm;codecs=vp9');
+  check('video: empty string when nothing is supported', pickVideoMime(() => false) === '');
+  check('video: a throwing isTypeSupported does not break the picker', pickVideoMime(() => { throw new Error('nope'); }) === '');
+  check('video: extension follows the mime family', videoExt('video/mp4;codecs=avc1') === 'mp4' && videoExt('video/webm;codecs=vp9') === 'webm' && videoExt('') === 'webm');
+  const fakeOk = { MediaRecorder: function () {}, HTMLCanvasElement: function () {} };
+  fakeOk.HTMLCanvasElement.prototype = { captureStream: () => ({}) };
+  check('video: support detected with MediaRecorder + captureStream', videoSupported(fakeOk) === true);
+  check('video: unsupported without MediaRecorder', videoSupported({ HTMLCanvasElement: fakeOk.HTMLCanvasElement }) === false);
+  check('video: unsupported without captureStream', videoSupported({ MediaRecorder: function () {}, HTMLCanvasElement: function () {} }) === false);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

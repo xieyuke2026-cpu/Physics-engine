@@ -5,6 +5,7 @@
 import { icon, TOOL_ICONS } from './icons.js';
 import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene, MAX_SCENE_JSON_BYTES, sceneJsonTooLarge } from './scene.js';
 import { createRecording, recordEvent, finalizeRecording, validateReplay, hashBodyStates, statesFromSnapshot, eventsByStep, MAX_REPLAY_STEPS, MAX_REPLAY_BYTES } from './replay.js';
+import { createVideoRecorder, videoSupported } from './video.js';
 import { CHALLENGES, challengeById, GoalTracker, pointInZone, starsFor } from './challenges.js';
 import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';
 import { PhysicsWorld } from './physics.js';
@@ -1864,6 +1865,7 @@ window.addEventListener('ml-lang', refreshAfterLangChange);
 /* ---------------- toolbar wiring ---------------- */
 /** Icon+text labels that depend on the language; re-run on language change. */
 function applyChromeLabels() {
+  updateVideoBtn();
   const logo = $('logo');
   if (logo) logo.title = t('tb.logoTitle');
   const nav = $('btnNavSettings'); if (nav) nav.innerHTML = `${icon('settings', 16)} ${t('tb.settings')}`;
@@ -1906,6 +1908,7 @@ function initChrome() {
     if (b) panel.refreshBody(liveOf(b));
   });
   $('btnReplay').addEventListener('click', () => { replayRec ? stopReplayRecording() : startReplayRecording(); });
+  $('btnVideo').addEventListener('click', toggleVideoRecording);
   $('btnReplayPlay').addEventListener('click', () => { if (lastReplay) openPlayback(lastReplay); });
   $('btnShot').addEventListener('click', () => {
     renderer.draw(world, {
@@ -2171,7 +2174,8 @@ let recStartStep = 0;        // world step when the recording started
 let dragRecActive = false;   // a physics drag is being recorded
 let recLastDrag = null;      // last sampled drag target while recording
 let lastReplay = null;       // most recent finished / imported replay
-let playback = null;         // {data, step, playing, speed, acc, byStep, checkpoints}
+let playback = null;         // {data, step, playing, speed, acc, byStep, checkpoints, seekTarget}
+const PB_CHECKPOINT_EVERY = 120; // steps between scrub checkpoints (1.52: was 300 — shorter worst-case seeks, ~90 max for a 3-minute replay)
 let savedLiveScene = null;   // scene JSON restored when playback exits
 let savedPlaybackBackend = null;
 let pbWired = false;
@@ -2225,6 +2229,49 @@ function cancelReplayRecording() {
   toast(t('msg.replayDiscarded'));
 }
 
+/* ---------------- canvas video recording (1.52) ----------------
+   Real-time capture (MediaRecorder): MP4 where the platform offers
+   it, WebM otherwise. Complements the deterministic replay — video
+   is for sharing, replay is for exact reproduction. */
+let videoRec = null; // { recorder, startedAt }
+
+function updateVideoBtn() {
+  const btn = $('btnVideo');
+  if (!btn) return;
+  if (videoRec) {
+    btn.innerHTML = `${icon('stop', 15)}<span>${t('replay.stop')} ${fmtT((performance.now() - videoRec.startedAt) / 1000)}</span>`;
+    btn.classList.add('recording');
+  } else {
+    btn.innerHTML = `${icon('camera', 15)}<span>${t('video.label')}</span>`;
+    btn.classList.remove('recording');
+  }
+}
+
+function toggleVideoRecording() {
+  if (videoRec) { videoRec.recorder.stop(); return; }
+  if (!videoSupported()) { toast(t('msg.videoUnsupported'), 3600); return; }
+  const startedAt = performance.now();
+  const recorder = createVideoRecorder(canvas, {
+    onStop: (blob, ext) => {
+      videoRec = null;
+      updateVideoBtn();
+      const sec = (performance.now() - startedAt) / 1000;
+      if (sec < 0.6 || !blob.size) { toast(t('msg.videoTooShort')); return; }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(sceneName || 'motionlab').replace(/[\\/:*?"<>|]/g, '_')}.${ext}`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast(t('msg.videoSaved', { sec: sec.toFixed(1), fmt: ext.toUpperCase() }), 3200);
+    },
+  });
+  if (!recorder) { toast(t('msg.videoUnsupported'), 3600); return; }
+  videoRec = { recorder, startedAt };
+  recorder.start();
+  updateVideoBtn();
+  toast(t('msg.videoStarted'), 2600);
+}
+
 function updateReplayBtn() {
   const btn = $('btnReplay');
   if (!btn) return;
@@ -2276,7 +2323,7 @@ function openPlayback(rec) {
   }
   world.loadSnapshot(JSON.parse(JSON.stringify(v.replay.initial)));
   playback = {
-    data: v.replay, step: 0, playing: false, speed: 1, acc: 0,
+    data: v.replay, step: 0, playing: false, speed: 1, acc: 0, seekTarget: null,
     byStep: eventsByStep(v.replay.events),
     checkpoints: new Map([[0, v.replay.initial]]),
   };
@@ -2344,7 +2391,7 @@ function stepPlayback(n) {
     if (evs) for (const ev of evs) applyReplayEvent(ev);
     world.stepOnce();
     playback.step++;
-    if (playback.step % 300 === 0) playback.checkpoints.set(playback.step, world.snapshot());
+    if (playback.step % PB_CHECKPOINT_EVERY === 0) playback.checkpoints.set(playback.step, world.snapshot());
   }
   if (playback.step >= playback.data.steps) finishPlayback();
 }
@@ -2378,17 +2425,39 @@ function finishPlayback() {
 
 function scrubPlayback(target) {
   if (!playback) return;
-  target = Math.max(0, Math.min(playback.data.steps, Math.floor(Number(target) || 0)));
+  // 1.52: seeking is ASYNCHRONOUS. The slider only records the target;
+  // the frame loop restores a checkpoint if needed and then catches up
+  // in budgeted slices (advanceSeek), rendering as it goes. The 1.50
+  // version re-stepped synchronously on EVERY slider input event — on
+  // an ~800-body replay that queued seconds of physics per event and
+  // scrubbing collapsed to ~2 FPS (user report).
   playback.playing = false;
-  if (target < playback.step) {
-    let cp = 0;
-    for (const k of playback.checkpoints.keys()) if (k <= target && k > cp) cp = k;
-    world.endDrag();
-    world.loadSnapshot(JSON.parse(JSON.stringify(playback.checkpoints.get(cp))));
-    playback.step = cp;
-  }
-  if (target > playback.step) stepPlayback(target - playback.step);
+  playback.seekTarget = Math.max(0, Math.min(playback.data.steps, Math.floor(Number(target) || 0)));
   updateReplayBar();
+}
+
+function restoreCheckpoint(target) {
+  let cp = 0;
+  for (const k of playback.checkpoints.keys()) if (k <= target && k > cp) cp = k;
+  world.endDrag();
+  world.loadSnapshot(JSON.parse(JSON.stringify(playback.checkpoints.get(cp))));
+  playback.step = cp;
+}
+
+/** Frame-loop seek service: at most ~16 ms of stepping per frame. */
+function advanceSeek() {
+  if (!playback || playback.seekTarget == null) return;
+  const target = playback.seekTarget;
+  if (target < playback.step) restoreCheckpoint(target);
+  if (target > playback.step) {
+    const t0 = performance.now();
+    while (playback && playback.step < target) {
+      stepPlayback(1);
+      if (performance.now() - t0 >= 16) break;
+    }
+  }
+  if (playback && playback.step >= target) playback.seekTarget = null;
+  if (playback) updateReplayBar();
 }
 
 function togglePlaybackPlay() {
@@ -2442,11 +2511,15 @@ function loop(now) {
   if (now - fpsT >= 500) {
     $('stFps').textContent = `FPS ${Math.round(fpsFrames * 1000 / (now - fpsT))}`;
     if (replayRec) updateReplayBtn();
+    if (videoRec) { updateVideoBtn(); if (performance.now() - videoRec.startedAt > 60500) videoRec.recorder.stop(); }
     fpsFrames = 0; fpsT = now;
   }
   // Fixed-timestep accumulator lives in the engine core: stable physics at
   // any display refresh rate, with spiral-of-death protection built in.
-  if (playback) { if (playback.playing) advancePlayback(dt); }
+  if (playback) {
+    if (playback.seekTarget != null && playback.step !== playback.seekTarget) advanceSeek();
+    else if (playback.playing) advancePlayback(dt);
+  }
   else if (running) world.advance(dt, settings.speed);
   if (replayRec && recStep() >= MAX_REPLAY_STEPS) stopReplayRecording();
   if (challenge && running && challenge.phase === 'run') stepChallenge();
