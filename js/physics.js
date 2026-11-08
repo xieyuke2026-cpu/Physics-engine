@@ -63,6 +63,9 @@ export class PhysicsWorld {
   /* ---------- deterministic replay support (1.50) ---------- */
   /** Simulated milliseconds elapsed on the core clock (rides snapshots). */
   get simTime() { return this.core.simTime; }
+  get stats() { return this.core.stats; }
+  onEvent(cb) { return this.core.onEvent ? this.core.onEvent(cb) : () => {}; }
+  resetStats() { if (this.core.resetStats) this.core.resetStats(); }
   /** The core's fixed timestep in ms (1000/60). */
   get fixedDt() { return this.core.fixedDt; }
   /** Full engine-state snapshot (bodies, constraints, RNG, clock). */

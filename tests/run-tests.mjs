@@ -9,6 +9,7 @@ globalThis.Matter = require('../vendor/matter.min.js');
 
 const { validateScene, defaultScene, sceneData, bodyData, constraintData, hingeData, fluidData, emitterData, presetScenes, jitteredScene, sceneJsonTooLarge, MAX_SCENE_JSON_BYTES } = await import('../js/scene.js');
 const { PhysicsWorld } = await import('../js/physics.js');
+const { ConsoleLog } = await import('../js/console.js');
 
 let pass = 0, fail = 0;
 function check(name, cond, extra = '') {
@@ -736,6 +737,20 @@ check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b)
   check('video: support detected with MediaRecorder + captureStream', videoSupported(fakeOk) === true);
   check('video: unsupported without MediaRecorder', videoSupported({ HTMLCanvasElement: fakeOk.HTMLCanvasElement }) === false);
   check('video: unsupported without captureStream', videoSupported({ MediaRecorder: function () {}, HTMLCanvasElement: function () {} }) === false);
+}
+
+/* --- console log model (1.61) --- */
+{
+  const log = new ConsoleLog(5);
+  log.push('system', 'boot');
+  log.push('impact', 'hit', 42);
+  log.push('sleep', 'zzz', 43);
+  check('console: lines carry category/text/step', log.lines.length === 3 && log.lines[1].cat === 'impact' && log.lines[1].step === 42);
+  check('console: filter views by category', log.view('sleep').length === 1 && log.view('all').length === 3 && log.view('spawn').length === 0);
+  log.push('system', 'a'); log.push('system', 'b'); log.push('system', 'c');
+  check('console: ring buffer caps at capacity (oldest dropped)', log.lines.length === 5 && log.lines[0].text === 'hit', `first=${log.lines[0].text}`);
+  log.clear();
+  check('console: clear empties the buffer', log.lines.length === 0 && log.view('all').length === 0);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -9,6 +9,7 @@ import { createVideoRecorder, videoSupported } from './video.js';
 import { CHALLENGES, challengeById, GoalTracker, pointInZone, starsFor } from './challenges.js';
 import { encodeScenePayload, decodeScenePayload, payloadFromHash } from './share.js';
 import { PhysicsWorld } from './physics.js';
+import { mountLabConsole } from './console.js';
 import { PhysicsEngine } from './engine/physics-engine.js';
 import { Renderer } from './render.js';
 import { Panel, renderSettings, APP_VERSION } from './ui.js';
@@ -34,6 +35,16 @@ function savedBackend() {
   try { return localStorage.getItem('motionlab.backend') === 'native' ? 'native' : 'matter'; } catch { return 'matter'; }
 }
 let world = new PhysicsWorld(savedBackend());
+
+/* Console (1.61, read-only): mounted in init below; engine events are
+   re-bound after every world recreation (backend switch / playback). */
+let labConsole = null;
+let consoleUnsub = null;
+function bindConsoleToWorld() {
+  if (consoleUnsub) { consoleUnsub(); consoleUnsub = null; }
+  if (labConsole) consoleUnsub = world.onEvent((ev) => labConsole.ingest(ev));
+}
+
 const renderer = new Renderer(canvas);
 const camera = renderer.camera;
 
@@ -87,6 +98,7 @@ function loadScene(scene, { markInitial = true } = {}) {
   settings = { ...s.settings };
   $('projectName').value = sceneName;
   world.loadScene(s);
+  if (labConsole) labConsole.sys(t('console.sysScene', { name: sceneName }));
   selectedId = null;
   selectedFluidId = null;
   selectedWindId = null;
@@ -1862,7 +1874,9 @@ function setEngineBackend(id) {
   if (world.core.backendId === id) return;
   const snap = currentScene();
   world = new PhysicsWorld(id);
+  bindConsoleToWorld();
   loadScene(snap);
+  if (labConsole) labConsole.sys(t('console.sysBackend', { name: id === 'native' ? 'Impulse' : 'Matter.js' }));
   resetHistory();
   toast(t('msg.backendSwitched', { name: id === 'native' ? 'Impulse' : 'Matter.js' }));
 }
@@ -1999,6 +2013,15 @@ function initChrome() {
   $('btnUndo').addEventListener('click', () => applyHistory(-1));
   $('btnRedo').addEventListener('click', () => applyHistory(1));
   $('btnSave').addEventListener('click', saveCurrent);
+  labConsole = mountLabConsole($('consoleDrawer'), {
+    world: () => world,
+    getFps: () => ($('stFps').textContent || '').replace(/^FPS\s*/, ''),
+    t,
+  });
+  bindConsoleToWorld();
+  if (labConsole.initialOpen) labConsole.setOpen(true);
+  labConsole.sys(t('console.sysReady', { name: world.core.backendId === 'native' ? 'Impulse' : 'Matter.js' }));
+  $('btnConsole').addEventListener('click', () => labConsole.toggle());
   $('btnPanel').addEventListener('click', () => {
     const p = $('panel');
     p.classList.toggle('hidden-panel');
@@ -2381,7 +2404,7 @@ function exitPlayback() {
   const back = savedPlaybackBackend;
   world.endDrag();
   teardownPlayback();
-  if (back && world.core.backendId !== back) world = new PhysicsWorld(back);
+  if (back && world.core.backendId !== back) { world = new PhysicsWorld(back); bindConsoleToWorld(); }
   if (restore) { try { loadScene(JSON.parse(restore)); } catch { /* keep current world */ } }
   refreshPanel();
 }
@@ -2395,7 +2418,7 @@ function openPlayback(rec) {
     savedPlaybackBackend = world.core.backendId;
   }
   setRunning(false);
-  if (world.core.backendId !== v.replay.backend) world = new PhysicsWorld(v.replay.backend);
+  if (world.core.backendId !== v.replay.backend) { world = new PhysicsWorld(v.replay.backend); bindConsoleToWorld(); }
   if (v.replay.settings) {
     settings = { ...settings, ...v.replay.settings };
     world.applySettings(settings);
@@ -2502,9 +2525,11 @@ function finishPlayback() {
   if (playback.data.finalHash && mine === playback.data.finalHash) {
     el.textContent = t('replay.exact');
     el.className = 'pb-verdict ok';
+    if (labConsole) labConsole.sys(t('console.sysVerdictExact'));
   } else if (playback.data.finalHash) {
     el.textContent = t('replay.diverged');
     el.className = 'pb-verdict warn';
+    if (labConsole) labConsole.sys(t('console.sysVerdictDiverged'));
   }
   updateReplayBar();
 }

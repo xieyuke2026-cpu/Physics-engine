@@ -198,11 +198,17 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.60')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.12.12')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.61')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
+check('console: drawer + toggle exist, drawer starts hidden', !!doc.getElementById('consoleDrawer') && !!doc.getElementById('btnConsole') && doc.getElementById('consoleDrawer').hidden === true);
+click(doc.getElementById('btnConsole'));
+check('console: toggle opens the drawer with stats + ready line', doc.getElementById('consoleDrawer').hidden === false && doc.getElementById('consoleStats').textContent.length > 0 && doc.getElementById('consoleLog').textContent.includes('控制台'), doc.getElementById('consoleLog').textContent.slice(0, 80));
+click(doc.getElementById('btnConsole'));
+check('console: toggle closes the drawer', doc.getElementById('consoleDrawer').hidden === true);
+
 {
   const sel = doc.querySelector('#settingsBody select');
   check('v1.41: settings offers the backend picker (Matter default, Impulse stable)',

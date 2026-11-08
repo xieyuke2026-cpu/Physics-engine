@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.12 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.13.0 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -87,6 +87,15 @@
              (id unchanged for compatibility; internal codename
              Native67). It also graduates from experimental to
              stable with the solver-stability work below.
+    1.13.0 — observability surface (MotionLab 1.61): both backends
+             expose the same stats getter (steps, bodies, sleeping,
+             contacts, plus Impulse-only cumulative counters:
+             wake-touch gate firings, pre-wake firings, wakes,
+             sleeps, spawns) and, on Impulse, an onEvent stream
+             (impact / sleep / wake / spawn). The Matter facade
+             reports null for the solver-internal fields — it has
+             no equivalent hooks. Counters are never serialized;
+             resetStats() zeroes them. No solver numerics change.
     1.12.12 — native wake-touch gating (MotionLab 1.60): 1.59's
              live verification caught what its Node protocol had
              missed — a FAST, chunked drag (pointer targets jumping
@@ -286,7 +295,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.12';
+export const VERSION = '1.13.0';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -1995,6 +2004,24 @@ export class PhysicsEngine {
 
   /* ---------------- events ---------------- */
   onCollision(cb) { if (typeof cb === 'function') this._collisionCbs.push(cb); }
+
+  /* --------------------- observability (1.13.0) -----------------------
+     Console surface, twin of the NativeEngine API. The common fields
+     are computed live; the solver-internal counters (wake-touch gate,
+     pre-wake, sleep/wake/spawn tallies) are Impulse-only and report
+     null here — Matter exposes no equivalent solver hooks. */
+  get stats() {
+    const bodies = this._bodies();
+    let sleeping = 0;
+    for (const b of bodies) if (b.isSleeping) sleeping++;
+    return {
+      steps: Math.round(this._simMs / this.fixedDt), bodies: bodies.length, sleeping,
+      contacts: (this.engine && this.engine.pairs && this.engine.pairs.list) ? this.engine.pairs.list.length : null,
+      gateFirings: null, preWakeFirings: null, wakes: null, sleeps: null, spawns: null,
+    };
+  }
+  onEvent() { return () => {}; }
+  resetStats() {}
   _emitChange() {
     this._bodiesCache = null; // any structural change invalidates the cached view
     this._indexCache = null;  // body -> position-in-array map used by the pair pass

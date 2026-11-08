@@ -16,7 +16,7 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 | Component | Version | Single source of truth |
 |---|---|---|
 | MotionLab (app) | 1.60 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.12.12 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| PhysicsEngine (2D core) | 1.13.0 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -353,6 +353,7 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   magnetism / gravitation / gusts / snapshots / seeded RNG), force
   models kicking once per fixed step and a substep floor of 2; its
   own 43-check behaviour suite (tests/native-tests.mjs)
+- 1.13.0 — Observability surface (MotionLab 1.61 console): a same-shape `stats` getter on both backends (steps / bodies / sleeping / contacts, plus Impulse-only cumulative counters: gate, pre-wake, wakes, sleeps, spawns) and an `onEvent` stream on Impulse (impact / sleep / wake / spawn); counters are never serialized and `resetStats()` zeroes them; Matter reports null for the solver-internal fields. No solver numerics change.
 - 1.12.12 — Native wake-touch gating (pyramid, second fix): live verification of 1.59 found that a fast chunked drag (real pointer cadence) still detonates the tower — the shock wave amplifies through frozen first-touch contacts (34 → 58 → 132 → 210 px/step), and resting rows have zero penetration so the pre-wake pass cannot see it coming. Contacts record `wakeTouch` (exactly one body asleep at creation); on the solve's first iteration, a wake-touch approaching faster than 12 px/step has its imN/imT re-based on the live effective mass. Gentle wake-touches keep the frozen transfer (cradle drift stays 45; sleep disabled measures 235 and a fully honest wake solve 132, for contrast). Chunked-drag peak 210 → 42.7 (Matter: 87 under the same protocol); slow press / rolling impact / bowling replay identical to 1.59; Native tests +3.
 - 1.12.11 — Native wake timing (pyramid detonation fix): contacts created in `_collide` against a sleeping body carry its zero inverse mass baked into the effective mass (measured imN 8.49 vs the true ~1.66); woken within the same substep, the oversized impulses pump energy iteration after iteration and the stack chain-detonates. A new pre-wake pass wakes a still-pressed sleeper BEFORE `_collide`. The first-touch frozen solve is kept deliberately (the cradle's clean equal-mass transfer depends on it; recomputing masses at the wake measured drift 45 → 132, and a drag-servo contact cap measured peak 181 — both rejected). Pyramid servo-press peak 34.1 → 10.1 with no box above the tower's top row; cradle 45 and the bowling replay unchanged; Native tests +3.
 - 1.12.10 — Native solver stability: symmetric (alternating-direction) contact sweeps + iterations 10 → 30 + restitution answered from the approach velocity sampled before warm-start pre-application; cradle middle-ball drift 184 → 45 px and flat to 3600 steps, bowling pin peak 2.46 → 0.87, honest bounces unchanged (e=0.8 rebounds to e²·h); Native tests +2.

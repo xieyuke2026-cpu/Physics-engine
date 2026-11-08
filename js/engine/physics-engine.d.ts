@@ -271,6 +271,29 @@ export declare const Formulas: {
   potentialEnergy(mass: number, gravity: number, height: number): number;
 };
 
+export interface EngineStats {
+  steps: number;
+  bodies: number;
+  sleeping: number;
+  contacts: number | null;
+  gateFirings: number | null;
+  preWakeFirings: number | null;
+  wakes: number | null;
+  sleeps: number | null;
+  spawns: number | null;
+}
+
+export interface EngineEvent {
+  type: 'impact' | 'sleep' | 'wake' | 'spawn';
+  step: number;
+  id?: string;
+  label?: string;
+  a?: string;
+  b?: string;
+  speed?: number;
+  emitter?: string;
+}
+
 export declare class PhysicsEngine {
   static readonly VERSION: string;
   static readonly BACKENDS: BackendInfo[];
@@ -416,6 +439,10 @@ export declare class PhysicsEngine {
   setMaxSpeed(pxPerStep: number): void;
   setSubsteps(n: number): void;
   onCollision(cb: (pairs: unknown) => void): void;
+  // ----- observability (1.13.0) -----
+  readonly stats: EngineStats;
+  onEvent(cb: (ev: EngineEvent) => void): () => void;
+  resetStats(): void;
   snapshot(): EngineSnapshot;
   load(snapshot: EngineSnapshot): void;
 }

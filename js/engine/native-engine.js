@@ -148,6 +148,10 @@ export class NativeEngine {
     this.setSeed(opts.seed === undefined ? (Math.random() * 4294967296) >>> 0 : opts.seed);
     this.onChange = null;
     this._collisionCbs = [];
+    this._eventCbs = [];
+    // 1.13.0: solver observability for the in-app console — cumulative
+    // counters (never serialized; resetStats() zeroes them).
+    this._stats = { steps: 0, contacts: 0, peakContacts: 0, gateFirings: 0, preWakeFirings: 0, wakes: 0, sleeps: 0, spawns: 0 };
     this._contactCache = new Map();
     this._activePairs = new Set();
     this._segPool = [];
@@ -316,7 +320,11 @@ export class NativeEngine {
   }
 
   _wake(b) {
-    if (b.isSleeping) { b.isSleeping = false; b.sleepCounter = 0; b._motion = 0.1; }
+    if (b.isSleeping) {
+      b.isSleeping = false; b.sleepCounter = 0; b._motion = 0.1;
+      this._stats.wakes++;
+      this._emit('wake', { id: b.plugin.pe.id, label: this._label(b) });
+    }
   }
   _changed() { if (typeof this.onChange === 'function') this.onChange(); }
 
@@ -647,13 +655,14 @@ export class NativeEngine {
       if (alive >= e.cap && oldestId !== null) this.removeBody(oldestId);
       const c = Math.cos(e.angle), s = Math.sin(e.angle);
       const off = e.size + 4;
-      this.addBody({
+      const spawned = this.addBody({
         kind: e.kind, x: e.x + c * off, y: e.y + s * off,
         radius: e.size, width: e.size * 2, height: e.size * 2,
         density: 0.001, friction: 0.3, frictionAir: 0.001, restitution: 0.3,
         vx: c * e.speed, vy: s * e.speed,
         emitter: e.id, label: 'Emitter',
       });
+      if (spawned) { this._stats.spawns++; this._emit('spawn', { emitter: e.id }); }
     }
   }
   _windVel(w) {
@@ -1009,6 +1018,43 @@ export class NativeEngine {
       if (i >= 0) this._collisionCbs.splice(i, 1);
     };
   }
+
+  /* --------------------- observability (1.13.0) -----------------------
+     The console surface: cumulative solver counters plus a lightweight
+     event stream (wake / sleep / spawn / impact). Events fire
+     synchronously from inside the step — listeners must be cheap and
+     must NOT mutate the world. Listener exceptions are swallowed so a
+     broken observer can never break the simulation. */
+  onEvent(cb) {
+    if (typeof cb === 'function') this._eventCbs.push(cb);
+    return () => {
+      const i = this._eventCbs.indexOf(cb);
+      if (i >= 0) this._eventCbs.splice(i, 1);
+    };
+  }
+  _emit(type, data) {
+    if (!this._eventCbs.length) return;
+    const ev = { type, step: Math.round(this._simMs / this.fixedDt), ...data };
+    for (const cb of this._eventCbs) { try { cb(ev); } catch { /* observer fault must not break the solver */ } }
+  }
+  _label(b) {
+    const pe = b && b.plugin && b.plugin.pe;
+    return pe ? (pe.desc.label || pe.id) : '';
+  }
+  get stats() {
+    let sleeping = 0;
+    for (const b of this._byId.values()) if (b.isSleeping) sleeping++;
+    const s = this._stats;
+    return {
+      steps: s.steps, bodies: this._byId.size, sleeping,
+      contacts: s.contacts, peakContacts: s.peakContacts,
+      gateFirings: s.gateFirings, preWakeFirings: s.preWakeFirings,
+      wakes: s.wakes, sleeps: s.sleeps, spawns: s.spawns,
+    };
+  }
+  resetStats() {
+    this._stats = { steps: 0, contacts: 0, peakContacts: 0, gateFirings: 0, preWakeFirings: 0, wakes: 0, sleeps: 0, spawns: 0 };
+  }
   setSubsteps(n) { this.substeps = Math.max(2, Math.min(8, Math.round(num(n, 2)))); }
   setMaxSpeed(v) { this._maxSpeed = Math.max(0, num(v, 0)); }
   get maxSpeed() { return this._maxSpeed; }
@@ -1035,6 +1081,7 @@ export class NativeEngine {
   }
 
   _stepOnce(scale) {
+    this._stats.steps++;
     this._simMs += this.fixedDt * scale;
     if (this._gravitation || (this._magnetism.K > 0 && this._magnets.size)) this._applyPairForces(scale);
     if (this._hinges.size) this._applyMotors(scale);
@@ -1422,7 +1469,7 @@ export class NativeEngine {
         const other = c.a.isSleeping ? c.b : c.a;
         if (other.isStatic) continue;
         this._pointVel(other, c.px - other.position.x, c.py - other.position.y, pv);
-        if (Math.hypot(pv.x, pv.y) > 0.6) this._wake(sleeper);
+        if (Math.hypot(pv.x, pv.y) > 0.6) { this._stats.preWakeFirings++; this._wake(sleeper); }
       }
     }
     const contacts = this._collide();
@@ -1507,6 +1554,21 @@ export class NativeEngine {
     }
     // 1.12.11: last substep's contacts drive the pre-wake pass at the
     // top of the next _integrateSolve (see below).
+    this._stats.contacts = contacts.length;
+    if (contacts.length > this._stats.peakContacts) this._stats.peakContacts = contacts.length;
+    // Impact events (console): the strongest NEW contact pair this
+    // substep, when it arrives fast. Computed only with listeners.
+    if (this._eventCbs.length && this._prevContacts) {
+      const prevPairs = new Set();
+      for (const pc of this._prevContacts) prevPairs.add(pc.a.plugin.pe.id + '|' + pc.b.plugin.pe.id);
+      let best = null;
+      for (const c of contacts) {
+        if (c.preVn === undefined || c.preVn > -8) continue;
+        if (prevPairs.has(c.a.plugin.pe.id + '|' + c.b.plugin.pe.id)) continue;
+        if (!best || c.preVn < best.preVn) best = c;
+      }
+      if (best) this._emit('impact', { a: this._label(best.a), b: this._label(best.b), speed: -best.preVn });
+    }
     this._prevContacts = contacts;
     for (const b of this._byId.values()) {
       // 1.12.5: sleeping bodies cannot have moved during this substep
@@ -1555,6 +1617,8 @@ export class NativeEngine {
             b.isSleeping = true;
             b.velocity.x = 0; b.velocity.y = 0; b.angularVelocity = 0;
             b._motion = 0;
+            this._stats.sleeps++;
+            this._emit('sleep', { id: b.plugin.pe.id, label: this._label(b) });
           }
         } else b.sleepCounter = 0;
       }
@@ -1622,6 +1686,7 @@ export class NativeEngine {
     // (live) effective mass for this substep; gentle ones keep
     // the frozen transfer.
     if (first && c.wakeTouch && c.preVn !== undefined && c.preVn < -12) {
+      this._stats.gateFirings++;
       const kia = this._invI(c.a), kib = this._invI(c.b);
       const gRaCn = c.rax * c.ny - c.ray * c.nx, gRbCn = c.rbx * c.ny - c.rby * c.nx;
       const gKn = ima + imb + kia * gRaCn * gRaCn + kib * gRbCn * gRbCn;

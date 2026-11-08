@@ -15,7 +15,7 @@
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
 | MotionLab（应用） | 1.60 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.12.12 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| PhysicsEngine（2D 核心） | 1.13.0 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -294,6 +294,7 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
   'native' })` 直接构造；从零编写的顺序冲量求解器覆盖全部公开接口
   （堆叠/休眠/铰链马达/真实浮力/磁力/引力/阵风/快照/种子随机），力模型
   按固定步踢一次、子步下限 2；专属行为测试 43 项（tests/native-tests.mjs）
+- 1.13.0 — 可观测性接口（MotionLab 1.61 控制台）：双后端同形 `stats`（步数/物体/睡着/接触 + Impulse 专属累计计数：闸门、预唤醒、唤醒、睡着、生成）与 Impulse 的 `onEvent` 事件流（impact/sleep/wake/spawn）；计数不入快照，`resetStats()` 清零；Matter 内部项为 null。本版不改求解数值。
 - 1.12.12 — Native 唤醒接触分档（金字塔二度修复）：1.59 线上验证发现快速分段跳拖（真实指针节奏）仍可引爆——冲击波经冻结首次接触逐层放大（34 → 58 → 132 → 210 px/步），静止塔层零穿透使预唤醒无从预见。接触记录 `wakeTouch`（恰一方在睡），求解首轮对接近速度 >12 px/步的唤醒接触按实时有效质量重算 imN/imT；温和唤醒接触保留冻结传递（牛顿摆偏离保持 45；关睡觉 235、全诚实 132 作对照）。分段跳拖峰值 210 → 42.7（同协议 Matter 87）；慢压/滚动/保龄球复测与 1.59 一致；Native 测试 +3 项。
 - 1.12.11 — Native 唤醒时序（金字塔爆炸修复）：接触在 `_collide` 生成时被撞的睡眠体零逆质量被烘焙进有效质量（实测 imN 8.49 vs 真实 ~1.66），同子步唤醒后过量冲量逐轮泵能、整塔连环引爆；新增预唤醒——上一子步接触表明仍在受压的睡眠体在 `_collide` 之前唤醒。首次接触的冻结求解刻意保留（牛顿摆等质量传递靠它；唤醒后重算有效质量测得偏离 45 → 132，拖拽伺服接触限速测得峰值 181，均已否决）。金字塔拖压峰值 34.1 → 10.1、无方块越过塔顶；牛顿摆 45 与保龄球回放不变；Native 测试 +3 项。
 - 1.12.10 — Native 求解器稳定性：接触求解改双向交替扫描（对称 Gauss-Seidel）+ 迭代 10 → 30 + 弹性回应热启动预压前采样的接近速度；牛顿摆中间球漂移 184 → 45 px 且 3600 步平稳，保龄球瓶峰值 2.46 → 0.87，诚实弹跳不变（e=0.8 回弹 = e²·h）；Native 测试 +2 项。

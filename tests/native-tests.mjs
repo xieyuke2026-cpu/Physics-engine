@@ -648,6 +648,64 @@ function poolWorld() {
   check('v1.12.12: no box is launched toward the stage top', minY > 150, `minY=${minY.toFixed(0)}`);
 }
 
+/* --- v1.13.0: observability — stats counters + event stream ---
+   The console surface: cumulative counters (steps, contacts, gate
+   firings, pre-wake firings, wakes, sleeps, spawns) and synchronous
+   events (impact / sleep / wake / spawn). A dropped ball must
+   produce an impact event and then a sleep event; the chunked-drag
+   protocol must move the gate counter; the slow press must move
+   the pre-wake counter; the cradle must move NEITHER. */
+{
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2, seed: 1 });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true });
+  e.addBody({ kind: 'circle', x: 640, y: 100, radius: 20, density: 0.001, label: 'Drop Ball' });
+  const types = [];
+  const unsub = e.onEvent((ev) => types.push(ev.type));
+  step(e, 600);
+  const st = e.stats;
+  check('v1.13.0: stats report steps/bodies/sleeping', st.steps === 600 && st.bodies === 2 && st.sleeping === 1, `steps=${st.steps} bodies=${st.bodies} sleeping=${st.sleeping}`);
+  check('v1.13.0: drop produces impact then sleep events', types.includes('impact') && types.includes('sleep'), `events=${types.join(',')}`);
+  check('v1.13.0: sleep counter tracks transitions', st.sleeps >= 1 && st.contacts >= 1, `sleeps=${st.sleeps} contacts=${st.contacts}`);
+  unsub();
+  e.resetStats();
+  check('v1.13.0: resetStats zeroes counters (bodies stay live)', e.stats.steps === 0 && e.stats.sleeps === 0 && e.stats.bodies === 2, `steps=${e.stats.steps}`);
+}
+{
+  // Chunked drag (the v1.12.12 protocol) must fire the gate.
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2, seed: 1 });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true, friction: 0.6 });
+  e.addBody({ kind: 'rect', x: 20, y: 240, width: 40, height: 680, isStatic: true, friction: 0.3 });
+  e.addBody({ kind: 'rect', x: 1260, y: 240, width: 40, height: 680, isStatic: true, friction: 0.3 });
+  const boxes = [];
+  for (let r = 0; r < 6; r++) for (let i = 0; i < 6 - r; i++)
+    boxes.push(e.addBody({ kind: 'rect', x: 520 + i * 48 + r * 24, y: 517 - r * 46, width: 46, height: 46, density: 0.001, friction: 0.5, restitution: 0.05 }));
+  const ball = e.addBody({ kind: 'circle', x: 200, y: 180, radius: 26, density: 0.004, friction: 0.3, restitution: 0.4 });
+  step(e, 240);
+  e.beginDrag(ball, ball.position.x, ball.position.y);
+  const startX = ball.position.x;
+  for (let c = 1; c <= 8; c++) { e.moveDrag(startX + ((846 - startX) * c) / 8, 514); step(e, 16); }
+  step(e, 60);
+  e.endDrag();
+  check('v1.13.0: chunked drag fires the wake-touch gate (counter moves)', e.stats.gateFirings > 0, `gate=${e.stats.gateFirings}`);
+}
+{
+  // Slow press (the v1.12.11 protocol) must fire pre-wake, not the gate.
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2, seed: 1 });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true, friction: 0.6 });
+  e.addBody({ kind: 'rect', x: 20, y: 240, width: 40, height: 680, isStatic: true, friction: 0.3 });
+  e.addBody({ kind: 'rect', x: 1260, y: 240, width: 40, height: 680, isStatic: true, friction: 0.3 });
+  for (let r = 0; r < 6; r++) for (let i = 0; i < 6 - r; i++)
+    e.addBody({ kind: 'rect', x: 520 + i * 48 + r * 24, y: 517 - r * 46, width: 46, height: 46, density: 0.001, friction: 0.5, restitution: 0.05 });
+  const ball = e.addBody({ kind: 'circle', x: 200, y: 180, radius: 26, density: 0.004, friction: 0.3, restitution: 0.4 });
+  step(e, 140);
+  e.beginDrag(ball, ball.position.x, ball.position.y);
+  let tx = ball.position.x;
+  while (tx < 560) { tx = Math.min(560, tx + 6); e.moveDrag(tx, 514); step(e, 1); }
+  step(e, 90);
+  e.endDrag();
+  check('v1.13.0: slow press fires pre-wake (counter moves)', e.stats.preWakeFirings > 0, `preWake=${e.stats.preWakeFirings}`);
+}
+
 /* --- v1.12.9: wedged light bodies are not launched (bowling repro) ---
    Ryan's bowling scene on the native backend: a heavy ball arriving
    at ~2.4 px/step wedged into a stacked triangle pyramid and one pin
