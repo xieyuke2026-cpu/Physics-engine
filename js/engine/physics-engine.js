@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.10 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.11 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -87,6 +87,31 @@
              (id unchanged for compatibility; internal codename
              Native67). It also graduates from experimental to
              stable with the solver-stability work below.
+    1.12.11 — native wake timing (MotionLab 1.59): pressing a
+             dragged body into a SLEPT stack detonated it (boxes
+             leaving at 50-266 px/step, one reaching the stage top).
+             Contacts are created in _collide BEFORE the wake-on-
+             impact pass, so a contact against a sleeping body
+             carries that body's zero inverse mass baked into its
+             effective mass (measured imN 8.49 vs the true ~1.66);
+             when the wake pass then wakes the body mid-substep,
+             the oversized impulses pump energy iteration after
+             iteration, and the stack explodes chain-by-chain as
+             each disturbed body wakes the next through a frozen
+             contact. Fix: a pre-wake pass — a sleeper that last
+             substep's contacts say is still being pressed by a
+             moving body wakes BEFORE _collide, so sustained
+             contacts are created with honest masses. First-touch
+             contacts deliberately keep the historical one-substep
+             frozen solve: it is what hands a Newton's-cradle
+             chain its clean equal-mass transfer (recomputing the
+             masses at the wake instead measured cradle drift
+             45 -> 132; a drag-servo contact cap measured WORSE,
+             peak box 181 — a slow hydraulic press maximises
+             penetration build-up). Re-test on the Pyramid preset:
+             servo-press peak box speed 34.1 -> 10.1, no box rises
+             above the tower's own top row; cradle drift unchanged
+             at 45; bowling replay unchanged.
     1.12.10 — native solver stability (MotionLab 1.58): touching
              chains (Newton's cradle) no longer drift apart over
              time. Contact solving is now symmetric (the sweep
@@ -232,7 +257,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.10';
+export const VERSION = '1.12.11';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.

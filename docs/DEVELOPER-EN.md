@@ -15,8 +15,8 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.58 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.12.10 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| MotionLab (app) | 1.59 | `APP_VERSION` in `js/ui.js` |
+| PhysicsEngine (2D core) | 1.12.11 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -353,6 +353,7 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   magnetism / gravitation / gusts / snapshots / seeded RNG), force
   models kicking once per fixed step and a substep floor of 2; its
   own 43-check behaviour suite (tests/native-tests.mjs)
+- 1.12.11 — Native wake timing (pyramid detonation fix): contacts created in `_collide` against a sleeping body carry its zero inverse mass baked into the effective mass (measured imN 8.49 vs the true ~1.66); woken within the same substep, the oversized impulses pump energy iteration after iteration and the stack chain-detonates. A new pre-wake pass wakes a still-pressed sleeper BEFORE `_collide`. The first-touch frozen solve is kept deliberately (the cradle's clean equal-mass transfer depends on it; recomputing masses at the wake measured drift 45 → 132, and a drag-servo contact cap measured peak 181 — both rejected). Pyramid servo-press peak 34.1 → 10.1 with no box above the tower's top row; cradle 45 and the bowling replay unchanged; Native tests +3.
 - 1.12.10 — Native solver stability: symmetric (alternating-direction) contact sweeps + iterations 10 → 30 + restitution answered from the approach velocity sampled before warm-start pre-application; cradle middle-ball drift 184 → 45 px and flat to 3600 steps, bowling pin peak 2.46 → 0.87, honest bounces unchanged (e=0.8 rebounds to e²·h); Native tests +2.
 - 1.12.9 — Native solver launch fix: restitution now answers the approach velocity captured at contact creation (warm-start impulses and solver iterations could inflate the contact-point velocity beyond physical scale — a 2.4 px/step tap measured vn = −61 and a pin left at 19.6 px/step), and the Baumgarte penetration bias is capped at 4 px/step (deep overlap is left to the positional correction over a few steps); honest bounces are unaffected (a restitution-0.8 drop still rebounds to e²·h); 3 new Native checks.
 - 1.12.8 — new emitters (`addEmitter`: a fixed nozzle spawning bodies on a fixed-step schedule — spawning depends only on the step index, so snapshots and replays reproduce it deterministically; spawned bodies carry an `emitter` source tag and a recycling cap) plus a snapshot-load id guard (`load()` advances the id sequence past every loaded id, so later auto-id adds can never evict a loaded entry); both backends, 8 new engine checks + 5 Native checks.

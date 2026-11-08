@@ -546,6 +546,59 @@ function poolWorld() {
   check('v1.12.10: cradle end ball still swings out (motion not frozen)', endSwing > 60, `endSwing=${endSwing.toFixed(0)}`);
 }
 
+/* --- v1.12.11: pressing a dragged body into a SLEPT stack must not
+   detonate it (Ryan's pyramid video, 2026-11-08). The fault: contacts
+   are created in _collide BEFORE the wake-on-impact pass, so a
+   contact against a sleeping body carries that body's zero inverse
+   mass baked into its effective mass (measured imN 8.49 where the
+   true value was ~1.66); when the wake pass then wakes the body
+   mid-substep, the solve pumps energy (impulses ±98, vn flipping
+   -8/+48.6 within one substep), and a pressed stack detonates
+   chain-by-chain as each disturbed box wakes the next through a
+   frozen contact. The fix is a pre-wake pass: a sleeper that last
+   substep's contacts say is still being pressed by a moving body
+   wakes BEFORE _collide, so sustained contacts are created with
+   honest masses. First-touch contacts deliberately keep the
+   historical one-substep frozen solve (it is what hands a
+   Newton's-cradle chain its clean equal-mass transfer — recomputing
+   masses at the wake instead measured cradle drift 45 -> 132).
+   This test rebuilds the Pyramid preset geometry, lets all 21
+   boxes fall asleep, then servo-presses the wrecking ball into the
+   base exactly as in the video. Pre-fix: peak box speed 34.1, a box
+   reaching y=67 (stage top). Post-fix: peak ~10, nothing rises
+   above the tower's own top row. */
+{
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2, seed: 1 });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true, friction: 0.6 });
+  e.addBody({ kind: 'rect', x: 20, y: 240, width: 40, height: 680, isStatic: true, friction: 0.3 });
+  e.addBody({ kind: 'rect', x: 1260, y: 240, width: 40, height: 680, isStatic: true, friction: 0.3 });
+  const boxes = [];
+  for (let r = 0; r < 6; r++) for (let i = 0; i < 6 - r; i++)
+    boxes.push(e.addBody({ kind: 'rect', x: 520 + i * 48 + r * 24, y: 517 - r * 46, width: 46, height: 46, density: 0.001, friction: 0.5, restitution: 0.05 }));
+  const ball = e.addBody({ kind: 'circle', x: 200, y: 180, radius: 26, density: 0.004, friction: 0.3, restitution: 0.4 });
+  step(e, 140);
+  const slept = boxes.filter((b) => b.isSleeping).length;
+  check('v1.12.11: pyramid boxes are asleep before the press (wake path exercised)', slept === 21, `slept=${slept}/21`);
+  let peak = 0, minY = Infinity;
+  const watch = (n) => {
+    for (let i = 0; i < n; i++) {
+      e.advance(e.fixedDt);
+      for (const b of boxes) {
+        peak = Math.max(peak, Math.hypot(b.velocity.x, b.velocity.y));
+        minY = Math.min(minY, b.position.y);
+      }
+    }
+  };
+  e.beginDrag(ball, ball.position.x, ball.position.y);
+  let tx = ball.position.x;
+  while (tx < 560) { tx = Math.min(560, tx + 6); e.moveDrag(tx, 514); watch(1); }
+  watch(90);
+  e.endDrag();
+  watch(200);
+  check('v1.12.11: pressing into a slept stack does not launch boxes (peak speed bounded)', peak < 15, `peak=${peak.toFixed(2)}`);
+  check('v1.12.11: no box flies above the tower (highest box stays low)', minY > 200, `minY=${minY.toFixed(0)}`);
+}
+
 /* --- v1.12.9: wedged light bodies are not launched (bowling repro) ---
    Ryan's bowling scene on the native backend: a heavy ball arriving
    at ~2.4 px/step wedged into a stacked triangle pyramid and one pin

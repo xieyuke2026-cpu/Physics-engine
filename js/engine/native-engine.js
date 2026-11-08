@@ -1400,6 +1400,31 @@ export class NativeEngine {
       b.angle += b.angularVelocity * h;
       this._syncShape(b);
     }
+    // 1.12.11: pre-wake — a sleeper that last substep's contacts say is
+    // still being pressed by a moving body wakes NOW, before _collide
+    // bakes its zero inverse mass into this substep's contacts. A
+    // contact created against a sleeping body carries the immovable-
+    // body effective mass (measured imN 8.49 vs the true ~1.66); when
+    // the exact wake pass below then wakes the body mid-substep, the
+    // solve pumps energy (impulses ±98, vn flipping -8/+48.6 within
+    // one substep) and a pressed stack detonates chain-by-chain as
+    // each newly disturbed box wakes the next with a frozen contact
+    // (Ryan's pyramid video: boxes leaving at 50-266 px/step, one
+    // reaching the stage top). First-touch contacts have no previous
+    // contact and keep the historical one-substep frozen solve —
+    // that frozen step is also what hands a Newton's-cradle chain
+    // its clean equal-mass transfer, so it is deliberately kept.
+    if (this._prevContacts && this.enableSleeping) {
+      const pv = { x: 0, y: 0 };
+      for (const c of this._prevContacts) {
+        if (c.a.isSleeping === c.b.isSleeping) continue;
+        const sleeper = c.a.isSleeping ? c.a : c.b;
+        const other = c.a.isSleeping ? c.b : c.a;
+        if (other.isStatic) continue;
+        this._pointVel(other, c.px - other.position.x, c.py - other.position.y, pv);
+        if (Math.hypot(pv.x, pv.y) > 0.6) this._wake(sleeper);
+      }
+    }
     const contacts = this._collide();
     // 1.12.10: snapshot each contact's approach velocity NOW — after
     // integration, before warm starting pre-applies last step's
@@ -1480,6 +1505,9 @@ export class NativeEngine {
       for (const c of contacts) this._contactCache.set(c._cacheKey, { n: c.accN, t: c.accT });
       for (const key of this._contactCache.keys()) if (!cacheSeen.has(key)) this._contactCache.delete(key);
     }
+    // 1.12.11: last substep's contacts drive the pre-wake pass at the
+    // top of the next _integrateSolve (see below).
+    this._prevContacts = contacts;
     for (const b of this._byId.values()) {
       // 1.12.5: sleeping bodies cannot have moved during this substep
       // (integration, impulses and position correction all skip them,
