@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.7 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.8 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -83,6 +83,16 @@
              snapshots, queries, seeded RNG). Matter stays the default
              and the reference behaviour; native is opt-in and labelled
              experimental while its feel is validated on real scenes.
+    1.12.8 — emitters (MotionLab 1.56): addEmitter registers a point
+             spawner { x, y, angle, rate, kind, size, speed, cap,
+             enabled } that creates a body every round(60/rate) fixed
+             steps at the END of the step, so spawning is a pure
+             function of the step index (the sim clock rides
+             snapshots, therefore recordings and replays spawn
+             identically). Spawned bodies carry an `emitter` tag in
+             their descriptor (round-trips through describeBody /
+             snapshots); at the cap the oldest spawned body is
+             removed to make room. Both backends.
     1.12.7 — noSleep descriptor flag (MotionLab 1.55): a body created
              with noSleep: true never enters sleep on either backend
              (Matter: sleepThreshold Infinity; Native: the sleep pass
@@ -196,7 +206,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.7';
+export const VERSION = '1.12.8';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -397,6 +407,7 @@ export class PhysicsEngine {
     this._fluids = new Map();      // id -> {id, x, y, width, height, density, drag, vx, vy}
     this._fluidFlow = new Map();   // id -> last computed effective flow {x, y} (base + wind-driven, 1.9.0)
     this._winds = new Map();       // id -> {id, x, y, width, height, vx, vy, power}
+    this._emitters = new Map();    // id -> {id, x, y, angle, rate, kind, size, speed, cap, enabled} (1.12.8)
     this._magnets = new Set();     // Matter bodies whose descriptor magnet !== 0
     this._magnetism = { K: 1.2, range: 320, softening: 900 };
     // 1.6.0 perf scratch state: reused across steps so the fixed-step loop
@@ -466,6 +477,10 @@ export class PhysicsEngine {
       va: num(partial.va, 0),
       sleeping: partial.sleeping === true,
       noSleep: partial.noSleep === true,
+      // Emitter tag (1.12.8): id of the emitter that spawned this body
+      // ('' for hand-placed bodies). Rides describeBody/snapshots so an
+      // emitter's alive-count survives a snapshot round-trip.
+      emitter: typeof partial.emitter === 'string' ? partial.emitter : '',
       label: typeof partial.label === 'string' ? partial.label : '',
       name: typeof partial.name === 'string' ? partial.name : '',
       userData: partial.userData && typeof partial.userData === 'object' ? partial.userData : {},
@@ -532,6 +547,7 @@ export class PhysicsEngine {
     this._magnetCache = null;
     this._fluids.clear();
     this._winds.clear();
+    this._emitters.clear();
     this.endDrag();
     this._acc = 0;
     this._emitChange();
@@ -894,6 +910,8 @@ export class PhysicsEngine {
     for (const h of data.hinges || []) { if (h && typeof h === 'object' && this.addHinge(h)) hinges++; }
     for (const f of data.fluids || []) { if (f && typeof f === 'object') { this.addFluid(f); fluids++; } }
     for (const w of data.winds || []) { if (w && typeof w === 'object') { this.addWind(w); winds++; } }
+    let emitters = 0;
+    for (const e of data.emitters || []) { if (e && typeof e === 'object') { this.addEmitter(e); emitters++; } }
     if (data.gravity) this.setGravity(data.gravity.x, data.gravity.y, data.gravity.enabled !== false);
     if (data.rng && Number.isFinite(data.rng.state)) {
       // Restore the RNG stream exactly where the snapshot left it, so a
@@ -902,7 +920,21 @@ export class PhysicsEngine {
       this._rngState = data.rng.state >>> 0;
     }
     if (Number.isFinite(data.simMs)) this._simMs = Math.max(0, data.simMs);
-    return { bodies, constraints, fluids, winds, hinges };
+    // Keep the id sequence ahead of every loaded id (1.12.8): a host
+    // that loads a snapshot into a FRESH engine and then adds entries
+    // with auto ids would otherwise reissue an existing id and
+    // silently overwrite a loaded entry in its map (found via emitter
+    // spawns after a snapshot load — five spawned balls "vanished"
+    // into overwritten map slots while the originals kept simulating
+    // as orphans in the composite).
+    const bump = (id) => { const m = /-(\d+)$/.exec(id || ''); if (m) this._seq = Math.max(this._seq, Number(m[1]) + 1); };
+    for (const id of this._byId.keys()) bump(id);
+    for (const id of this._cons.keys()) bump(id);
+    for (const id of this._hinges.keys()) bump(id);
+    for (const id of this._fluids.keys()) bump(id);
+    for (const id of this._winds.keys()) bump(id);
+    for (const id of this._emitters.keys()) bump(id);
+    return { bodies, constraints, fluids, winds, hinges, emitters };
   }
   snapshot() {
     return {
@@ -911,6 +943,7 @@ export class PhysicsEngine {
       hinges: this.describeHinges(),
       fluids: this.fluids(),
       winds: this.winds(),
+      emitters: this.emitters(),
       rng: { seed: this._seed, state: this._rngState },
       simMs: this._simMs,
     };
@@ -961,6 +994,10 @@ export class PhysicsEngine {
     // Orphan-sleeper probe (every 15 fixed steps): a sleeper whose
     // support was deleted or dragged away must fall, not hover.
     if (this.enableSleeping && Math.round(this._simMs / this.fixedDt) % 15 === 0) this._wakeOrphans();
+    // Emitters fire at the very end of the fixed step (1.12.8): the new
+    // body first participates in the NEXT step, and the schedule is a
+    // pure function of the step index, so replays reproduce it exactly.
+    if (this._emitters.size) this._runEmitters(Math.round(this._simMs / this.fixedDt));
   }
 
   /** Wake sleeping bodies that have lost every support (see the
@@ -1455,6 +1492,77 @@ export class PhysicsEngine {
    *  for render loops and other per-frame readers (1.6.0). */
   forEachWind(fn) { for (const w of this._winds.values()) fn(w); }
   get windCount() { return this._winds.size; }
+
+  /* ---------------- emitters (point spawners, 1.12.8) ----------------
+     An emitter is a fixed point that creates bodies on a schedule:
+     every round(60 / rate) fixed steps it spawns one body of the
+     template kind ('circle' | 'rect'), `size` px (circle radius; rect
+     side = 2·size), launched at `speed` px/step along `angle`. The
+     schedule derives only from the fixed-step index, and the sim
+     clock rides snapshots — so a recorded run and its replay spawn
+     the same bodies at the same steps. Spawned bodies are tagged
+     (desc.emitter = emitter id); when the alive count reaches `cap`
+     the OLDEST spawned body is removed to make room, so fountains
+     run forever without unbounded growth. A global ceiling (1500
+     bodies) additionally stops spawning in packed worlds. Template
+     physics is fixed for now: density 0.001, friction 0.3,
+     frictionAir 0.001, restitution 0.3. */
+  /**
+   * Add an emitter: { id?, x, y, angle = 0 (rad), rate = 4 (/s),
+   * kind = 'circle', size = 16, speed = 8 (px/step), cap = 60,
+   * enabled = true }. Returns the stored record (a copy).
+   */
+  addEmitter(partial = {}) {
+    const rec = {
+      id: typeof partial.id === 'string' && partial.id ? partial.id : `emitter-${this._seq++}`,
+      x: num(partial.x, 0), y: num(partial.y, 0),
+      angle: num(partial.angle, 0),
+      rate: Math.min(30, Math.max(0.2, num(partial.rate, 4))),
+      kind: partial.kind === 'rect' ? 'rect' : 'circle',
+      size: Math.min(80, Math.max(6, num(partial.size, 16))),
+      speed: Math.min(30, Math.max(0, num(partial.speed, 8))),
+      cap: Math.min(200, Math.max(1, Math.round(num(partial.cap, 60)))),
+      enabled: partial.enabled !== false,
+    };
+    this._emitters.set(rec.id, rec);
+    this._emitChange();
+    return { ...rec };
+  }
+  removeEmitter(id) {
+    const ok = this._emitters.delete(id);
+    if (ok) this._emitChange();
+    return ok;
+  }
+  clearEmitters() { this._emitters.clear(); }
+  emitterById(id) { const e = this._emitters.get(id); return e ? { ...e } : null; }
+  /** All emitters (copies), in insertion order. */
+  emitters() { return [...this._emitters.values()].map((e) => ({ ...e })); }
+  /** Allocation-free iteration over the LIVE emitter records — read-only. */
+  forEachEmitter(fn) { for (const e of this._emitters.values()) fn(e); }
+  get emitterCount() { return this._emitters.size; }
+
+  _runEmitters(stepIdx) {
+    for (const e of this._emitters.values()) {
+      if (!e.enabled) continue;
+      const interval = Math.max(1, Math.round(60 / e.rate));
+      if (stepIdx % interval !== 0) continue;
+      if (this._byId.size >= 1500) continue;
+      let alive = 0, oldestId = null;
+      for (const b of this._bodies()) {
+        if (b.plugin.pe.desc.emitter === e.id) { alive++; if (oldestId === null) oldestId = b.plugin.pe.id; }
+      }
+      if (alive >= e.cap && oldestId !== null) this.removeBody(oldestId);
+      const c = Math.cos(e.angle), s = Math.sin(e.angle);
+      const off = e.size + 4;
+      this.addBody({
+        kind: e.kind, x: e.x + c * off, y: e.y + s * off,
+        radius: e.size, width: e.size * 2, height: e.size * 2,
+        density: 0.001, friction: 0.3, frictionAir: 0.001, restitution: 0.3,
+        vx: c * e.speed, vy: s * e.speed,
+        emitter: e.id, label: 'Emitter',
+      });
+    }
+  }
   /** Simulated milliseconds elapsed (the gust clock); rides snapshots. */
   get simTime() { return this._simMs; }
 

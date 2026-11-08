@@ -464,6 +464,33 @@ function poolWorld() {
   e.endDrag();
   check('drag state clears on endDrag', e.dragging === false && e.dragBody === null);
 }
+/* --- v1.12.8: emitters (twin of the Matter facade) --- */
+{
+  const e = new NativeEngine({ enableSleeping: true });
+  e.setGravity(0, 0, false);
+  const em = e.addEmitter({ x: 100, y: 100, angle: 0, rate: 6, kind: 'circle', size: 10, speed: 5, cap: 60 });
+  check('emitters: registry reads back on Native', e.emitterCount === 1 && e.emitterById(em.id).rate === 6);
+  step(e, 120);
+  const spawned = [...e._byId.values()].filter((b) => e.describeBody(b).emitter === em.id);
+  check('emitters: rate 6/s spawns exactly 12 bodies in 120 steps on Native', spawned.length === 12, `n=${spawned.length}`);
+  check('emitters: snapshot carries emitters; a fresh load restores them',
+    e.snapshot().emitters.length === 1 && (() => { const q = new NativeEngine({}); q.load(JSON.parse(JSON.stringify(e.snapshot()))); return q.emitterCount === 1; })());
+  const e2 = new NativeEngine({ enableSleeping: true });
+  e2.setGravity(0, 0, false);
+  e2.addEmitter({ x: 0, y: 0, angle: 0, rate: 60, size: 8, speed: 0, cap: 5 });
+  step(e2, 60);
+  check('emitters: the cap recycles the oldest on Native (alive stays at cap)', e2.count === 5, `n=${e2.count}`);
+  // restore-vs-restore determinism with an emitter mid-run (replay path)
+  const mk = () => { const p = new NativeEngine({ enableSleeping: true, seed: 42 }); p.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true }); p.addEmitter({ x: 200, y: 80, angle: Math.PI / 2, rate: 12, size: 12, speed: 2, cap: 40 }); return p; };
+  const src = mk(); step(src, 150);
+  const snap = JSON.parse(JSON.stringify(src.snapshot()));
+  const c1 = new NativeEngine({ enableSleeping: true, seed: 42 }); c1.load(snap);
+  const c2 = new NativeEngine({ enableSleeping: true, seed: 42 }); c2.load(snap);
+  step(c1, 150); step(c2, 150);
+  const h = (p) => [...p._byId.values()].map((b) => { const d = p.describeBody(b); return `${d.id}@${d.x.toFixed(4)},${d.y.toFixed(4)}`; }).join('|');
+  check('emitters: restore-vs-restore stays bit-identical on Native', h(c1) === h(c2) && c1.count === 41, `n=${c1.count}`);
+}
+
 /* --- framed world: a ball bouncing off a spring-hung box stays inside
        and settles (audit A re-test with the app frame, 2026-11-06) --- */
 {

@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 globalThis.Matter = require('../vendor/matter.min.js');
 
-const { validateScene, defaultScene, sceneData, bodyData, constraintData, hingeData, fluidData, presetScenes, jitteredScene, sceneJsonTooLarge, MAX_SCENE_JSON_BYTES } = await import('../js/scene.js');
+const { validateScene, defaultScene, sceneData, bodyData, constraintData, hingeData, fluidData, emitterData, presetScenes, jitteredScene, sceneJsonTooLarge, MAX_SCENE_JSON_BYTES } = await import('../js/scene.js');
 const { PhysicsWorld } = await import('../js/physics.js');
 
 let pass = 0, fail = 0;
@@ -499,6 +499,22 @@ for (const p of presets) {
     wetTurn < dryTurn * 0.82, `dry ${dryTurn.toFixed(0)}° wet ${wetTurn.toFixed(0)}°`);
   check('fluid flow: fluidData keeps vx/vy and validation accepts them',
     fluidData({ vx: 2 }).vx === 2 && validateScene(sceneData({ fluids: [fluidData({ vx: 1.5, vy: -1 })] })).ok);
+}
+
+/* --- v1.56: emitters at scene level --- */
+{
+  const ed = emitterData({});
+  check('emitterData defaults: circle, 4/s, downward', ed.kind === 'circle' && ed.rate === 4 && Math.abs(ed.angle - Math.PI / 2) < 1e-9 && ed.cap === 60);
+  check('emitterData clamps out-of-range fields', emitterData({ rate: 999, size: 1, cap: 0 }).rate === 30 && emitterData({ size: 999 }).size === 80);
+  const sc = sceneData({ name: 'EM', emitters: [emitterData({ rate: 9, kind: 'rect' })] });
+  const rt = JSON.parse(JSON.stringify(sc));
+  check('scene roundtrip keeps emitters', rt.emitters.length === 1 && rt.emitters[0].rate === 9 && rt.emitters[0].kind === 'rect');
+  check('validate accepts a scene with emitters', validateScene(rt).ok);
+  const many = sceneData({ emitters: Array.from({ length: 9 }, () => emitterData({})) });
+  check('validate rejects more than 8 emitters', !validateScene(many).ok);
+  const bad = JSON.parse(JSON.stringify(sc)); bad.emitters[0].rate = 'fast';
+  check('validate rejects a non-numeric emitter rate', !validateScene(bad).ok);
+  check('bodyData keeps the emitter tag', bodyData({ emitter: 'emitter-1' }).emitter === 'emitter-1' && bodyData({}).emitter === '');
 }
 
 /* --- v1.23: gravitation / fluids / rename get lab entries (scene level) --- */

@@ -16,6 +16,7 @@ function mlToDesc(d) {
     density: d.density, friction: d.friction, frictionAir: d.frictionAir,
     restitution: d.restitution, isStatic: d.isStatic, lockRotation: d.lockRotation,
     noSleep: d.noSleep === true,
+    emitter: d.emitter || '',
     magnet: d.magnet,
     vx: d.vx, vy: d.vy, label: d.label,
     // The scene label doubles as the engine-level body name (1.4.0), so
@@ -97,6 +98,7 @@ export class PhysicsWorld {
     for (const h of scene.hinges || []) this.addHinge(h);
     for (const f of scene.fluids || []) this.core.addFluid(f);
     for (const w of scene.winds || []) this.core.addWind(w);
+    for (const e of scene.emitters || []) this.core.addEmitter(e);
     this.applySettings(scene.settings);
   }
 
@@ -138,6 +140,21 @@ export class PhysicsWorld {
   setMagnet(body, v) { this.core.setMagnet(body, v); }
   magnetOf(body) { return this.core.magnetOf(body); }
 
+  /* ---------- emitters (point spawners, 1.56 / core 1.12.8) ---------- */
+  addEmitter(e) { return this.core.addEmitter(e); }
+  removeEmitter(id) { return this.core.removeEmitter(id); }
+  emitterById(id) { return this.core.emitterById(id); }
+  emitters() { return this.core.emitters(); }
+  forEachEmitter(fn) { this.core.forEachEmitter(fn); }
+  get emitterCount() { return this.core.emitterCount; }
+  /** Replace an emitter's fields (the engine has no in-place update). */
+  updateEmitter(id, patch) {
+    const e = this.core.emitterById(id);
+    if (!e) return null;
+    this.core.removeEmitter(id);
+    return this.core.addEmitter({ ...e, ...patch, id });
+  }
+
   bodyById(dataId) { return this.core.bodyById(dataId); }
   /** Engine-level naming (1.4.0): find / rename scene bodies by label-name. */
   bodyByName(name) { return this.core.getBodyByName(name); }
@@ -166,6 +183,7 @@ export class PhysicsWorld {
       density: d.density, friction: d.friction, frictionAir: d.frictionAir,
       restitution: d.restitution, isStatic: d.isStatic, magnet: d.magnet,
       isBound: ud.isBound === true, lockRotation: d.lockRotation, noSleep: d.noSleep === true,
+      emitter: d.emitter || '',
       // A rename done through the engine wins over the creation label.
       vx: d.vx, vy: d.vy, label: d.name || d.label,
     });
@@ -178,6 +196,7 @@ export class PhysicsWorld {
       hinges: this.serializeHinges(),
       fluids: this.core.fluids(),
       winds: this.core.winds(),
+      emitters: this.core.emitters(),
     };
   }
 

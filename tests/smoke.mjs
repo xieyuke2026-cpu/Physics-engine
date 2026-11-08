@@ -198,8 +198,8 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.55')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.12.7')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.56')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.12.8')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
@@ -278,6 +278,24 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   await wait(60);
   check('v1.23: scene panel lists the fluid next to the bodies',
     panelBody.textContent.includes('流体 1') && panelBody.querySelectorAll('.obj-row').length === 10,
+    `rows=${panelBody.querySelectorAll('.obj-row').length}`);
+  const addEmitterBtn = [...panelBody.querySelectorAll('.btn')].find((b) => b.textContent.includes('添加发射器'));
+  check('v1.56: scene panel exposes the add-emitter entry', !!addEmitterBtn);
+  click(addEmitterBtn);
+  await wait(60);
+  check('v1.56: adding an emitter opens its editor (rate / direction)',
+    panelBody.textContent.includes('发射器 Emitter') && panelBody.textContent.includes('速率 Rate'),
+    panelBody.textContent.slice(0, 120));
+  const backBtn2 = [...panelBody.querySelectorAll('.btn')].find((b) => b.textContent.includes('返回场景属性'));
+  click(backBtn2);
+  await wait(60);
+  check('v1.56: scene panel lists the emitter', panelBody.textContent.includes('发射器 1'),
+    panelBody.textContent.slice(0, 120));
+  const emitterRow = [...panelBody.querySelectorAll('.obj-row')].find((rw) => rw.textContent.includes('发射器 1'));
+  click(emitterRow.querySelector('.o-del'));
+  await wait(60);
+  check('v1.56: deleting the emitter from its list row removes it',
+    !panelBody.textContent.includes('发射器 1') && panelBody.querySelectorAll('.obj-row').length === 10,
     `rows=${panelBody.querySelectorAll('.obj-row').length}`);
   const groundRow = [...panelBody.querySelectorAll('.obj-row')].find((rw) => rw.textContent.includes('Ground'));
   click(groundRow);

@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.55';
+export const APP_VERSION = '1.56';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -57,14 +57,16 @@ export class Panel {
    *        onBodyAction(action), onSelectBody(id), onDeleteBody(id), onGravityPreset(key),
    *        onBodyRename(name), onAddFluid(), onSelectFluid(id), onDeleteFluid(id),
    *        onFluidProp(id,key,value), onAddWind(), onSelectWind(id), onDeleteWind(id),
+   *        onAddEmitter(), onSelectEmitter(id), onDeleteEmitter(id), onEmitterProp(id,key,value),
    *        onWindProp(id,key,value), onShowScene(), onAddMagnet(), onMaterialPreset(key),
    *        onHingeProp(id,key,value), onDeleteHinge(id) } */
   constructor(root, cb) {
     this.root = root;
     this.cb = cb;
-    this.mode = null;       // 'body' | 'scene' | 'fluid' | 'wind' | 'hinge'
+    this.mode = null;       // 'body' | 'scene' | 'fluid' | 'wind' | 'hinge' | 'emitter'
     this.selectedId = null;
     this.selectedHingeId = null;
+    this.selectedEmitterId = null;
     this.staticDragId = null; // body id with static-drag armed (set by the app)
     this.inputs = new Map();
     this.ro = {};
@@ -102,14 +104,15 @@ export class Panel {
     return this.backendId === 'native' ? L('Native（自研）', 'Native (self-developed)') : 'Matter.js';
   }
 
-  showScene(settings, bodies, fluids, winds) {
+  showScene(settings, bodies, fluids, winds, emitters) {
     const list = Array.isArray(bodies) ? bodies : [];
     const flist = Array.isArray(fluids) ? fluids : [];
     const wlist = Array.isArray(winds) ? winds : [];
-    const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',') + '|' + wlist.map((w) => `${w.id}:${w.vx},${w.vy}`).join(',') + '|seed:' + (settings.seed ?? '') + '|be:' + (this.backendId || 'matter');
+    const elist = Array.isArray(emitters) ? emitters : [];
+    const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',') + '|' + wlist.map((w) => `${w.id}:${w.vx},${w.vy}`).join(',') + '|' + elist.map((e) => `${e.id}:${e.rate},${e.kind},${e.enabled}`).join(',') + '|seed:' + (settings.seed ?? '') + '|be:' + (this.backendId || 'matter');
     if (this.mode === 'scene' && this.root.childElementCount && this._sceneSig === sig) { this.refreshScene(settings, list.length); return; }
     this._sceneSig = sig;
-    this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null;
+    this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('场景属性 Scene', 'Scene Properties')));
     const ro = el(`<div class="readonly-grid"><span>${L('物体数量', 'Bodies')}</span><b data-ro="count">${list.length}</b>
@@ -182,6 +185,22 @@ export class Panel {
       });
       r.appendChild(wwrap);
     }
+    r.appendChild(el(`<p class="empty-note">${L('发射器是一个定点喷口：运行时按设定速率朝一个方向喷出圆球或方块，造球雨、瀑布、自动流水线都靠它。喷出的物体达到「上限」后，最早的那颗会被回收，喷泉不会无限涨。点「添加」在舞台上方放一个朝下喷的发射器，再点选它改速率、方向和大小；发射器在画布上可以直接拖动改位置。', 'An emitter is a fixed nozzle: while the simulation runs it fires circles or squares in one direction at a set rate — ball rain, waterfalls and automatic assembly lines. When spawned bodies reach the Cap, the oldest one is recycled, so a fountain never grows without bound. Add one above the stage firing downward, then click it to edit rate, direction and size — emitters can be dragged on the canvas to move them.')}</p>`));
+    const addEmitter = el(`<button class="btn block">${icon('plus', 16)}${L(' 添加发射器（喷物体）', ' Add Emitter (spawns bodies)')}</button>`);
+    addEmitter.addEventListener('click', () => this.cb.onAddEmitter());
+    r.appendChild(addEmitter);
+    if (elist.length) {
+      const ewrap = el('<div class="obj-list"></div>');
+      elist.forEach((e, i) => {
+        const rowEl = el(`<button class="obj-row"><span class="o-name">${L(`发射器 ${i + 1}`, `Emitter ${i + 1}`)}</span><span class="o-type">${e.kind === 'rect' ? L('方块', 'square') : L('圆球', 'circle')} · ${e.rate}/s${e.enabled ? '' : L(' · 已停用', ' · off')}</span></button>`);
+        rowEl.addEventListener('click', () => this.cb.onSelectEmitter(e.id));
+        const del = el(`<span class="tb-btn icon o-del">${icon('trash', 16)}</span>`);
+        del.addEventListener('click', (ev) => { ev.stopPropagation(); this.cb.onDeleteEmitter(e.id); });
+        rowEl.appendChild(del);
+        ewrap.appendChild(rowEl);
+      });
+      r.appendChild(ewrap);
+    }
     r.appendChild(el(`<p class="empty-note">${L('磁铁是一个固定不动的圆：自带磁极，会吸住或推开附近的磁性物体与铁质物体。点「添加」在画布中心放一个 N 极磁铁（+100），选中后在它的「材质」一节改磁性数值就能换成 S 极；左侧工具栏的磁铁工具也可以直接在画布上放。', 'A magnet is a fixed circle with a pole: it attracts or repels nearby magnetic and iron bodies. Add one at the canvas centre (N pole, +100), then select it and change the Magnetism value in its Material section to flip it to S — or place magnets directly with the Magnet tool in the left rail.')}</p>`));
     const addMagnet = el(`<button class="btn block">${icon('magnet', 16)}${L(' 添加磁铁（N 极）', ' Add Magnet (N pole)')}</button>`);
     addMagnet.addEventListener('click', () => this.cb.onAddMagnet());
@@ -227,7 +246,7 @@ export class Panel {
   showBody(data, live) {
     const sameTarget = this.mode === 'body' && this.selectedId === data.id;
     if (sameTarget) { this.refreshBody(live); return; }
-    this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null;
+    this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('物体属性 Object', 'Object Properties')));
     const head = el(`<div class="readonly-grid"><span>${L('类型 Type', 'Type')}</span><b>${typeLabel(data.type)}</b>
@@ -345,7 +364,7 @@ export class Panel {
   /** Wind-region editor: geometry + wind velocity/power, wired to onWindProp. */
   showWind(wind) {
     if (this.mode === 'wind' && this.selectedWindId === wind.id && this.root.childElementCount) return;
-    this.mode = 'wind'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = wind.id; this.selectedHingeId = null;
+    this.mode = 'wind'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = wind.id; this.selectedHingeId = null; this.selectedEmitterId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('风场区域 Wind · 风', 'Wind Region')));
     r.appendChild(el(`<p class="empty-note">${L('区域内的物体被吹向风速 (vx, vy) 的方向：密度越小吹得越快（按 0.0012 ÷ 物体密度 放大），密实重物几乎不动。负数表示向左/向上吹。强度 Power 整体放大或减弱这个效果。也可以直接在画布上拖动这块区域来移动它。', 'Bodies inside are blended toward the wind velocity (vx, vy): the lower a body\'s density, the faster it goes (scaled by 0.0012 ÷ body density); dense blocks barely stir. Negative values blow left/up. Power scales the whole effect. You can also drag this region on the canvas to move it.')}</p>`));
@@ -410,7 +429,7 @@ export class Panel {
   /** Fluid-region editor: geometry + density/drag, wired to onFluidProp. */
   showFluid(fluid) {
     if (this.mode === 'fluid' && this.selectedFluidId === fluid.id && this.root.childElementCount) return;
-    this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id; this.selectedWindId = null; this.selectedHingeId = null;
+    this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('流体区域 Fluid · 浮力', 'Fluid Region · Buoyancy')));
     r.appendChild(el(`<p class="empty-note">${L('区域上沿是液面。浮力按「流体密度 ÷ 物体密度 × 浸没比例」计算：物体密度小于流体就浮起，大于就沉底。默认水的密度约 0.0012。也可以直接在画布上拖动这块区域来移动它。', 'The top edge of the region is the surface. Buoyancy = fluid density ÷ body density × submerged fraction: bodies less dense than the fluid float, denser ones sink. Default water density ≈ 0.0012. You can also drag this region on the canvas to move it.')}</p>`));
@@ -435,6 +454,44 @@ export class Panel {
     this._wireNumbers(r, (k, v) => {
       const map = { fx: 'x', fy: 'y', fwidth: 'width', fheight: 'height', fdensity: 'density', fdrag: 'drag', fvx: 'vx', fvy: 'vy' };
       if (map[k]) this.cb.onFluidProp(fluid.id, map[k], v);
+    });
+    this._collectInputs();
+  }
+
+  /** Emitter editor (1.56): geometry + template + schedule, wired to
+   *  onEmitterProp. Angle is edited in degrees, stored in radians. */
+  showEmitter(em) {
+    if (this.mode === 'emitter' && this.selectedEmitterId === em.id && this.root.childElementCount) return;
+    this.mode = 'emitter'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = em.id;
+    const r = this.root; r.innerHTML = '';
+    r.appendChild(title(L('发射器 Emitter · 喷物体', 'Emitter · Spawner')));
+    r.appendChild(el(`<p class="empty-note">${L('运行时按速率朝「方向」喷出物体，喷发节奏只跟模拟步走，所以录制的回放会一颗不差地重演。达到上限后最早喷出的会被回收。也可以直接在画布上拖动发射器改位置。', 'While running, it fires bodies along its Direction at the set Rate — the schedule follows simulation steps only, so recorded replays re-fire identically. At the Cap the oldest spawned body is recycled. You can also drag the emitter on the canvas to move it.')}</p>`));
+    r.appendChild(row(
+      numField(L('位置 X', 'Position X'), 'ex', em.x, { step: 5 }),
+      numField(L('位置 Y', 'Position Y'), 'ey', em.y, { step: 5 }),
+    ));
+    const kindRow = el('<div class="chip-row"></div>');
+    for (const [kind, label] of [['circle', L('圆球 Circle', 'Circle')], ['rect', L('方块 Square', 'Square')]]) {
+      const c = el(`<button class="chip${em.kind === kind ? ' active' : ''}">${label}</button>`);
+      c.addEventListener('click', () => { this.cb.onEmitterProp(em.id, 'kind', kind); this.mode = null; this.showEmitter({ ...em, kind }); });
+      kindRow.appendChild(c);
+    }
+    r.appendChild(kindRow);
+    r.appendChild(sliderField(L('速率 Rate（个/秒）', 'Rate (per second)'), 'erate', em.rate, 0.5, 20, 0.5));
+    r.appendChild(sliderField(L('大小 Size', 'Size'), 'esize', em.size, 6, 60, 1));
+    r.appendChild(sliderField(L('初速 Speed（px/步）', 'Speed (px/step)'), 'espeed', em.speed, 0, 20, 0.5));
+    r.appendChild(numField(L('方向 Direction（度，0=右，90=下）', 'Direction (deg, 0=right, 90=down)'), 'eangle', Math.round(em.angle * 180 / Math.PI), { step: 5, min: -180, max: 180 }));
+    r.appendChild(numField(L('上限 Cap（同时存在）', 'Cap (alive at once)'), 'ecap', em.cap, { step: 5, min: 1, max: 200 }));
+    r.appendChild(switchRow(L('启用 Enabled', 'Enabled'), 'eenabled', em.enabled));
+    const back = el(`<button class="btn block">${L('返回场景属性', 'Back to Scene Properties')}</button>`);
+    back.addEventListener('click', () => this.cb.onShowScene());
+    const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除发射器', ' Delete Emitter')}</button>`);
+    del.addEventListener('click', () => this.cb.onDeleteEmitter(em.id));
+    r.appendChild(back); r.appendChild(del);
+    this._wireNumbers(r, (k, v) => {
+      const map = { ex: 'x', ey: 'y', erate: 'rate', esize: 'size', espeed: 'speed', ecap: 'cap', eenabled: 'enabled' };
+      if (k === 'eangle') { this.cb.onEmitterProp(em.id, 'angle', v * Math.PI / 180); return; }
+      if (map[k]) this.cb.onEmitterProp(em.id, map[k], v);
     });
     this._collectInputs();
   }
@@ -467,7 +524,7 @@ export class Panel {
     this._chalPhase = vm.phase;
     if (this.mode === 'challenge' && this._chalSig === sig && this.root.childElementCount) { this.updateChallengeStats(vm); return; }
     this._chalSig = sig;
-    this.mode = 'challenge'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null;
+    this.mode = 'challenge'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('挑战 Challenge', 'Challenge')));
     r.appendChild(el(`<div class="chal-name">${vm.title}</div>`));

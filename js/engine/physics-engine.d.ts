@@ -50,6 +50,8 @@ export interface BodyDescriptor {
   sleeping?: boolean;
   /** Never enter sleep (for slow-instability bodies like dominoes). */
   noSleep?: boolean;
+  /** Id of the emitter that spawned this body ('' / undefined = placed). */
+  emitter?: string;
   /** Display name; look bodies up with `getBodyByName`. */
   name?: string;
   /** Signed magnet strength; 0 / undefined = unmagnetised. */
@@ -161,6 +163,30 @@ export interface Wind extends WindDescriptor {
   id: string;
 }
 
+export interface EmitterDescriptor {
+  id?: string;
+  x: number;
+  y: number;
+  /** Launch direction in radians (0 = +x, π/2 = +y/down). */
+  angle?: number;
+  /** Spawns per second, 0.2–30 (fires every round(60/rate) fixed steps). */
+  rate?: number;
+  /** Template shape: 'circle' (radius = size) or 'rect' (side = 2·size). */
+  kind?: 'circle' | 'rect';
+  /** Template size in px, 6–80. */
+  size?: number;
+  /** Launch speed in px/step, 0–30. */
+  speed?: number;
+  /** Max simultaneously alive spawned bodies, 1–200 (oldest recycled). */
+  cap?: number;
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
+export interface Emitter extends EmitterDescriptor {
+  id: string;
+}
+
 export interface EngineOptions {
   /** Backend id: 'matter' (default) or 'native'. */
   backend?: string;
@@ -192,6 +218,7 @@ export interface EngineSnapshot {
   hinges: HingeDescriptor[];
   fluids: FluidDescriptor[];
   winds: WindDescriptor[];
+  emitters: EmitterDescriptor[];
   gravity: { x: number; y: number; enabled: boolean };
   gravitation: number;
   magnetism: number;
@@ -364,6 +391,13 @@ export declare class PhysicsEngine {
   winds(): Wind[];
   forEachWind(fn: (wind: Wind) => void): void;
   clearWinds(): void;
+  addEmitter(desc: EmitterDescriptor): Emitter;
+  removeEmitter(id: string): boolean;
+  emitterById(id: string): Emitter | null;
+  emitters(): Emitter[];
+  forEachEmitter(fn: (emitter: Emitter) => void): void;
+  clearEmitters(): void;
+  readonly emitterCount: number;
 
   // ----- drag (physics picking) -----
   beginDrag(body: Body, wx: number, wy: number): void;

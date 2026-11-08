@@ -66,6 +66,7 @@ export function bodyData(partial = {}) {
     isBound: partial.isBound === true,       // ground / walls that belong to the scene frame
     lockRotation: partial.lockRotation === true,
     noSleep: partial.noSleep === true,
+    emitter: typeof partial.emitter === 'string' ? partial.emitter.slice(0, 64) : '', // spawning emitter id (1.56)
     vx: num(partial.vx, 0),
     vy: num(partial.vy, 0),
     label: typeof partial.label === 'string' ? partial.label.slice(0, MAX_BODY_LABEL_LEN) : '',
@@ -147,6 +148,26 @@ export function windData(partial = {}) {
   };
 }
 
+/** A plain-data emitter (point spawner, 1.56). (x, y) is the spawn
+ *  point; angle is the launch direction in radians; rate is spawns per
+ *  second; size is the template radius (rect side = 2·size); speed is
+ *  the launch speed in px/step; cap bounds simultaneously alive
+ *  spawned bodies. Mirrors PhysicsEngine.addEmitter's clamps. */
+export function emitterData(partial = {}) {
+  return {
+    id: typeof partial.id === 'string' && partial.id ? partial.id : nextId('emitter'),
+    x: num(partial.x, 640),
+    y: num(partial.y, 120),
+    angle: num(partial.angle, Math.PI / 2),
+    rate: Math.min(30, Math.max(0.2, num(partial.rate, 4))),
+    kind: partial.kind === 'rect' ? 'rect' : 'circle',
+    size: Math.min(80, Math.max(6, num(partial.size, 16))),
+    speed: Math.min(30, Math.max(0, num(partial.speed, 8))),
+    cap: Math.min(200, Math.max(1, Math.round(num(partial.cap, 60)))),
+    enabled: partial.enabled !== false,
+  };
+}
+
 export function sceneData(partial = {}) {
   return {
     format: SCENE_FORMAT,
@@ -158,6 +179,7 @@ export function sceneData(partial = {}) {
     hinges: Array.isArray(partial.hinges) ? partial.hinges.map(hingeData).filter((h) => h.bodyB) : [],
     fluids: Array.isArray(partial.fluids) ? partial.fluids.map(fluidData) : [],
     winds: Array.isArray(partial.winds) ? partial.winds.map(windData) : [],
+    emitters: Array.isArray(partial.emitters) ? partial.emitters.map(emitterData) : [],
     updatedAt: typeof partial.updatedAt === 'number' ? partial.updatedAt : Date.now(),
   };
 }
@@ -293,6 +315,21 @@ export function validateScene(raw) {
         }
         if ((w.x !== undefined && Math.abs(Number(w.x)) > 100000) || (w.y !== undefined && Math.abs(Number(w.y)) > 100000)) {
           errors.push(`winds[${i}] 坐标超出范围 ±100000`);
+        }
+      });
+    }
+  }
+  if (raw.emitters !== undefined) {
+    if (!Array.isArray(raw.emitters)) errors.push('emitters 必须是数组');
+    else {
+      if (raw.emitters.length > 8) errors.push('发射器数量超过上限 8');
+      raw.emitters.forEach((e, i) => {
+        if (!e || typeof e !== 'object') { errors.push(`emitters[${i}] 不是对象`); return; }
+        for (const k of ['x', 'y', 'angle', 'rate', 'size', 'speed', 'cap']) {
+          if (e[k] !== undefined && !Number.isFinite(Number(e[k]))) errors.push(`emitters[${i}].${k} 必须是有限数字`);
+        }
+        if ((e.x !== undefined && Math.abs(Number(e.x)) > 100000) || (e.y !== undefined && Math.abs(Number(e.y)) > 100000)) {
+          errors.push(`emitters[${i}] 坐标超出范围 ±100000`);
         }
       });
     }

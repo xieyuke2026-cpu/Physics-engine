@@ -3,7 +3,7 @@
    drawing in render.js, panel DOM in ui.js, persistence in storage.js. */
 
 import { icon, TOOL_ICONS } from './icons.js';
-import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene, MAX_SCENE_JSON_BYTES, sceneJsonTooLarge } from './scene.js';
+import { sceneData, bodyData, constraintData, hingeData, fluidData, windData, emitterData, validateScene, defaultScene, presetScenes, DEFAULT_SETTINGS, jitteredScene, MAX_SCENE_JSON_BYTES, sceneJsonTooLarge } from './scene.js';
 import { createRecording, recordEvent, finalizeRecording, validateReplay, hashBodyStates, statesFromSnapshot, eventsByStep, MAX_REPLAY_STEPS, MAX_REPLAY_BYTES } from './replay.js';
 import { createVideoRecorder, videoSupported } from './video.js';
 import { CHALLENGES, challengeById, GoalTracker, pointInZone, starsFor } from './challenges.js';
@@ -46,6 +46,7 @@ let staticDragId = null; // body id armed for direct static dragging (panel togg
 let selectedFluidId = null;
 let selectedWindId = null;
 let selectedHingeId = null;
+let selectedEmitterId = null;
 let initialSnapshot = null;   // for Reset: state at load / last save
 let preview = null;
 let dragPoint = null;
@@ -73,6 +74,7 @@ function currentScene() {
     hinges: world.serializeHinges(),
     fluids: world.fluids(),
     winds: world.winds(),
+    emitters: world.emitters(),
   });
 }
 
@@ -89,6 +91,7 @@ function loadScene(scene, { markInitial = true } = {}) {
   selectedFluidId = null;
   selectedWindId = null;
   selectedHingeId = null;
+  selectedEmitterId = null;
   springStart = null; springCur = null;
   hingeStart = null; hingeCur = null;
   renderer.clearTrails();
@@ -193,7 +196,7 @@ function addMagnetAt(x, y, radius = 26) {
   recEvent('add', { body: world.serializeBody(b) });
   if (challenge) challenge.added.add(world.dataIdOf(b));
   selectedId = world.dataIdOf(b);
-  selectedFluidId = null; selectedWindId = null; selectedHingeId = null;
+  selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null;
   refreshPanel(); pushHistorySoon(); scheduleAutosave();
   toast(t('msg.magnetAdded'));
   return b;
@@ -244,6 +247,7 @@ const panel = new Panel($('panelBody'), {
     selectedFluidId = null;
     selectedWindId = null;
     selectedHingeId = null;
+    selectedEmitterId = null;
     refreshPanel();
   },
   onDeleteBody(id) {
@@ -334,13 +338,13 @@ const panel = new Panel($('panelBody'), {
     if (challenge && challenge.phase === 'run') { toast(t('chal.needBuild')); return; }
     const f = world.addFluid(fluidData({}));
     recRegions();
-    selectedFluidId = f.id; selectedId = null; selectedWindId = null; selectedHingeId = null;
+    selectedFluidId = f.id; selectedId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.fluidAdded'));
   },
   onSelectFluid(id) {
     if (!world.fluidById(id)) return;
-    selectedFluidId = id; selectedId = null; selectedWindId = null; selectedHingeId = null;
+    selectedFluidId = id; selectedId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null;
     refreshPanel();
   },
   onDeleteFluid(id) {
@@ -359,13 +363,13 @@ const panel = new Panel($('panelBody'), {
     if (challenge && challenge.phase === 'run') { toast(t('chal.needBuild')); return; }
     const w = world.addWind(windData({}));
     recRegions();
-    selectedWindId = w.id; selectedId = null; selectedFluidId = null; selectedHingeId = null;
+    selectedWindId = w.id; selectedId = null; selectedFluidId = null; selectedHingeId = null; selectedEmitterId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.windAdded'));
   },
   onSelectWind(id) {
     if (!world.windById(id)) return;
-    selectedWindId = id; selectedId = null; selectedFluidId = null; selectedHingeId = null;
+    selectedWindId = id; selectedId = null; selectedFluidId = null; selectedHingeId = null; selectedEmitterId = null;
     refreshPanel();
   },
   onDeleteWind(id) {
@@ -380,7 +384,33 @@ const panel = new Panel($('panelBody'), {
     recRegions();
     pushHistorySoon(); scheduleAutosave();
   },
-  onShowScene() { chalDismissed = true; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; refreshPanel(); },
+  onAddEmitter() {
+    if (challenge && challenge.phase === 'run') { toast(t('chal.needBuild')); return; }
+    if (world.emitterCount >= 8) { toast(t('msg.emitterLimit')); return; }
+    const e = world.addEmitter(emitterData({}));
+    recRegions();
+    selectedEmitterId = e.id; selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.emitterAdded'));
+  },
+  onSelectEmitter(id) {
+    if (!world.emitterById(id)) return;
+    selectedEmitterId = id; selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null;
+    refreshPanel();
+  },
+  onDeleteEmitter(id) {
+    world.removeEmitter(id);
+    recRegions();
+    if (selectedEmitterId === id) selectedEmitterId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.emitterDeleted'));
+  },
+  onEmitterProp(id, key, value) {
+    world.updateEmitter(id, { [key]: value });
+    recRegions();
+    pushHistorySoon(); scheduleAutosave();
+  },
+  onShowScene() { chalDismissed = true; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null; refreshPanel(); },
   onHingeProp(id, key, value) {
     if (key === 'motorSpeed') { world.setHingeMotor(id, value); recEvent('hingeMotor', { id, value }); }
     pushHistorySoon(); scheduleAutosave();
@@ -448,6 +478,18 @@ function pickWind(w) {
   return null;
 }
 
+/** Nearest emitter within grab range of a world point, or null (1.56).
+ *  Emitters are points, so the pick is a radius test (18 world px). */
+function pickEmitter(w) {
+  const list = world.emitters();
+  let best = null, bestD = 18;
+  for (const e of list) {
+    const d = Math.hypot(w.x - e.x, w.y - e.y);
+    if (d <= bestD) { best = e; bestD = d; }
+  }
+  return best;
+}
+
 function refreshPanel() {
   // The static-drag arm belongs to the BODY, not to the selection:
   // a stray click on empty canvas (which clears the selection) must
@@ -477,9 +519,14 @@ function refreshPanel() {
     if (w) { panel.showWind(w); return; }
     selectedWindId = null;
   }
+  if (selectedEmitterId) {
+    const em = world.emitterById(selectedEmitterId);
+    if (em) { panel.showEmitter(em); return; }
+    selectedEmitterId = null;
+  }
   if (challenge && !chalDismissed) { panel.showChallenge(challengeVM()); return; }
   panel.backendId = world.core.backendId; // scene panel's Engine row follows the live backend
-  panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)), world.fluids(), world.winds());
+  panel.showScene(settings, world.allBodies().map((x) => world.serializeBody(x)), world.fluids(), world.winds(), world.emitters());
 }
 
 function deleteSelected() {
@@ -490,6 +537,14 @@ function deleteSelected() {
     selectedHingeId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.hingeDeleted'));
+    return;
+  }
+  if (selectedEmitterId) {
+    world.removeEmitter(selectedEmitterId);
+    recRegions();
+    selectedEmitterId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.emitterDeleted'));
     return;
   }
   if (!selectedId) return;
@@ -692,7 +747,7 @@ function handleHingeTap(w) {
   if (created) recEvent('addHinge', { hinge: world.hingeById(created.id) || data });
   if (created) {
     selectedHingeId = created.id;
-    selectedId = null; selectedFluidId = null; selectedWindId = null;
+    selectedId = null; selectedFluidId = null; selectedWindId = null; selectedEmitterId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.hingeCreated'));
   } else toast(t('msg.hingeFailed'));
@@ -809,7 +864,7 @@ canvas.addEventListener('pointerdown', (e) => {
     const hg = pickHinge(w.x, w.y);
     if (hg) {
       selectedHingeId = hg.id;
-      selectedId = null; selectedFluidId = null; selectedWindId = null;
+      selectedId = null; selectedFluidId = null; selectedWindId = null; selectedEmitterId = null;
       refreshPanel();
       gesture = { kind: 'none' };
       return;
@@ -827,6 +882,7 @@ canvas.addEventListener('pointerdown', (e) => {
     selectedFluidId = null;
     selectedWindId = null;
     selectedHingeId = null;
+    selectedEmitterId = null;
     refreshPanel();
     if (b.isStatic && staticDragId === selectedId) {
       gesture = { kind: 'drag-static', body: b, offX: w.x - b.position.x, offY: w.y - b.position.y, moved: false };
@@ -848,16 +904,18 @@ canvas.addEventListener('pointerdown', (e) => {
       // editing (winds are drawn above fluids, so they win the pick) —
       // and since 1.26 it can be dragged on the canvas to move it.
       if (challenge) { gesture = { kind: 'none' }; return; }
-      const wn = pickWind(w);
-      const f = wn ? null : pickFluid(w);
+      const em = pickEmitter(w);
+      const wn = em ? null : pickWind(w);
+      const f = (em || wn) ? null : pickFluid(w);
       selectedId = null;
       selectedHingeId = null;
+      selectedEmitterId = em ? em.id : null;
       selectedWindId = wn ? wn.id : null;
       selectedFluidId = f ? f.id : null;
       refreshPanel();
-      const rec = wn || f;
+      const rec = em || wn || f;
       gesture = rec
-        ? { kind: 'drag-region', regionType: wn ? 'wind' : 'fluid', rec, offX: w.x - rec.x, offY: w.y - rec.y, moved: false }
+        ? { kind: 'drag-region', regionType: em ? 'emitter' : wn ? 'wind' : 'fluid', rec, offX: w.x - rec.x, offY: w.y - rec.y, moved: false }
         : { kind: 'none' };
     }
   }
@@ -883,6 +941,7 @@ canvas.addEventListener('pointermove', (e) => {
     gesture.moved = true;
     const nx = Math.round(w.x - gesture.offX), ny = Math.round(w.y - gesture.offY);
     if (gesture.regionType === 'wind') world.updateWind(gesture.rec.id, { x: nx, y: ny });
+    else if (gesture.regionType === 'emitter') world.updateEmitter(gesture.rec.id, { x: nx, y: ny });
     else world.updateFluid(gesture.rec.id, { x: nx, y: ny });
     gesture.rec.x = nx; gesture.rec.y = ny; // local copy: keep the grab offset stable
   } else if (gesture.kind === 'drag-static') {
@@ -2016,7 +2075,7 @@ function initChrome() {
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); }
     else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); toggleRun(); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedId || selectedHingeId)) { deleteSelected(); }
-    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; staticDragId = null; springStart = null; springCur = null; hingeStart = null; hingeCur = null; refreshPanel(); }
+    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; selectedEmitterId = null; selectedHingeId = null; staticDragId = null; springStart = null; springCur = null; hingeStart = null; hingeCur = null; refreshPanel(); }
     else if (selectedId && e.key.startsWith('Arrow')) {
       e.preventDefault();
       const b = selectedBody(); if (!b) return;
@@ -2200,7 +2259,7 @@ function recEvent(type, data = {}) {
   if (!recordEvent(replayRec, recStep(), { type, ...data })) stopReplayRecording();
 }
 function recBodyProps(body) { if (replayRec && body) recEvent('bodyProps', { body: world.serializeBody(body) }); }
-function recRegions() { if (replayRec) recEvent('regions', { fluids: world.fluids(), winds: world.winds() }); }
+function recRegions() { if (replayRec) recEvent('regions', { fluids: world.fluids(), winds: world.winds(), emitters: world.emitters() }); }
 function recSettings() { if (replayRec) recEvent('settings', { settings: { ...settings } }); }
 
 function startReplayRecording() {
@@ -2374,6 +2433,12 @@ function applyReplayEvent(ev) {
       for (const w of world.winds()) world.removeWind(w.id);
       for (const f of ev.fluids || []) world.addFluid(fluidData(f));
       for (const w of ev.winds || []) world.addWind(windData(w));
+      // Emitters joined the regions event in 1.56; recordings made
+      // before that carry no emitters field and leave them untouched.
+      if (Array.isArray(ev.emitters)) {
+        for (const e of world.emitters()) world.removeEmitter(e.id);
+        for (const e of ev.emitters) world.addEmitter(emitterData(e));
+      }
       break;
     }
     case 'bodyProps': applyBodyProps(ev.body); break;
@@ -2550,6 +2615,7 @@ function loop(now) {
     selectedId,
     selectedFluidId,
     selectedWindId,
+    selectedEmitterId,
     selectedHingeId,
     hinges: world.hingeAnchors(),
     showGrid: settings.showGrid,

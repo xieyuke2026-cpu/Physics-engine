@@ -74,7 +74,7 @@ export class Renderer {
 
   draw(world, opts) {
     const { ctx, view, camera } = this;
-    const { selectedId = null, selectedFluidId = null, selectedWindId = null, selectedHingeId = null, hinges = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null, goalZone = null, goalTarget = null } = opts;
+    const { selectedId = null, selectedFluidId = null, selectedWindId = null, selectedHingeId = null, selectedEmitterId = null, hinges = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null, goalZone = null, goalTarget = null } = opts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (this._cacheOff || !this._blitBackdrop(showGrid)) {
       ctx.fillStyle = '#fafafa';
@@ -164,6 +164,13 @@ export class Renderer {
     // hinge pins on top of bodies: a ring + centre dot; motorised hinges
     // get a second ring so they read as powered at a glance.
     if (hinges) for (const h of hinges) this._hinge(h, h.id === selectedHingeId);
+    // emitters on top of bodies (1.56): a small nozzle glyph — under a
+    // pile of spawned bodies it would be unfindable at the back layer.
+    if (typeof world.forEachEmitter === 'function') {
+      world.forEachEmitter((e) => this._emitter(e, e.id === selectedEmitterId));
+    } else if (typeof world.emitters === 'function') {
+      for (const e of world.emitters()) this._emitter(e, e.id === selectedEmitterId);
+    }
     if (showVectors) for (const body of bodies) this._vector(body);
     if (dragPoint && world.dragging) {
       ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 1.2 / camera.zoom;
@@ -480,6 +487,54 @@ export class Renderer {
     ctx.fillStyle = 'rgba(96,125,139,0.8)';
     ctx.font = `${12 / camera.zoom}px sans-serif`;
     ctx.fillText(getLang() === 'en' ? `Wind · (${w.vx}, ${w.vy})` : `风场 Wind · (${w.vx}, ${w.vy})`, x + 8 / camera.zoom, y + 16 / camera.zoom);
+  }
+
+  /** An emitter (1.56): a nozzle disc with a direction wedge and three
+   *  seed dots along the launch direction; greyed when disabled. */
+  _emitter(e, isSel) {
+    const { ctx, camera } = this;
+    const c = Math.cos(e.angle), s = Math.sin(e.angle);
+    const px = -s, py = c; // perpendicular
+    const off = e.enabled ? 1 : 0.45;
+    ctx.save();
+    if (isSel) {
+      ctx.beginPath(); ctx.arc(e.x, e.y, 17, 0, Math.PI * 2);
+      ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 1.8 / Math.sqrt(camera.zoom);
+      ctx.setLineDash([5 / camera.zoom, 4 / camera.zoom]); ctx.stroke(); ctx.setLineDash([]);
+      // dashed aim line, one template-length long
+      ctx.beginPath();
+      ctx.moveTo(e.x + c * 14, e.y + s * 14);
+      ctx.lineTo(e.x + c * (14 + e.size * 2 + e.speed * 3), e.y + s * (14 + e.size * 2 + e.speed * 3));
+      ctx.strokeStyle = 'rgba(47,109,179,0.5)'; ctx.lineWidth = 1.2 / camera.zoom;
+      ctx.setLineDash([4 / camera.zoom, 4 / camera.zoom]); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // nozzle wedge (a short trapezoid pointing along the direction)
+    ctx.beginPath();
+    ctx.moveTo(e.x + px * 7 - c * 6, e.y + py * 7 - s * 6);
+    ctx.lineTo(e.x + c * 12 + px * 4, e.y + s * 12 + py * 4);
+    ctx.lineTo(e.x + c * 12 - px * 4, e.y + s * 12 - py * 4);
+    ctx.lineTo(e.x - px * 7 - c * 6, e.y - py * 7 - s * 6);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(60,64,70,${off})`;
+    ctx.fill();
+    ctx.strokeStyle = isSel ? COLORS.accent : `rgba(60,64,70,${off})`;
+    ctx.lineWidth = 1.2 / Math.sqrt(camera.zoom);
+    ctx.stroke();
+    // base disc
+    ctx.beginPath(); ctx.arc(e.x, e.y, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(238,240,242,${off})`; ctx.fill();
+    ctx.strokeStyle = `rgba(60,64,70,${off})`; ctx.stroke();
+    // seed dots along the direction
+    ctx.fillStyle = `rgba(60,64,70,${off * 0.8})`;
+    for (let i = 1; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.arc(e.x + c * (16 + i * 7), e.y + s * (16 + i * 7), 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = `rgba(60,64,70,${off})`;
+    ctx.font = `${11 / camera.zoom}px sans-serif`;
+    ctx.fillText(getLang() === 'en' ? 'Emitter' : '发射器', e.x + 10 / camera.zoom, e.y - 10 / camera.zoom);
+    ctx.restore();
   }
 
   _grid() {

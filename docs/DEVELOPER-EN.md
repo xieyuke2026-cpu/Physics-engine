@@ -15,8 +15,8 @@ module set), **PhysicsEngine3D** (the 3D core) and the vendored
 
 | Component | Version | Single source of truth |
 |---|---|---|
-| MotionLab (app) | 1.55 | `APP_VERSION` in `js/ui.js` |
-| PhysicsEngine (2D core) | 1.12.7 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
+| MotionLab (app) | 1.56 | `APP_VERSION` in `js/ui.js` |
+| PhysicsEngine (2D core) | 1.12.8 | `VERSION` / `PhysicsEngine.VERSION` in `js/engine/physics-engine.js` |
 | PF engine (platform fighter) | 1.1.0 | `PF_VERSION` / `PFEngine.VERSION` in `js/pf/pf-config.js` |
 | PhysicsEngine3D (3D core) | 1.0.0 | `VERSION` in `js/engine/physics-engine-3d.js` |
 | Matter.js (vendored) | 0.20.0 | Read from `Matter.version` at runtime, never hard-coded |
@@ -100,6 +100,7 @@ restore the whole world.
 | Fluids (added 1.4.0; coupling 1.9.0; preconditions 1.10.0) | `addFluid({ id?, x, y, width, height, density, drag, vx, vy })`, `removeFluid(id)`, `fluids()`, `fluidById(id)`, `fluidCount`, `fluidFlow(id)` |
 | Magnetism (added 1.5.0) | descriptor field `magnet` (−100..100), `setMagnetism(K, { range, softening })`, `magnetism`, `setMagnet(body, v)`, `magnetOf(body)`, `magnetCount` |
 | Wind fields (added 1.5.0; gusts 1.8.0) | `addWind({ id?, x, y, width, height, vx, vy, power, gust, gustPeriod })`, `removeWind(id)`, `winds()`, `windById(id)`, `windCount`, `simTime` |
+| Emitters (added 1.12.8) | `addEmitter({ id?, x, y, angle, rate, kind, size, speed, cap, enabled })`, `removeEmitter(id)`, `emitters()`, `emitterById(id)`, `emitterCount`, descriptor field `emitter` (spawn-source tag) |
 | Hinges & motors (added 1.7.0) | `addHinge({ id?, bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })`, `removeHinge(id)`, `hingeById(id)`, `describeHinges()`, `hingeCount`, `hingeAnchors()`, `setHingeMotor(id, v)` |
 | Formulas & measurement (added 1.4.0) | `Formulas.*` (pure functions, below), `bodyKineticEnergy(body)`, `totalKineticEnergy()`, `bodyMomentum(body)`, `totalMomentum()`, `centerOfMass()` |
 | Stability (added 1.4.0) | `PhysicsEngine.validateDescriptor(desc)`, `findNonFiniteBodies()`, `{ maxSpeed }` / `setMaxSpeed(v)` |
@@ -205,6 +206,27 @@ wind velocity every substep, at a rate ∝ overlap-area fraction × `power`
 × (0.0012 ÷ body density): light bodies quickly reach wind speed while
 dense blocks barely stir — the gaseous counterpart of fluids. Snapshots
 carry a `winds` array.
+
+### Emitters (1.12.8)
+
+`addEmitter({ x, y, angle = 0, rate = 4, kind = 'circle', size = 16, speed = 8, cap = 60, enabled = true })`
+is a fixed nozzle. At the END of every fixed step whose index is a
+multiple of `round(60 / rate)` it spawns one body: circles get radius
+`size`, rects get side 2·`size`; the spawn point sits `size + 4` px
+along `angle`, launched at `speed` px/step (template physics is fixed:
+density 0.001, friction 0.3, frictionAir 0.001, restitution 0.3). The
+schedule is a pure function of the step index and the sim clock rides
+snapshots, so a restored world keeps firing on schedule and replays
+reproduce every spawn. Spawned bodies carry an `emitter` descriptor
+tag (the source emitter's id, round-tripping through describeBody /
+snapshots); when the alive tagged count reaches `cap`, the oldest
+spawned body is recycled first, and spawning pauses while the world
+holds 1500+ bodies. Snapshots carry an `emitters` array. The same
+release adds the snapshot-load **id guard**: `load()` advances the
+internal id sequence past the largest loaded id — before this, loading
+a snapshot into a fresh engine and then adding auto-id entries could
+reissue a loaded entry's id and silently evict it from its index map
+(still simulating, but invisible), on both backends.
 
 ### Hinges & motors (1.7.0)
 
@@ -331,6 +353,7 @@ Combined with the instance measurements (`totalMomentum()`, `centerOfMass()`,
   magnetism / gravitation / gusts / snapshots / seeded RNG), force
   models kicking once per fixed step and a substep floor of 2; its
   own 43-check behaviour suite (tests/native-tests.mjs)
+- 1.12.8 — new emitters (`addEmitter`: a fixed nozzle spawning bodies on a fixed-step schedule — spawning depends only on the step index, so snapshots and replays reproduce it deterministically; spawned bodies carry an `emitter` source tag and a recycling cap) plus a snapshot-load id guard (`load()` advances the id sequence past every loaded id, so later auto-id adds can never evict a loaded entry); both backends, 8 new engine checks + 5 Native checks.
 - 1.12.7 — new `noSleep` descriptor: a flagged body never enters sleep on either backend (Matter via `sleepThreshold: Infinity`; Native skips it in the sleep pass). Made for slow-instability bodies like dominoes, whose leaning motion decays under the sleep threshold and froze mid-push. Carried through the scene format via `bodyData`; 3 new checks per backend suite.
 - 1.12.6 — snapshot-fidelity fix: `describeBody` now carries `va` (angular velocity) and `sleeping`, and `addBody` restores both on both backends — previously a snapshot restore silently zeroed spin and woke every sleeper, so a replay recorded after warm-up diverged from its own run (Newton's cradle: >14 px measured). Solver behaviour unchanged; 5 new fidelity checks per backend suite.
 - 1.12.5 — performance pass (behaviour unchanged): the orphan-sleeper probe (both backends) now finds candidate pairs through a uniform grid instead of O(sleepers x bodies) scans (~31% of all step time at ~800 bodies); Native gets numeric contact-sort / warm-start keys, shared solver scratch vectors, stamp-based support marking, and shape sync that skips sleeping bodies.

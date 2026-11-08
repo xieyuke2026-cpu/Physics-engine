@@ -14,8 +14,8 @@
 
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
-| MotionLab（应用） | 1.55 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.12.7 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| MotionLab（应用） | 1.56 | `js/ui.js` 的 `APP_VERSION` |
+| PhysicsEngine（2D 核心） | 1.12.8 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -95,6 +95,7 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 | 流体浮力（1.4.0 新增；1.9.0 联动；1.10.0 条件化） | `addFluid({ id?, x, y, width, height, density, drag, vx, vy })`、`removeFluid(id)`、`fluids()`、`fluidById(id)`、`fluidCount`、`fluidFlow(id)` |
 | 磁力（1.5.0 新增） | 描述符字段 `magnet`（−100..100）、`setMagnetism(K, { range, softening })`、`magnetism`、`setMagnet(body, v)`、`magnetOf(body)`、`magnetCount` |
 | 风场（1.5.0 新增；1.8.0 阵风） | `addWind({ id?, x, y, width, height, vx, vy, power, gust, gustPeriod })`、`removeWind(id)`、`winds()`、`windById(id)`、`windCount`、`simTime` |
+| 发射器（1.12.8 新增） | `addEmitter({ id?, x, y, angle, rate, kind, size, speed, cap, enabled })`、`removeEmitter(id)`、`emitters()`、`emitterById(id)`、`emitterCount`、描述符字段 `emitter`（喷出物体的来源标记） |
 | 铰链与马达（1.7.0 新增） | `addHinge({ id?, bodyA, bodyB, pointA, pointB, motorSpeed, motorPower })`、`removeHinge(id)`、`hingeById(id)`、`describeHinges()`、`hingeCount`、`hingeAnchors()`、`setHingeMotor(id, v)` |
 | 公式与测量（1.4.0 新增） | `Formulas.*`（纯函数，见下）、`bodyKineticEnergy(body)`、`totalKineticEnergy()`、`bodyMomentum(body)`、`totalMomentum()`、`centerOfMass()` |
 | 稳定性（1.4.0 新增） | `PhysicsEngine.validateDescriptor(desc)`、`findNonFiniteBodies()`、`{ maxSpeed }` / `setMaxSpeed(v)` |
@@ -189,6 +190,22 @@ lockRotation, vx, vy, label, userData }`——全部可序列化；`describeBody
 t 是引擎模拟时钟（全部区域同节奏，像一片天气系统）；时钟随快照
 （`simMs`）保存，读档后阵风相位不跳变。
 
+### 发射器（1.12.8）
+
+`addEmitter({ x, y, angle = 0, rate = 4, kind = 'circle', size = 16, speed = 8, cap = 60, enabled = true })`：
+定点喷口。在每个固定步的**末尾**，步序号能被 `round(60 / rate)` 整除时
+喷出一个物体：圆形半径 = `size`，方形边长 = 2·`size`，出生点在喷口沿
+`angle` 方向 `size + 4` px 处，初速 `speed` px/步（模板物理固定：密度
+0.001、摩擦 0.3、气阻 0.001、弹性 0.3）。喷发日程只是步序号的函数、
+模拟时钟随快照保存，所以快照恢复后喷发节奏与计数无缝衔接、回放逐位
+重演。喷出的物体描述符带 `emitter` 标记（来源发射器 id，随
+`describeBody`/快照往返）；存活的标记物体达到 `cap` 时，先回收最早
+喷出的一颗再喷新的；全场物体 ≥ 1500 时暂停喷发。快照携带
+`emitters` 数组。同版附带快照载入 **id 守卫**：`load()` 结束时把内部
+id 序号推进到全部已载入 id 的最大编号之后——此前把快照载入全新引擎
+后再自动编号添加条目会撞 id 并把已载入条目从索引里顶掉（对方仍在
+模拟却不可见），双后端同修。
+
 ### 铰链与马达（1.7.0）
 
 `addHinge({ bodyA, bodyB, pointA, pointB, motorSpeed = 0, motorPower = 0.0025 })`：
@@ -277,6 +294,7 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
   'native' })` 直接构造；从零编写的顺序冲量求解器覆盖全部公开接口
   （堆叠/休眠/铰链马达/真实浮力/磁力/引力/阵风/快照/种子随机），力模型
   按固定步踢一次、子步下限 2；专属行为测试 43 项（tests/native-tests.mjs）
+- 1.12.8 — 新增发射器 `addEmitter`（定点按固定步日程喷出物体，喷发只依赖步序号、随快照/回放确定性重演；喷出物体带 `emitter` 来源标记与上限回收）与快照载入 id 守卫（`load()` 后 id 序号自动越过全部已载入编号，杜绝自动 id 撞车顶掉已载入条目）；双后端同版，新增引擎测试 8 + Native 5 项。
 - 1.12.7 — 新增 `noSleep` 描述符：标记的物体双后端永不入睡（Matter 走 `sleepThreshold: Infinity`，Native 在睡眠遍中跳过）。为多米诺这类「慢速不稳定」物体而设——倾倒中的牌运动量衰减到睡眠阈值以下会被中途冻住。场景格式经 `bodyData` 透传；新增双后端测试各 3 项。
 - 1.12.6 — 快照保真修复：`describeBody` 新增 `va`（角速度）与 `sleeping` 字段，`addBody` 双后端均恢复二者——此前快照恢复会静默清零自旋并唤醒全部睡眠体，使热身后录制的回放与实况分家（牛顿摆实测 >14 px）。求解行为不变；新增双后端快照保真测试各 5 项。
 - 1.12.5 — 性能优化（行为不变）：孤儿唤醒探测（双后端）改走均匀网格候选对（原 O(睡眠体×全体），约 800 物体时占步进总时间约 31%）；Native 接触排序/热启动键改数字键、求解器临时向量复用、支撑标记改步内戳记、形状同步跳过睡眠体。

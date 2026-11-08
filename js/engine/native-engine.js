@@ -128,6 +128,8 @@ export class NativeEngine {
     this._hinges = new Map();
     this._fluids = new Map();
     this._winds = new Map();
+    this._emitters = new Map();    // (1.12.8) twin of the Matter facade
+    this._emStepIdx = 0;           // last fixed-step index emitters fired for
     this._fluidFlow = new Map();
     this._seq = 1;
     this._drag = null;
@@ -212,6 +214,7 @@ export class NativeEngine {
       va: num(partial.va, 0),
       sleeping: partial.sleeping === true,
       noSleep: partial.noSleep === true,
+      emitter: typeof partial.emitter === 'string' ? partial.emitter : '',
       userData: partial.userData && typeof partial.userData === 'object' ? { ...partial.userData } : {},
     };
     let local = null, area = 0, inertiaPerMass = 0;
@@ -341,6 +344,7 @@ export class NativeEngine {
     this._hinges.clear();
     this._fluids.clear();
     this._winds.clear();
+    this._emitters.clear();
     this._fluidFlow.clear();
     this._magnets.clear();
     this._clusterRoot.clear();
@@ -598,6 +602,60 @@ export class NativeEngine {
   winds() { return [...this._winds.values()].map((w) => ({ ...w })); }
   forEachWind(fn) { for (const w of this._winds.values()) fn(w); }
   get windCount() { return this._winds.size; }
+
+  /* ---------------- emitters (1.12.8, twin of the Matter facade) ------
+     Same contract: schedule is a pure function of the fixed-step
+     index; spawned bodies carry desc.emitter; at the cap the oldest
+     spawned body is removed. See physics-engine.js for the full note. */
+  addEmitter(partial = {}) {
+    const rec = {
+      id: typeof partial.id === 'string' && partial.id ? partial.id : `emitter-${this._seq++}`,
+      x: num(partial.x, 0), y: num(partial.y, 0),
+      angle: num(partial.angle, 0),
+      rate: Math.min(30, Math.max(0.2, num(partial.rate, 4))),
+      kind: partial.kind === 'rect' ? 'rect' : 'circle',
+      size: Math.min(80, Math.max(6, num(partial.size, 16))),
+      speed: Math.min(30, Math.max(0, num(partial.speed, 8))),
+      cap: Math.min(200, Math.max(1, Math.round(num(partial.cap, 60)))),
+      enabled: partial.enabled !== false,
+    };
+    this._emitters.set(rec.id, rec);
+    this._changed();
+    return { ...rec };
+  }
+  removeEmitter(id) {
+    const ok = this._emitters.delete(id);
+    if (ok) this._changed();
+    return ok;
+  }
+  clearEmitters() { this._emitters.clear(); }
+  emitterById(id) { const e = this._emitters.get(id); return e ? { ...e } : null; }
+  emitters() { return [...this._emitters.values()].map((e) => ({ ...e })); }
+  forEachEmitter(fn) { for (const e of this._emitters.values()) fn(e); }
+  get emitterCount() { return this._emitters.size; }
+
+  _runEmitters(stepIdx) {
+    for (const e of this._emitters.values()) {
+      if (!e.enabled) continue;
+      const interval = Math.max(1, Math.round(60 / e.rate));
+      if (stepIdx % interval !== 0) continue;
+      if (this._byId.size >= 1500) continue;
+      let alive = 0, oldestId = null;
+      for (const b of this._byId.values()) {
+        if (b.plugin.pe.desc.emitter === e.id) { alive++; if (oldestId === null) oldestId = b.plugin.pe.id; }
+      }
+      if (alive >= e.cap && oldestId !== null) this.removeBody(oldestId);
+      const c = Math.cos(e.angle), s = Math.sin(e.angle);
+      const off = e.size + 4;
+      this.addBody({
+        kind: e.kind, x: e.x + c * off, y: e.y + s * off,
+        radius: e.size, width: e.size * 2, height: e.size * 2,
+        density: 0.001, friction: 0.3, frictionAir: 0.001, restitution: 0.3,
+        vx: c * e.speed, vy: s * e.speed,
+        emitter: e.id, label: 'Emitter',
+      });
+    }
+  }
   _windVel(w) {
     if (!(w.gust > 0)) return { x: w.vx, y: w.vy };
     const m = 1 + w.gust * Math.sin(6.283185307179586 * (this._simMs / (1000 * w.gustPeriod)));
@@ -906,6 +964,7 @@ export class NativeEngine {
       hinges: this.describeHinges(),
       fluids: this.fluids(),
       winds: this.winds(),
+      emitters: this.emitters(),
       gravity: { ...this.gravity },
       gravitation: this.gravitation,
       rng: { seed: this._seed, state: this._rngState },
@@ -920,6 +979,8 @@ export class NativeEngine {
     for (const h of data.hinges || []) { if (h && typeof h === 'object' && this.addHinge(h)) hinges++; }
     for (const f of data.fluids || []) { if (f && typeof f === 'object') { this.addFluid(f); fluids++; } }
     for (const w of data.winds || []) { if (w && typeof w === 'object') { this.addWind(w); winds++; } }
+    let emitters = 0;
+    for (const e of data.emitters || []) { if (e && typeof e === 'object') { this.addEmitter(e); emitters++; } }
     if (data.gravity) this.setGravity(data.gravity.x, data.gravity.y, true);
     if (data.gravitation) this.setGravitation(data.gravitation.G, data.gravitation);
     if (data.rng && Number.isFinite(data.rng.state)) {
@@ -927,7 +988,17 @@ export class NativeEngine {
       this._rngState = data.rng.state >>> 0;
     }
     if (Number.isFinite(data.simMs)) this._simMs = Math.max(0, data.simMs);
-    return { bodies, constraints, fluids, winds, hinges };
+    this._emStepIdx = Math.round(this._simMs / this.fixedDt);
+    // Id-sequence guard (1.12.8, twin of the Matter facade): never
+    // reissue a loaded entry's id to a later auto-id add.
+    const bump = (id) => { const m = /-(\d+)$/.exec(id || ''); if (m) this._seq = Math.max(this._seq, Number(m[1]) + 1); };
+    for (const id of this._byId.keys()) bump(id);
+    for (const id of this._cons.keys()) bump(id);
+    for (const id of this._hinges.keys()) bump(id);
+    for (const id of this._fluids.keys()) bump(id);
+    for (const id of this._winds.keys()) bump(id);
+    for (const id of this._emitters.keys()) bump(id);
+    return { bodies, constraints, fluids, winds, hinges, emitters };
   }
 
   /* --------------------------- collision hook -------------------------- */
@@ -984,6 +1055,13 @@ export class NativeEngine {
     // Orphan-sleeper probe (every 15 fixed steps): a sleeper whose
     // support was deleted or dragged away must fall, not hover.
     if (this.enableSleeping && Math.round(this._simMs / this.fixedDt) % 15 === 0) this._wakeOrphans();
+    // Emitters (1.12.8, twin of the Matter facade): fire once per
+    // crossed fixed-step index, at the end of the step.
+    const eidx = Math.round(this._simMs / this.fixedDt);
+    if (eidx !== this._emStepIdx) {
+      this._emStepIdx = eidx;
+      if (this._emitters.size) this._runEmitters(eidx);
+    }
   }
 
   /** Wake sleeping bodies that have lost every support. Support means

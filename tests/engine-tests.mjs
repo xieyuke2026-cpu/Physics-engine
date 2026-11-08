@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.7');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.8');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -440,6 +440,37 @@ function galtonBins(seed) {
   pe.removeFluid('water');
   for (let s = 0; s < 240; s++) pe.stepOnce();
   check('fluids: removing the fluid lets the floater sink', wood.position.y > 500, `y=${wood.position.y.toFixed(1)}`);
+}
+
+/* --- v1.12.8: emitters (point spawners) --- */
+{
+  const pe = new PhysicsEngine({});
+  pe.setGravity(0, 0, false);
+  const e = pe.addEmitter({ x: 100, y: 100, angle: 0, rate: 6, kind: 'circle', size: 10, speed: 5, cap: 60 });
+  check('emitters: registry reads back; count tracks adds', pe.emitterCount === 1 && pe.emitterById(e.id).rate === 6);
+  const clamped = pe.addEmitter({ rate: 999, size: 1, cap: 0, speed: -3 });
+  check('emitters: fields are clamped to their ranges', clamped.rate === 30 && clamped.size === 6 && clamped.cap === 1 && clamped.speed === 0);
+  pe.removeEmitter(clamped.id);
+  for (let s = 0; s < 120; s++) pe.stepOnce();
+  const spawned = pe.allBodies().filter((b) => pe.describeBody(b).emitter === e.id);
+  check('emitters: rate 6/s spawns exactly 12 bodies in 120 steps', spawned.length === 12, `n=${spawned.length}`);
+  check('emitters: snapshot carries emitters; a fresh load restores them',
+    pe.snapshot().emitters.length === 1 && (() => { const q = new PhysicsEngine({}); q.load(JSON.parse(JSON.stringify(pe.snapshot()))); return q.emitterCount === 1; })());
+  const q = new PhysicsEngine({}); q.load(JSON.parse(JSON.stringify(pe.snapshot())));
+  const qBefore = q.count; q.addBody({ kind: 'circle', x: 0, y: 0, radius: 5 });
+  check('emitters: an auto-id add after a snapshot load never overwrites a loaded body (1.12.8 id guard)', q.count === qBefore + 1, `count ${qBefore} -> ${q.count}`);
+  pe.removeEmitter(e.id);
+  const n0 = pe.count;
+  for (let s = 0; s < 60; s++) pe.stepOnce();
+  check('emitters: removeEmitter stops future spawns', pe.count === n0 && pe.emitterCount === 0);
+  const pe2 = new PhysicsEngine({}); pe2.setGravity(0, 0, false);
+  pe2.addEmitter({ x: 0, y: 0, angle: 0, rate: 60, size: 8, speed: 0, cap: 5 });
+  for (let s = 0; s < 60; s++) pe2.stepOnce();
+  check('emitters: the cap recycles the oldest spawned body (alive stays at cap)', pe2.count === 5, `n=${pe2.count}`);
+  const pe3 = new PhysicsEngine({});
+  pe3.addEmitter({ x: 0, y: 0, rate: 60, enabled: false });
+  for (let s = 0; s < 30; s++) pe3.stepOnce();
+  check('emitters: a disabled emitter never fires', pe3.count === 0);
 }
 
 /* --- v1.9.0: module coupling — angular fluid drag, currents, wind→water --- */
