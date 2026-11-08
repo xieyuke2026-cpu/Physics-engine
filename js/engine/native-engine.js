@@ -1540,9 +1540,21 @@ export class NativeEngine {
     this._pointVel(c.b, c.rbx, c.rby, vb);
     const vn = (vb.x - va.x) * c.nx + (vb.y - va.y) * c.ny;
     if (first) {
-      c.restVn = vn;
-      const rest = vn < -1 ? -c.e * vn : 0;
-      c.biasVel = rest + (0.2 * Math.max(0, c.pen - 0.01)) / Math.max(h, 0.05);
+      // 1.12.9: restitution from the approach velocity captured at
+      // contact creation (c.restVn), NOT from the live vn — by the
+      // first iteration, warm-start pre-application and the wedge
+      // geometry of a stack can inflate the contact-point velocity
+      // far beyond anything physical (measured vn = -61 on a pin
+      // the ball reached at 2.4 px/step), and -e*vn then LAUNCHES
+      // the light body (peak pin speed 19.6 px/step, ~4x the
+      // momentum ceiling). The Baumgarte penetration term is capped
+      // for the same reason: a deep one-step overlap (pen ~16)
+      // otherwise demands a separating velocity of 12+; the linear
+      // position correction below resolves deep overlap over a few
+      // steps instead. Honest fast impacts keep their full bounce:
+      // a restitution-0.8 drop still rebounds to e^2 * h.
+      const rest = c.restVn < -1 ? -c.e * c.restVn : 0;
+      c.biasVel = rest + Math.min((0.2 * Math.max(0, c.pen - 0.01)) / Math.max(h, 0.05), 4);
     }
     let lambda = (c.biasVel - vn) * c.imN;
     const newAcc = Math.max(0, c.accN + lambda);
@@ -1669,7 +1681,14 @@ export class NativeEngine {
               imN: kn > 0 ? 1 / kn : 0, imT: kt > 0 ? 1 / kt : 0,
               mu: Math.sqrt(Math.max(0, a.friction) * Math.max(0, b.friction)),
               e: Math.max(a.restitution, b.restitution),
-              restVn: 0, biasVel: 0, accN: 0, accT: 0,
+              // 1.12.9: capture the approach velocity NOW, at contact
+              // creation — before warm starting pre-applies last step's
+              // impulses and before any solver iteration mutates the
+              // velocities. Restitution must answer the velocity the
+              // bodies actually arrived with.
+              restVn: (b.velocity.x - b.angularVelocity * rby - (a.velocity.x - a.angularVelocity * ray)) * f.nx
+                    + (b.velocity.y + b.angularVelocity * rbx - (a.velocity.y + a.angularVelocity * rax)) * f.ny,
+              biasVel: 0, accN: 0, accT: 0,
             });
           }
         }

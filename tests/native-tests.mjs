@@ -508,5 +508,47 @@ function poolWorld() {
     `y=${ball.position.y.toFixed(1)} sleeping=${ball.isSleeping}`);
 }
 
+/* --- v1.12.9: wedged light bodies are not launched (bowling repro) ---
+   Ryan's bowling scene on the native backend: a heavy ball arriving
+   at ~2.4 px/step wedged into a stacked triangle pyramid and one pin
+   left at 19.6 px/step (~4x the momentum ceiling, it hit the side
+   wall). Two amplifiers: restitution answered the contact-point
+   velocity AFTER warm-start/solve pollution (vn measured -61), and
+   the Baumgarte term demanded 12+ px/step for a 16 px overlap. The
+   fix captures the approach velocity at contact creation and caps
+   the penetration bias; this test rebuilds the scene and bounds the
+   peak pin speed, and a drop test pins honest restitution. */
+{
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2, seed: 1 });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true, friction: 0.6 });
+  e.addBody({ id: 'ball', kind: 'circle', x: 210, y: 514, radius: 26, density: 0.006, friction: 0.08, frictionAir: 0.01, restitution: 0.1, vx: 10.5 });
+  const pinAt = (x, y) => e.addBody({ kind: 'polygon', sides: 3, x, y, radius: 24, density: 0.0008, friction: 0.3 });
+  const pins = [pinAt(950, 519), pinAt(995, 519), pinAt(1040, 519), pinAt(972, 478), pinAt(1017, 478), pinAt(995, 437)];
+  let peak = 0;
+  for (let i = 0; i < 423; i++) {
+    e.advance(e.fixedDt);
+    if (i >= 130 && i <= 220) {
+      for (const p of pins) peak = Math.max(peak, Math.hypot(p.velocity.x, p.velocity.y));
+    }
+  }
+  check('v1.12.9: wedged pins are not launched (peak pin speed bounded)', peak < 8, `peak=${peak.toFixed(2)}`);
+  check('v1.12.9: no pin reaches the side wall', pins.every((p) => p.position.x < 1150),
+    `maxX=${Math.max(...pins.map((p) => p.position.x)).toFixed(0)}`);
+}
+{
+  const e = new NativeEngine({ enableSleeping: false, substeps: 2, seed: 1 });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true, friction: 0 });
+  const ball = e.addBody({ kind: 'circle', x: 300, y: 200, radius: 20, density: 0.001, friction: 0, frictionAir: 0, restitution: 0.8 });
+  let fell = false, apex = Infinity;
+  for (let i = 0; i < 300; i++) {
+    e.advance(e.fixedDt);
+    if (!fell && ball.velocity.y < -3) fell = true;
+    if (fell) apex = Math.min(apex, ball.position.y);
+  }
+  const rebound = 520 - apex; // ground top 540, centre rest y = 520
+  check('v1.12.9: honest restitution survives the bias fix (e=0.8 rebounds near e^2*h)', rebound > 140 && rebound < 270,
+    `rebound=${rebound.toFixed(0)}px (ideal 205)`);
+}
+
 console.log(`\nNativeEngine tests: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

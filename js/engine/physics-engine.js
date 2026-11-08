@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.8 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.9 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -83,6 +83,16 @@
              snapshots, queries, seeded RNG). Matter stays the default
              and the reference behaviour; native is opt-in and labelled
              experimental while its feel is validated on real scenes.
+    1.12.9 — native solver: no more launched light bodies (MotionLab
+             1.57). Restitution now answers the approach velocity
+             captured at contact creation (before warm-start impulses
+             and solver iterations can inflate the contact-point
+             velocity — a wedged pin showed vn = -61 from a 2.4
+             px/step tap and left at 19.6 px/step), and the Baumgarte
+             penetration bias is capped at 4 px/step (deep overlap is
+             resolved by the positional correction over a few steps
+             instead). Peak pin speed in the repro: 19.6 -> 2.5;
+             an honest restitution-0.8 drop still rebounds to e^2*h.
     1.12.8 — emitters (MotionLab 1.56): addEmitter registers a point
              spawner { x, y, angle, rate, kind, size, speed, cap,
              enabled } that creates a body every round(60/rate) fixed
@@ -206,7 +216,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.8';
+export const VERSION = '1.12.9';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
