@@ -198,16 +198,16 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.57')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.12.9')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.58')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.12.10')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
 {
   const sel = doc.querySelector('#settingsBody select');
-  check('v1.41: settings offers the backend picker (Matter default, Native experimental)',
+  check('v1.41: settings offers the backend picker (Matter default, Impulse stable)',
     !!sel && sel.options.length === 2 && sel.value === 'matter'
-    && sel.textContent.includes('Native') && sel.textContent.includes('实验性'),
+    && sel.textContent.includes('Impulse') && sel.textContent.includes('冲量'),
     sel ? sel.textContent : 'no select');
   sel.value = 'native';
   sel.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -217,7 +217,7 @@ check('v1.13: About line shows all three versions (app / engine / Matter)',
     && /物体 [1-9]/.test(doc.getElementById('stCount').textContent),
     window.localStorage.getItem('motionlab.backend') + ' / ' + doc.getElementById('stCount').textContent);
   check('v1.43: scene panel Engine row follows the live backend',
-    (doc.querySelector('[data-ro="engine"]') || {}).textContent === 'Native（自研）',
+    (doc.querySelector('[data-ro="engine"]') || {}).textContent === 'Impulse（冲量 · 自研）',
     (doc.querySelector('[data-ro="engine"]') || {}).textContent);
   sel.value = 'matter';
   sel.dispatchEvent(new window.Event('change', { bubbles: true }));

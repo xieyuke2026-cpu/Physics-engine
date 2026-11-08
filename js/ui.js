@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.57';
+export const APP_VERSION = '1.58';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -101,7 +101,7 @@ export class Panel {
     // The scene panel's Engine row names the CURRENT solver backend
     // (app.js keeps panel.backendId in sync) — it used to hardcode
     // "Matter.js", which stayed wrong after switching to Native.
-    return this.backendId === 'native' ? L('Native（自研）', 'Native (self-developed)') : 'Matter.js';
+    return this.backendId === 'native' ? L('Impulse（冲量 · 自研）', 'Impulse (self-developed)') : 'Matter.js';
   }
 
   showScene(settings, bodies, fluids, winds, emitters) {
@@ -607,7 +607,9 @@ export function renderSettings(root, ui, cb) {
   for (const b of ENGINE_BACKENDS) {
     const tag = b.status === 'active'
       ? L('（默认）', ' (default)')
-      : b.status === 'experimental'
+      : b.status === 'stable'
+        ? L('（冲量 · 自研）', ' (self-developed)')
+        : b.status === 'experimental'
         ? L('（自研 · 实验性）', ' (self-developed, experimental)')
         : L('（开发中）', ' (in development)');
     const opt = el(`<option value="${b.id}">${b.name}${tag}</option>`);
@@ -618,9 +620,9 @@ export function renderSettings(root, ui, cb) {
   backendSel.addEventListener('change', () => { if (cb.onEngineBackend) cb.onEngineBackend(backendSel.value); });
   backendRow.appendChild(backendSel);
   wrap.appendChild(backendRow);
-  wrap.appendChild(el(`<p class="empty-note">${L('切换后端会以当前场景重建世界并重演；Native 为自研求解器（实验性），手感可能与 Matter.js 略有差异。', 'Switching rebuilds the world on the chosen solver and replays the current scene. Native is the self-developed solver (experimental); its feel may differ slightly from Matter.js.')}</p>`));
+  wrap.appendChild(el(`<p class="empty-note">${L('切换后端会以当前场景重建世界并重演；Impulse 为自研求解器（原开发代号 Native），手感可能与 Matter.js 略有差异。', 'Switching rebuilds the world on the chosen solver and replays the current scene. Impulse is the self-developed solver (dev codename Native); its feel may differ slightly from Matter.js.')}</p>`));
   const matterVersion = (typeof window !== 'undefined' && window.Matter && window.Matter.version) || '0.20.0';
-  wrap.appendChild(el(`<p class="empty-note">${L(`MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · 纯静态部署（GitHub Pages）· 无后端、无 API Key。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。`, `MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · Fully static (GitHub Pages) · no backend, no API key. Shortcuts: Space run/pause · Ctrl+Z/Y undo/redo · Ctrl+S save · Ctrl+D duplicate body · Arrow keys nudge · R rotate 15° · Delete remove.`)}</p>`));
+  wrap.appendChild(el(`<p class="empty-note">${L(`MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · 纯静态部署（GitHub Pages）· 无后端、无 API Key；自研后端 Impulse（冲量），内部代号 Native67。快捷键：空格 运行/暂停 · Ctrl+Z/Y 撤销/重做 · Ctrl+S 保存 · Ctrl+D 复制物体 · 方向键 微调位置 · R 旋转 15° · Delete 删除。`, `MotionLab ${APP_VERSION} · PhysicsEngine ${ENGINE_VERSION} · Matter.js ${matterVersion} · PFLab ${PF_VERSION} · Fully static (GitHub Pages) · no backend, no API key; self-developed backend Impulse, internal codename Native67. Shortcuts: Space run/pause · Ctrl+Z/Y undo/redo · Ctrl+S save · Ctrl+D duplicate body · Arrow keys nudge · R rotate 15° · Delete remove.`)}</p>`));
   root.appendChild(wrap);
   root.querySelectorAll('input[type=checkbox][data-key]').forEach((inp) => {
     inp.addEventListener('change', () => cb.onUISetting(inp.dataset.key, inp.checked));

@@ -19,7 +19,7 @@ const step = (e, n) => { for (let i = 0; i < n; i++) e.advance(1000 / 60); };
   check('create({backend:"native"}) returns a NativeEngine', e instanceof NativeEngine);
   check('native instance carries backendId "native"', e.backendId === 'native');
   const reg = BACKENDS.find((b) => b.id === 'native');
-  check('BACKENDS marks native experimental (no longer planned)', reg && reg.status === 'experimental');
+  check('BACKENDS marks native/Impulse stable (graduated 1.12.10)', reg && reg.status === 'stable' && reg.name === 'Impulse');
   check('substeps floor: native clamps substeps to >= 2', new NativeEngine({ substeps: 1 }).substeps === 2);
 }
 
@@ -506,6 +506,44 @@ function poolWorld() {
     `at (${ball.position.x.toFixed(0)},${ball.position.y.toFixed(0)})`);
   check('framed world: ball settles asleep on the ground', ball.isSleeping === true && near(ball.position.y, 525, 3),
     `y=${ball.position.y.toFixed(1)} sleeping=${ball.isSleeping}`);
+}
+
+/* --- v1.12.10: touching chains stay together (cradle stability) ---
+   The cradle preset on the native backend used to disintegrate:
+   one-directional contact sweeps systematically favour the contacts
+   solved last, and in a touching chain that bias pumps the middle
+   balls a little more every exchange (worst middle-ball deviation
+   184 px after 600 steps, row destroyed by 2400). Symmetric
+   (alternating-direction) iterations + 30 iterations + restitution
+   answered from the pre-warm-start approach sample keep the row
+   together (worst ~45 px out to 3600 steps, Matter reference ~35)
+   while the bowling wedge peak DROPS to 0.87. This test rebuilds
+   the preset geometry directly on the engine and bounds the drift
+   over 1200 steps; the second check guards against a "fix" that
+   merely freezes the motion. */
+{
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2, seed: 1 });
+  e.addBody({ kind: 'rect', x: 640, y: 62, width: 285, height: 14, isStatic: true });
+  const balls = [];
+  const n = 5, r = 22, L = 190, topY = 70, cx = 640;
+  for (let i = 0; i < n; i++) {
+    const ax = cx + (i - 2) * (r * 2 + 1);
+    let bx = ax, by = topY + L;
+    if (i === 0) { const a = 0.62; bx = ax - Math.sin(a) * L; by = topY + Math.cos(a) * L; }
+    balls.push(e.addBody({ id: 'cb' + i, kind: 'circle', x: bx, y: by, radius: r, density: 0.004, friction: 0.05, frictionAir: 0.0005, restitution: 0.95 }));
+    e.addConstraint({ bodyA: null, bodyB: 'cb' + i, pointA: { x: ax, y: topY }, pointB: { x: 0, y: 0 }, stiffness: 1, damping: 0, length: L });
+  }
+  let worst = 0, endSwing = 0;
+  for (let s = 0; s < 1200; s++) {
+    e.advance(e.fixedDt);
+    if (s > 60) for (let i = 1; i <= 3; i++) {
+      const dev = Math.abs(balls[i].position.x - (cx + (i - 2) * 45)) + Math.abs(balls[i].position.y - (topY + L));
+      if (dev > worst) worst = dev;
+    }
+    if (s > 40 && s < 300) endSwing = Math.max(endSwing, Math.abs(balls[4].position.x - (cx + 2 * 45)));
+  }
+  check('v1.12.10: cradle middle balls stay in line on native (1200 steps)', worst < 100, `worst=${worst.toFixed(0)}`);
+  check('v1.12.10: cradle end ball still swings out (motion not frozen)', endSwing > 60, `endSwing=${endSwing.toFixed(0)}`);
 }
 
 /* --- v1.12.9: wedged light bodies are not launched (bowling repro) ---

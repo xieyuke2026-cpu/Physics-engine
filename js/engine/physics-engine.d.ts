@@ -232,7 +232,7 @@ export interface EngineSnapshot {
 export interface BackendInfo {
   id: string;
   name: string;
-  status: 'active' | 'experimental' | 'planned';
+  status: 'active' | 'experimental' | 'planned' | 'stable';
   /** Engine version that introduced the backend. */
   since: string;
   summary: string;

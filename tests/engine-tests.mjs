@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.9');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.12.10');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -785,10 +785,10 @@ function galtonBins(seed) {
 
 /* --- v1.11.0/v1.12.0: backend registry; native experimental since 1.12.0 --- */
 {
-  check('backends: registry lists matter (active) + native (experimental)',
+  check('backends: registry lists matter (active) + native/Impulse (stable since 1.12.10)',
     Array.isArray(BACKENDS) && BACKENDS.length === 2
     && BACKENDS[0].id === 'matter' && BACKENDS[0].status === 'active'
-    && BACKENDS[1].id === 'native' && BACKENDS[1].status === 'experimental');
+    && BACKENDS[1].id === 'native' && BACKENDS[1].status === 'stable' && BACKENDS[1].name === 'Impulse');
   check('backends: class exposes the same registry', PhysicsEngine.BACKENDS === BACKENDS);
   const def = PhysicsEngine.create();
   check('backends: create() defaults to the matter backend', def instanceof PhysicsEngine && def.backendId === 'matter');

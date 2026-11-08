@@ -1,9 +1,9 @@
 # MotionLab — 2D Physics Sandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.12.9-blue.svg)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.12.10-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-711%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-713%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -13,7 +13,7 @@
 
 **MotionLab** is a browser-based 2D physics sandbox — no build step, no backend, open the page and play on desktop or tablet. Create rigid bodies, tune gravity, friction and elasticity, connect springs, rods and motorised hinges, add pairwise gravitation, fluid buoyancy, magnetism and gusting wind, then save experiments as portable JSON scenes or share links.
 
-It runs on **two switchable solver backends** behind one API: the battle-tested **Matter.js** backend (the default) and **Native**, a solver written from scratch in this repo (experimental) — the same scene replays on either engine, so you can compare how they feel.
+It runs on **two switchable solver backends** behind one API: the battle-tested **Matter.js** backend (the default) and **Impulse**, a solver written from scratch in this repo (formally named in 1.58; dev codename Native) — the same scene replays on either engine, so you can compare how they feel.
 
 Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse in other projects (see *Reuse* below). A platform-fighter prototype, **PFLab**, is included as a demonstration of what the same API can build.
 
@@ -54,7 +54,7 @@ Interactive · Responsive · Lightweight——黑白灰为主、低饱和蓝为�
 
 ### 双引擎
 
-- 同一公开 API、两个求解器后端：**Matter.js**（默认、成熟稳定）与 **Native**（本仓库从零编写的顺序冲量求解器，实验性）。
+- 同一公开 API、两个求解器后端：**Matter.js**（默认、成熟稳定）与 **Impulse**（冲量，本仓库从零编写的顺序冲量求解器；1.58 正式命名，开发代号 Native）。
 - 后端由注册表 `PhysicsEngine.BACKENDS` 管理，`PhysicsEngine.create({ backend })` 构造；设置里切换即以当前场景重建并重演，场景属性面板会显示当前后端。
 
 ### 编辑与交互
@@ -166,10 +166,10 @@ UI、物理引擎、场景管理三层分离：`ui.js` 不直接接触 Matter，
 ## 已知问题
 
 - 画布世界未做无限边界管理：把物体拖到很远处后需用「适应画布」按钮找回视角。
-- 极端参数组合（如弹性 1 + 高速）在 Matter 后端仍可能有轻微抖动（休眠与子步已大幅缓解）；也可切换到 Native 后端对比。
+- 极端参数组合（如弹性 1 + 高速）在 Matter 后端仍可能有轻微抖动（休眠与子步已大幅缓解）；也可切换到 Impulse 后端对比。
 - 深色模式未实现（设计已预留）。
 - Apple Pencil 专属功能未实现（按需求暂缓）。
-- Native 后端仍为实验性：密集堆积的沉降与入睡速度与 Matter 有差异，默认后端保持 Matter。
+- Impulse（自研）后端已于 1.58 转正为 stable：密集堆积的沉降与入睡速度与 Matter 仍有细微差异，默认后端保持 Matter。
 
 ## 测试
 

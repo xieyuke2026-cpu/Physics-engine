@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.9 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.10 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -83,6 +83,22 @@
              snapshots, queries, seeded RNG). Matter stays the default
              and the reference behaviour; native is opt-in and labelled
              experimental while its feel is validated on real scenes.
+    The 'native' backend is formally named Impulse from 1.12.10
+             (id unchanged for compatibility; internal codename
+             Native67). It also graduates from experimental to
+             stable with the solver-stability work below.
+    1.12.10 — native solver stability (MotionLab 1.58): touching
+             chains (Newton's cradle) no longer drift apart over
+             time. Contact solving is now symmetric (the sweep
+             direction alternates every iteration, cancelling the
+             one-way bias), iterations 10 -> 30, and restitution
+             answers the approach velocity sampled BEFORE the
+             warm-start pre-application (between 1.12.9's
+             chain-starving collide-time sample and the live vn
+             that launched wedged pins). Cradle middle-body drift
+             184 -> 45 px, flat out to 3600 steps; bowling-wedge
+             peak pin speed 2.46 -> 0.87; an e=0.8 drop still
+             rebounds to exactly e^2*h.
     1.12.9 — native solver: no more launched light bodies (MotionLab
              1.57). Restitution now answers the approach velocity
              captured at contact creation (before warm-start impulses
@@ -216,7 +232,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.9';
+export const VERSION = '1.12.10';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -240,7 +256,7 @@ export const BACKENDS = [
     summary: 'The original solver: Matter.js 0.20 rigid-body engine behind the PhysicsEngine API, plus the engine-level force models (gravitation, buoyancy, magnetism, wind).',
   },
   {
-    id: 'native', name: 'Native', status: 'experimental', since: '1.12.0',
+    id: 'native', name: 'Impulse', status: 'stable', since: '1.12.0',
     summary: 'A self-developed solver written for this API (sequential impulses, warm starting, sleeping, SAT + face-clipping contacts). Experimental since 1.12.0: covers the full API surface, validated by its own behaviour suite; Matter remains the default.',
   },
 ];

@@ -1401,6 +1401,19 @@ export class NativeEngine {
       this._syncShape(b);
     }
     const contacts = this._collide();
+    // 1.12.10: snapshot each contact's approach velocity NOW — after
+    // integration, before warm starting pre-applies last step's
+    // impulses. Restitution answers this sample (see _solveContact):
+    // the collide-time capture (1.12.9) starved touching chains,
+    // because a chain's downstream contacts are created before the
+    // impact has travelled into them; the post-warm-start live vn
+    // (pre-1.12.9) is what launched wedged pins. This sample point
+    // sits between those two failure modes.
+    for (const c of contacts) {
+      this._pointVel(c.a, c.rax, c.ray, _scratchVa);
+      this._pointVel(c.b, c.rbx, c.rby, _scratchVb);
+      c.preVn = (_scratchVb.x - _scratchVa.x) * c.nx + (_scratchVb.y - _scratchVa.y) * c.ny;
+    }
     // Warm starting: seed each contact with the impulses its feature
     // point accumulated last step and pre-apply them — resting stacks
     // start each step already held up instead of re-solving from zero
@@ -1436,9 +1449,18 @@ export class NativeEngine {
       this._pointVel(other, c.px - other.position.x, c.py - other.position.y, tmp);
       if (Math.hypot(tmp.x, tmp.y) > 0.6) { this._wake(sleeper); }
     }
-    const ITER = 10;
+    const ITER = 30;
     for (let it = 0; it < ITER; it++) {
-      for (const c of contacts) this._solveContact(c, h, it === 0);
+      // 1.12.10: symmetric Gauss-Seidel — alternate the contact order
+      // every iteration. One-directional sweeps systematically favour
+      // the contacts solved last, and in a touching chain (Newton's
+      // cradle) that bias pumps the middle bodies a little more every
+      // exchange until the row falls apart; alternating the sweep
+      // direction cancels the bias. Measured on the cradle preset
+      // (middle-body worst deviation, 600 steps): 184 -> 31 combined
+      // with the iteration raise below; flat ~45 out to 3600 steps.
+      if (it % 2 === 0) { for (const c of contacts) this._solveContact(c, h, it === 0); }
+      else { for (let ci = contacts.length - 1; ci >= 0; ci--) this._solveContact(contacts[ci], h, false); }
       for (const c of this._cons.values()) this._solveConstraint(c);
       for (const hg of this._hinges.values()) this._solveHinge(hg);
     }
@@ -1540,8 +1562,8 @@ export class NativeEngine {
     this._pointVel(c.b, c.rbx, c.rby, vb);
     const vn = (vb.x - va.x) * c.nx + (vb.y - va.y) * c.ny;
     if (first) {
-      // 1.12.9: restitution from the approach velocity captured at
-      // contact creation (c.restVn), NOT from the live vn — by the
+      // 1.12.9: restitution from a captured approach velocity, NOT
+      // from the live vn — by the
       // first iteration, warm-start pre-application and the wedge
       // geometry of a stack can inflate the contact-point velocity
       // far beyond anything physical (measured vn = -61 on a pin
@@ -1553,7 +1575,8 @@ export class NativeEngine {
       // position correction below resolves deep overlap over a few
       // steps instead. Honest fast impacts keep their full bounce:
       // a restitution-0.8 drop still rebounds to e^2 * h.
-      const rest = c.restVn < -1 ? -c.e * c.restVn : 0;
+      const ap = (c.preVn !== undefined ? c.preVn : c.restVn);
+      const rest = ap < -1 ? -c.e * ap : 0;
       c.biasVel = rest + Math.min((0.2 * Math.max(0, c.pen - 0.01)) / Math.max(h, 0.05), 4);
     }
     let lambda = (c.biasVel - vn) * c.imN;

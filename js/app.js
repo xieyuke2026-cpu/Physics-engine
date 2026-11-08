@@ -1864,7 +1864,7 @@ function setEngineBackend(id) {
   world = new PhysicsWorld(id);
   loadScene(snap);
   resetHistory();
-  toast(t('msg.backendSwitched', { name: id === 'native' ? 'Native' : 'Matter.js' }));
+  toast(t('msg.backendSwitched', { name: id === 'native' ? 'Impulse' : 'Matter.js' }));
 }
 
 function openSettings() {
