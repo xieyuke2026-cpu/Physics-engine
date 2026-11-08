@@ -1607,6 +1607,30 @@ export class NativeEngine {
       const rest = ap < -1 ? -c.e * ap : 0;
       c.biasVel = rest + Math.min((0.2 * Math.max(0, c.pen - 0.01)) / Math.max(h, 0.05), 4);
     }
+    // 1.12.12: a contact created against a sleeping body carries the
+    // immovable-body effective mass. For gentle touches that frozen
+    // solve is a feature — it hands a touching chain (Newton's
+    // cradle) a clean equal-mass transfer, and sleeping is what
+    // keeps the middle balls from drifting (cradle drift 45 with
+    // sleep vs 235 without). But a FAST first touch turns it into
+    // an amplifier: the impulse is sized to stop the striker
+    // against a wall, then delivered to the woken body at its real
+    // mass — a wrecking ball arriving at 34 px/step produced box
+    // speeds 58 -> 132 -> 210 up the pyramid rows. The solver
+    // knows the approach speed (preVn) and the sleep states at
+    // creation, so a violent wake-touch is re-based on the honest
+    // (live) effective mass for this substep; gentle ones keep
+    // the frozen transfer.
+    if (first && c.wakeTouch && c.preVn !== undefined && c.preVn < -12) {
+      const kia = this._invI(c.a), kib = this._invI(c.b);
+      const gRaCn = c.rax * c.ny - c.ray * c.nx, gRbCn = c.rbx * c.ny - c.rby * c.nx;
+      const gKn = ima + imb + kia * gRaCn * gRaCn + kib * gRbCn * gRbCn;
+      const gTx = -c.ny, gTy = c.nx;
+      const gRaCt = c.rax * gTy - c.ray * gTx, gRbCt = c.rbx * gTy - c.rby * gTx;
+      const gKt = ima + imb + kia * gRaCt * gRaCt + kib * gRbCt * gRbCt;
+      c.imN = gKn > 0 ? 1 / gKn : 0;
+      c.imT = gKt > 0 ? 1 / gKt : 0;
+    }
     let lambda = (c.biasVel - vn) * c.imN;
     const newAcc = Math.max(0, c.accN + lambda);
     lambda = newAcc - c.accN;
@@ -1740,6 +1764,7 @@ export class NativeEngine {
               restVn: (b.velocity.x - b.angularVelocity * rby - (a.velocity.x - a.angularVelocity * ray)) * f.nx
                     + (b.velocity.y + b.angularVelocity * rbx - (a.velocity.y + a.angularVelocity * rax)) * f.ny,
               biasVel: 0, accN: 0, accT: 0,
+              wakeTouch: a.isSleeping !== b.isSleeping,
             });
           }
         }

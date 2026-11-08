@@ -29,7 +29,7 @@
      PhysicsEngine.setMatter(Matter)  /  new PhysicsEngine({ matter })
    In Node tests: globalThis.Matter = require('matter-js') before importing.
 
-   Version: 1.12.11 (exported as VERSION / PhysicsEngine.VERSION)
+   Version: 1.12.12 (exported as VERSION / PhysicsEngine.VERSION)
      1.0.0 — extracted from MotionLab as a project-agnostic core
      1.1.0 — substeps anti-tunnelling (setSubsteps)
      1.2.0 — spatial queries (queryRegion / raycast), impulse helpers
@@ -87,6 +87,35 @@
              (id unchanged for compatibility; internal codename
              Native67). It also graduates from experimental to
              stable with the solver-stability work below.
+    1.12.12 — native wake-touch gating (MotionLab 1.60): 1.59's
+             live verification caught what its Node protocol had
+             missed — a FAST, chunked drag (pointer targets jumping
+             ~80 px at a time, as real pointer events do) still
+             detonated the pyramid on the first attempt, while a
+             second identical attempt behaved: unreliable. Cause:
+             the frozen first-touch solve that 1.59 deliberately
+             kept is an amplifier at speed. A contact created
+             against a sleeping body is solved as if that body
+             were a wall; for gentle touches that hands a touching
+             chain its clean transfer (the cradle's drift-45
+             behaviour depends on it — disabling sleep measures
+             235), but a wrecking ball arriving at 34 px/step
+             transfers through the slept rows at 58 -> 132 ->
+             210 px/step, each row waking the next through a
+             frozen contact. Pre-wake cannot see this wave coming:
+             resting rows have zero penetration, so no contact
+             exists to pre-wake from until the wave arrives. Fix:
+             contacts record wakeTouch (exactly one body asleep
+             at creation); on the solve's first iteration, a
+             wake-touch whose approach speed exceeds 12 px/step
+             is re-based on the honest live effective mass.
+             Gentle wake-touches keep the frozen transfer.
+             Measured: chunked-drag pyramid peak box speed
+             210 -> 42.7 (the Matter backend under the same
+             protocol measures 87 — the drag itself is violent;
+             the solver no longer multiplies it); cradle drift
+             unchanged at 45; slow press 10.1, rolling impact
+             10.1, bowling replay peak pin 3.61 — all unchanged.
     1.12.11 — native wake timing (MotionLab 1.59): pressing a
              dragged body into a SLEPT stack detonated it (boxes
              leaving at 50-266 px/step, one reaching the stage top).
@@ -257,7 +286,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.12.11';
+export const VERSION = '1.12.12';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.

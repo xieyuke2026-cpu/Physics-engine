@@ -599,6 +599,55 @@ function poolWorld() {
   check('v1.12.11: no box flies above the tower (highest box stays low)', minY > 200, `minY=${minY.toFixed(0)}`);
 }
 
+/* --- v1.12.12: a FAST chunked drag into a slept stack must not
+   amplify up the rows (the 1.59 live-verification failure). The
+   frozen first-touch solve kept for the cradle's sake is an
+   amplifier at speed: impulse sized against an immovable body,
+   delivered at real mass — measured wave 34 (ball) -> 58 -> 132
+   -> 210 px/step up the pyramid rows, each row waking the next
+   through a frozen contact; resting rows have zero penetration,
+   so 1.59's pre-wake never sees the wave coming. Fix: wake-touch
+   contacts (exactly one body asleep at creation) whose approach
+   speed exceeds 12 px/step are re-based on the honest live
+   effective mass; gentle wake-touches keep the frozen transfer.
+   Protocol = the live verifier's: settle 240 steps, drag the
+   ball in 8 chunk jumps (~80 px each) to x=846, hold 180 steps,
+   release, watch 300. Pre-fix: peak box 210. Post-fix: ~43 (the
+   Matter backend under the same protocol measures 87 — the drag
+   is violent, the solver must not multiply it); cradle drift
+   stays 45 (checked by the v1.12.10 block above). */
+{
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2, seed: 1 });
+  e.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true, friction: 0.6 });
+  e.addBody({ kind: 'rect', x: 20, y: 240, width: 40, height: 680, isStatic: true, friction: 0.3 });
+  e.addBody({ kind: 'rect', x: 1260, y: 240, width: 40, height: 680, isStatic: true, friction: 0.3 });
+  const boxes = [];
+  for (let r = 0; r < 6; r++) for (let i = 0; i < 6 - r; i++)
+    boxes.push(e.addBody({ kind: 'rect', x: 520 + i * 48 + r * 24, y: 517 - r * 46, width: 46, height: 46, density: 0.001, friction: 0.5, restitution: 0.05 }));
+  const ball = e.addBody({ kind: 'circle', x: 200, y: 180, radius: 26, density: 0.004, friction: 0.3, restitution: 0.4 });
+  step(e, 240);
+  const slept = boxes.filter((b) => b.isSleeping).length;
+  check('v1.12.12: pyramid boxes are asleep before the fast drag', slept === 21, `slept=${slept}/21`);
+  let peak = 0, minY = Infinity;
+  const watch = (n) => {
+    for (let i = 0; i < n; i++) {
+      e.advance(e.fixedDt);
+      for (const b of boxes) {
+        peak = Math.max(peak, Math.hypot(b.velocity.x, b.velocity.y));
+        minY = Math.min(minY, b.position.y);
+      }
+    }
+  };
+  e.beginDrag(ball, ball.position.x, ball.position.y);
+  const startX = ball.position.x;
+  for (let c = 1; c <= 8; c++) { e.moveDrag(startX + ((846 - startX) * c) / 8, 514); watch(16); }
+  watch(180);
+  e.endDrag();
+  watch(300);
+  check('v1.12.12: fast chunked drag does not amplify (peak box speed bounded)', peak < 60, `peak=${peak.toFixed(2)}`);
+  check('v1.12.12: no box is launched toward the stage top', minY > 150, `minY=${minY.toFixed(0)}`);
+}
+
 /* --- v1.12.9: wedged light bodies are not launched (bowling repro) ---
    Ryan's bowling scene on the native backend: a heavy ball arriving
    at ~2.4 px/step wedged into a stacked triangle pyramid and one pin
