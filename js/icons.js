@@ -2,7 +2,10 @@
    No emoji are used as functional icons anywhere in MotionLab. */
 
 const PATHS = {
-  logo: '<circle cx="12" cy="12" r="2.1"/><ellipse cx="12" cy="12" rx="10" ry="4.3" transform="rotate(-24 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.3" transform="rotate(52 12 12)"/>',
+  // MotionLab's own mark (1.62): solid disc + trajectory swoosh and ball,
+  // Ryan's pick (candidate B) from the two-round logo design. Drawn filled,
+  // not stroked — the disc takes currentColor, the swoosh stays white.
+  logo: '<circle cx="12" cy="12" r="9.4" fill="currentColor" stroke="none"/><path d="M5.6 16.9 Q10.9 5.6 17.3 8.6" stroke="#fff"/><circle cx="18.8" cy="9.2" r="1.6" fill="#fff" stroke="none"/>',
   undo: '<path d="M8.5 5.5 4.5 9.5l4 4"/><path d="M4.5 9.5H15a4.5 4.5 0 0 1 0 9h-3"/>',
   redo: '<path d="m15.5 5.5 4 4-4 4"/><path d="M19.5 9.5H9a4.5 4.5 0 0 0 0 9h3"/>',
   play: '<path d="M8 5.2v13.6c0 .8.9 1.3 1.6.9l10-6.8c.6-.4.6-1.3 0-1.7l-10-6.8C8.9 4 8 4.4 8 5.2Z"/>',
