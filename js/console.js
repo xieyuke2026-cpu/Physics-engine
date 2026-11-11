@@ -7,6 +7,13 @@
    Matter backend those readouts show — and the log carries the
    app-level lines only.
  *
+ * 1.63 (Ryan's field feedback): the drawer no longer restores its
+ * open state (it "spread open by itself" and ate the lab view), all
+ * timers and the engine-event subscription live only while it is
+ * open (closed = zero cost), rendering is incremental (append-only
+ * tail) instead of a full rebuild every flush, and stats refresh
+ * at 1 Hz.
+ *
  * ConsoleLog is the DOM-free model (unit-tested); mountLabConsole
  * builds the drawer UI and the event-batching intake. Engine
  * events can arrive dozens of times per second (a pile falling
@@ -19,6 +26,7 @@ export class ConsoleLog {
     this.cap = Math.max(1, cap | 0);
     this.lines = [];
     this.seq = 0;
+    this.gen = 0; // bumped by clear() so renderers can resync
   }
 
   push(cat, text, step = null) {
@@ -28,7 +36,7 @@ export class ConsoleLog {
     return line;
   }
 
-  clear() { this.lines = []; }
+  clear() { this.lines = []; this.gen++; }
 
   view(filter = 'all') {
     return filter === 'all' ? this.lines : this.lines.filter((l) => l.cat === filter);
@@ -58,13 +66,18 @@ const STAT_FIELDS = [
 
 /** Mount the console drawer into `section` (an element with the
  *  static skeleton from index.html). deps: { world(): PhysicsWorld,
- *  getFps(): string, t(key, params?): string } */
+ *  getFps(): string, t(key, params?): string,
+ *  onToggle?(open): called after the drawer opens/closes so the app
+ *  can subscribe/unsubscribe the engine event stream (1.63) } */
 export function mountLabConsole(section, deps) {
   const { t } = deps;
   const log = new ConsoleLog(300);
   let filter = 'all';
   let open = false;
   let dirty = true;
+  let renderedFilter = null;
+  let renderedSeq = 0;
+  let renderedGen = -1;
   let statsTimer = null;
   let flushTimer = null;
 
@@ -104,22 +117,45 @@ export function mountLabConsole(section, deps) {
     statVals.set(field, val);
   }
 
+  function makeLine(l) {
+    const div = document.createElement('div');
+    div.className = 'console-line cat-' + l.cat;
+    const step = document.createElement('span');
+    step.className = 'console-step';
+    step.textContent = l.step === null ? '' : '#' + l.step;
+    div.appendChild(step);
+    div.appendChild(document.createTextNode(l.text));
+    return div;
+  }
+
+  const RENDER_CAP = 160;
   function render() {
     if (!open) return;
     const lines = log.view(filter);
-    logEl.innerHTML = '';
-    const frag = document.createDocumentFragment();
-    for (const l of lines) {
-      const div = document.createElement('div');
-      div.className = 'console-line cat-' + l.cat;
-      const step = document.createElement('span');
-      step.className = 'console-step';
-      step.textContent = l.step === null ? '' : '#' + l.step;
-      div.appendChild(step);
-      div.appendChild(document.createTextNode(l.text));
-      frag.appendChild(div);
+    // Incremental append is safe: log pushes happen only inside
+    // flush()/sys() (a handful per interval), so the last rendered
+    // line can never be evicted from the 300-line model between
+    // renders. Anything else (first render, filter change, clear)
+    // falls back to a tail rebuild.
+    const anchor = renderedSeq ? lines.findIndex((l) => l.n === renderedSeq) : -1;
+    if (filter === renderedFilter && log.gen === renderedGen && anchor >= 0) {
+      if (lines.length > anchor + 1) {
+        const frag = document.createDocumentFragment();
+        for (let i = anchor + 1; i < lines.length; i++) frag.appendChild(makeLine(lines[i]));
+        logEl.appendChild(frag);
+        while (logEl.childElementCount > RENDER_CAP) logEl.removeChild(logEl.firstChild);
+        renderedSeq = lines[lines.length - 1].n;
+      }
+    } else {
+      logEl.innerHTML = '';
+      const tail = lines.slice(-RENDER_CAP);
+      const frag = document.createDocumentFragment();
+      for (const l of tail) frag.appendChild(makeLine(l));
+      logEl.appendChild(frag);
+      renderedSeq = tail.length ? tail[tail.length - 1].n : 0;
+      renderedFilter = filter;
+      renderedGen = log.gen;
     }
-    logEl.appendChild(frag);
     logEl.scrollTop = logEl.scrollHeight;
     dirty = false;
   }
@@ -188,26 +224,27 @@ export function mountLabConsole(section, deps) {
   function setOpen(v) {
     open = !!v;
     section.hidden = !open;
-    try { localStorage.setItem('motionlab.console.v1', JSON.stringify({ open })); } catch { /* storage unavailable */ }
     if (open) {
+      flush();
       render();
       refreshStats();
-      if (!statsTimer) statsTimer = setInterval(refreshStats, 500);
-    } else if (statsTimer) {
-      clearInterval(statsTimer);
-      statsTimer = null;
+      if (!statsTimer) statsTimer = setInterval(refreshStats, 1000);
+      if (!flushTimer) flushTimer = setInterval(flush, 500);
+    } else {
+      if (statsTimer) { clearInterval(statsTimer); statsTimer = null; }
+      if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
     }
+    if (deps.onToggle) { try { deps.onToggle(open); } catch { /* the app's binding must not break the drawer */ } }
   }
 
-  // The flush runs from mount (not only while open) so the log
-  // history is already there when the drawer is first opened.
-  flushTimer = setInterval(flush, 300);
+  // 1.63: no timers run while the drawer is closed (see setOpen).
 
   section.querySelector('#consoleClear').addEventListener('click', () => { log.clear(); dirty = true; render(); });
   section.querySelector('#consoleClose').addEventListener('click', () => setOpen(false));
 
-  let initialOpen = false;
-  try { initialOpen = JSON.parse(localStorage.getItem('motionlab.console.v1') || '{}').open === true; } catch { initialOpen = false; }
+  // 1.63: the drawer always starts closed — 1.61 persisted the open
+  // state and restored it on every lab entry. Drop any stale key.
+  try { localStorage.removeItem('motionlab.console.v1'); } catch { /* storage unavailable */ }
 
   return {
     log,
@@ -216,7 +253,6 @@ export function mountLabConsole(section, deps) {
     setOpen,
     toggle: () => setOpen(!open),
     isOpen: () => open,
-    initialOpen,
     render: () => { dirty = true; render(); },
   };
 }

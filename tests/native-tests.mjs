@@ -667,8 +667,12 @@ function poolWorld() {
   check('v1.13.0: drop produces impact then sleep events', types.includes('impact') && types.includes('sleep'), `events=${types.join(',')}`);
   check('v1.13.0: sleep counter tracks transitions', st.sleeps >= 1 && st.contacts >= 1, `sleeps=${st.sleeps} contacts=${st.contacts}`);
   unsub();
+  const seenAtUnsub = types.length;
+  e.addBody({ kind: 'circle', x: 300, y: 80, radius: 16, density: 0.001, label: 'Second Ball' });
+  step(e, 600);
+  check('v1.13.0: after unsubscribe the stream is silent (a closed console takes in nothing)', types.length === seenAtUnsub, `events ${seenAtUnsub} -> ${types.length}`);
   e.resetStats();
-  check('v1.13.0: resetStats zeroes counters (bodies stay live)', e.stats.steps === 0 && e.stats.sleeps === 0 && e.stats.bodies === 2, `steps=${e.stats.steps}`);
+  check('v1.13.0: resetStats zeroes counters (bodies stay live)', e.stats.steps === 0 && e.stats.sleeps === 0 && e.stats.bodies === 3, `steps=${e.stats.steps} bodies=${e.stats.bodies}`);
 }
 {
   // Chunked drag (the v1.12.12 protocol) must fire the gate.

@@ -198,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.62')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.63')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -206,8 +206,12 @@ check('v1.13: About line shows all three versions (app / engine / Matter)',
 check('console: drawer + toggle exist, drawer starts hidden', !!doc.getElementById('consoleDrawer') && !!doc.getElementById('btnConsole') && doc.getElementById('consoleDrawer').hidden === true);
 click(doc.getElementById('btnConsole'));
 check('console: toggle opens the drawer with stats + ready line', doc.getElementById('consoleDrawer').hidden === false && doc.getElementById('consoleStats').textContent.length > 0 && doc.getElementById('consoleLog').textContent.includes('控制台'), doc.getElementById('consoleLog').textContent.slice(0, 80));
+const statsWhileOpen = doc.getElementById('consoleStats').textContent;
 click(doc.getElementById('btnConsole'));
 check('console: toggle closes the drawer', doc.getElementById('consoleDrawer').hidden === true);
+check('console: open state is not persisted (1.63)', window.localStorage.getItem('motionlab.console.v1') === null);
+await wait(1200);
+check('console: stats stay frozen while closed — timers stopped (1.63)', doc.getElementById('consoleStats').textContent === statsWhileOpen, doc.getElementById('consoleStats').textContent);
 
 {
   const sel = doc.querySelector('#settingsBody select');
@@ -351,8 +355,9 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
 
 /* --- v1.25: share button, hub import entry, wind add button --- */
 {
-  check('v1.25: top bar has a share button with an icon',
-    !!doc.getElementById('btnShare') && doc.getElementById('btnShare').innerHTML.includes('<svg'));
+  check('v1.63: share lives in the export menu now (separate share button merged away)',
+    !!doc.getElementById('btnExport') && !doc.getElementById('btnShare')
+    && doc.getElementById('exportMenu').textContent.includes('分享场景'));
   check('v1.25: home hub toolbar has an import-scene entry',
     !!doc.getElementById('btnImportHub') && doc.getElementById('btnImportHub').textContent.includes('导入场景'));
   check('v1.25: scene panel offers adding a wind region',
@@ -410,23 +415,29 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   check('v1.28: tool rail has four group captions',
     doc.querySelectorAll('#toolrail .rail-cap').length === 4,
     `caps=${doc.querySelectorAll('#toolrail .rail-cap').length}`);
-  const recBtn = doc.getElementById('btnReplay');
-  check('v1.50: replay button exists with a label', !!recBtn && recBtn.textContent.trim().length > 0);
+  const recBtn = doc.getElementById('btnRec');
+  check('v1.63: merged record button exists with a label', !!recBtn && recBtn.textContent.includes('录制'));
   check('v1.50: GIF record button is gone', !doc.getElementById('btnRecord'));
+  check('v1.63: the two old record buttons are merged away', !doc.getElementById('btnReplay') && !doc.getElementById('btnVideo'));
   click(recBtn);
   await wait(60);
-  check('v1.50: replay button enters recording state', recBtn.classList.contains('recording'));
+  const recMenu = doc.getElementById('recMenu');
+  check('v1.63: record button opens a chooser with both modes', !!recMenu && !recMenu.hidden
+    && recMenu.textContent.includes('录制回放') && recMenu.textContent.includes('录制视频'));
+  click([...recMenu.querySelectorAll('.tb-menu-item')].find((b) => b.textContent.includes('录制回放')));
+  await wait(60);
+  check('v1.50: replay recording starts from the chooser', recBtn.classList.contains('recording') && recMenu.hidden);
   click(recBtn);
   await wait(200);
   check('v1.50: replay button leaves recording state after stop', !recBtn.classList.contains('recording'));
   const rBar = doc.getElementById('replayBar');
   check('v1.50: replay transport bar exists and starts hidden', !!rBar && rBar.hidden);
-  const vidBtn = doc.getElementById('btnVideo');
-  check('v1.52: video record button exists and is labelled', !!vidBtn && vidBtn.textContent.includes('录制视频'));
-  click(vidBtn);
+  click(recBtn);
+  await wait(60);
+  click([...recMenu.querySelectorAll('.tb-menu-item')].find((b) => b.textContent.includes('录制视频')));
   await wait(80);
-  check('v1.52: without MediaRecorder the video button toasts unsupported and never enters recording state',
-    !vidBtn.classList.contains('recording') && doc.body.textContent.includes('不支持视频录制'));
+  check('v1.52: without MediaRecorder the video mode toasts unsupported and never enters recording state',
+    !recBtn.classList.contains('recording') && doc.body.textContent.includes('不支持视频录制'));
 
   // hinge flow on a paused scene: two fresh circles, pin them, drive, delete
   click(doc.getElementById('btnPause'));

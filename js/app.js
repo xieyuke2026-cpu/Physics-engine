@@ -42,7 +42,10 @@ let labConsole = null;
 let consoleUnsub = null;
 function bindConsoleToWorld() {
   if (consoleUnsub) { consoleUnsub(); consoleUnsub = null; }
-  if (labConsole) consoleUnsub = world.onEvent((ev) => labConsole.ingest(ev));
+  // 1.63: subscribe only while the drawer is open — closed means the
+  // engine builds no event objects and skips its impact scan, so a
+  // closed console costs exactly zero FPS.
+  if (labConsole && labConsole.isOpen()) consoleUnsub = world.onEvent((ev) => labConsole.ingest(ev));
 }
 
 const renderer = new Renderer(canvas);
@@ -1311,6 +1314,19 @@ async function shareSceneObject(sceneObj) {
     else window.prompt(t('msg.sharePrompt'), url);
   } catch { toast(t('msg.shareInvalid'), 3200); }
 }
+/* Export the current scene as a .motionlab.json file (1.63: sits in
+   the merged Export menu, next to Share). */
+function exportCurrentScene() {
+  sceneName = $('projectName').value.trim() || sceneName;
+  const blob = new Blob([JSON.stringify(currentScene(), null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${sceneName.replace(/[\\/:*?"<>|]/g, '_')}.motionlab.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(t('msg.exportOk'));
+}
+
 function shareCurrentScene() {
   sceneName = $('projectName').value.trim() || sceneName;
   shareSceneObject(currentScene());
@@ -1946,6 +1962,57 @@ function refreshAfterLangChange() {
 }
 window.addEventListener('ml-lang', refreshAfterLangChange);
 
+/* ------- top-bar dropdown menus (1.63) -------
+   One Record button (choose replay vs video) and one Export button
+   (choose JSON vs share link) — Ryan: the top bar was too cramped. */
+let openMenuEl = null;
+function closeMenus() { if (openMenuEl) { openMenuEl.hidden = true; openMenuEl = null; } }
+function toggleMenu(menu, anchor) {
+  if (!menu || !anchor) return;
+  if (openMenuEl === menu) { closeMenus(); return; }
+  closeMenus();
+  const r = anchor.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 232))}px`;
+  menu.style.top = `${r.bottom + 6}px`;
+  menu.hidden = false;
+  openMenuEl = menu;
+}
+function menuItem(label, desc, fn) {
+  const b = document.createElement('button');
+  b.className = 'tb-menu-item';
+  const l = document.createElement('span');
+  l.className = 'tb-menu-label';
+  l.textContent = label;
+  b.appendChild(l);
+  if (desc) {
+    const d = document.createElement('span');
+    d.className = 'tb-menu-desc';
+    d.textContent = desc;
+    b.appendChild(d);
+  }
+  b.addEventListener('click', () => { closeMenus(); fn(); });
+  return b;
+}
+function buildMenus() {
+  const rec = $('recMenu');
+  if (rec) {
+    rec.innerHTML = '';
+    rec.appendChild(menuItem(t('replay.label'), t('tb.title.replay'), () => startReplayRecording()));
+    rec.appendChild(menuItem(t('video.label'), t('tb.title.video'), () => toggleVideoRecording()));
+  }
+  const exp = $('exportMenu');
+  if (exp) {
+    exp.innerHTML = '';
+    exp.appendChild(menuItem(t('tb.title.export'), '', () => exportCurrentScene()));
+    exp.appendChild(menuItem(t('menu.shareScene'), t('menu.shareDesc'), () => shareCurrentScene()));
+  }
+}
+document.addEventListener('pointerdown', (e) => {
+  if (openMenuEl && !openMenuEl.contains(e.target)
+    && !(e.target.closest && e.target.closest('#btnRec, #btnExport'))) closeMenus();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenus(); });
+
 /* ---------------- toolbar wiring ---------------- */
 /** Icon+text labels that depend on the language; re-run on language change. */
 function applyChromeLabels() {
@@ -1958,6 +2025,9 @@ function applyChromeLabels() {
   const nw = $('btnNewScene'); if (nw) nw.innerHTML = `${icon('plus', 16)} ${t('tb.newScene')}`;
   const dup = $('btnDuplicateScene'); if (dup) dup.innerHTML = `${icon('copy', 16)} ${t('tb.dupScene')}`;
   updateReplayBtn();
+  const exp = $('btnExport');
+  if (exp) exp.innerHTML = `${icon('export', 16)}<span>${t('tb.export')}</span><span class="caret">▾</span>`;
+  buildMenus();
   const rp = $('btnReplayPlay'); if (rp) rp.innerHTML = icon('play', 15);
 }
 
@@ -1973,8 +2043,7 @@ function initChrome() {
   $('btnPause').innerHTML = icon('pause'); $('btnReset').innerHTML = icon('reset');
   $('btnStep').innerHTML = icon('step'); $('btnShot').innerHTML = icon('camera');
   $('btnSettings').innerHTML = icon('settings'); $('btnPanel').innerHTML = icon('panel');
-  $('btnExport').innerHTML = icon('export'); $('btnImport').innerHTML = icon('import');
-  $('btnShare').innerHTML = icon('share');
+  $('btnImport').innerHTML = icon('import');
   $('btnZoomIn').innerHTML = icon('plus', 17); $('btnZoomOut').innerHTML = icon('minus', 17);
   applyChromeLabels();
   document.querySelectorAll('.modal-close').forEach((b) => { b.innerHTML = icon('close', 18); });
@@ -1991,8 +2060,11 @@ function initChrome() {
     const b = selectedBody();
     if (b) panel.refreshBody(liveOf(b));
   });
-  $('btnReplay').addEventListener('click', () => { replayRec ? stopReplayRecording() : startReplayRecording(); });
-  $('btnVideo').addEventListener('click', toggleVideoRecording);
+  $('btnRec').addEventListener('click', () => {
+    if (replayRec) { stopReplayRecording(); return; }
+    if (videoRec) { toggleVideoRecording(); return; }
+    toggleMenu($('recMenu'), $('btnRec'));
+  });
   $('btnReplayPlay').addEventListener('click', () => { if (lastReplay) openPlayback(lastReplay); });
   $('btnShot').addEventListener('click', () => {
     renderer.draw(world, {
@@ -2017,9 +2089,9 @@ function initChrome() {
     world: () => world,
     getFps: () => ($('stFps').textContent || '').replace(/^FPS\s*/, ''),
     t,
+    onToggle: () => bindConsoleToWorld(),
   });
   bindConsoleToWorld();
-  if (labConsole.initialOpen) labConsole.setOpen(true);
   labConsole.sys(t('console.sysReady', { name: world.core.backendId === 'native' ? 'Impulse' : 'Matter.js' }));
   $('btnConsole').addEventListener('click', () => labConsole.toggle());
   $('btnPanel').addEventListener('click', () => {
@@ -2028,18 +2100,8 @@ function initChrome() {
     store.saveUISettings({ ...store.loadUISettings(), panelHidden: p.classList.contains('hidden-panel') });
     requestAnimationFrame(() => { renderer.resize(); });
   });
-  $('btnExport').addEventListener('click', () => {
-    sceneName = $('projectName').value.trim() || sceneName;
-    const blob = new Blob([JSON.stringify(currentScene(), null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${sceneName.replace(/[\\/:*?"<>|]/g, '_')}.motionlab.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast(t('msg.exportOk'));
-  });
+  $('btnExport').addEventListener('click', () => toggleMenu($('exportMenu'), $('btnExport')));
   $('btnImport').addEventListener('click', () => $('fileImport').click());
-  $('btnShare').addEventListener('click', shareCurrentScene);
   // Home hub import entry: same file picker + loader as the lab's button,
   // so a scene can be imported without entering the lab first.
   $('btnImportHub').addEventListener('click', () => $('fileImport').click());
@@ -2338,17 +2400,7 @@ function cancelReplayRecording() {
    is for sharing, replay is for exact reproduction. */
 let videoRec = null; // { recorder, startedAt }
 
-function updateVideoBtn() {
-  const btn = $('btnVideo');
-  if (!btn) return;
-  if (videoRec) {
-    btn.innerHTML = `${icon('stop', 15)}<span>${t('replay.stop')} ${fmtT((performance.now() - videoRec.startedAt) / 1000)}</span>`;
-    btn.classList.add('recording');
-  } else {
-    btn.innerHTML = `${icon('camera', 15)}<span>${t('video.label')}</span>`;
-    btn.classList.remove('recording');
-  }
-}
+function updateVideoBtn() { updateRecBtn(); }
 
 function toggleVideoRecording() {
   if (videoRec) { videoRec.recorder.stop(); return; }
@@ -2375,17 +2427,24 @@ function toggleVideoRecording() {
   toast(t('msg.videoStarted'), 2600);
 }
 
-function updateReplayBtn() {
-  const btn = $('btnReplay');
+/* One record button (1.63): idle it reads 录制 ▾ and opens the mode
+   chooser; while either recording runs it becomes that recording's
+   stop button (click stops). */
+function updateRecBtn() {
+  const btn = $('btnRec');
   if (!btn) return;
   if (replayRec) {
     btn.innerHTML = `${icon('stop', 15)}<span>${t('replay.stop')} ${fmtT(recStep() / 60)}</span>`;
     btn.classList.add('recording');
+  } else if (videoRec) {
+    btn.innerHTML = `${icon('stop', 15)}<span>${t('replay.stop')} ${fmtT((performance.now() - videoRec.startedAt) / 1000)}</span>`;
+    btn.classList.add('recording');
   } else {
-    btn.innerHTML = `${icon('record', 15)}<span>${t('replay.label')}</span>`;
+    btn.innerHTML = `${icon('record', 15)}<span>${t('tb.record')}</span><span class="caret">▾</span>`;
     btn.classList.remove('recording');
   }
 }
+function updateReplayBtn() { updateRecBtn(); }
 
 function updateReplayPlayBtn() {
   const btn = $('btnReplayPlay');
