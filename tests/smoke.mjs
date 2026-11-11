@@ -198,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.64')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.65')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.0')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -212,8 +212,13 @@ check('console: toggle closes the drawer', doc.getElementById('consoleDrawer').h
 check('console: open state is not persisted (1.63)', window.localStorage.getItem('motionlab.console.v1') === null);
 await wait(1200);
 check('console: stats stay frozen while closed — timers stopped (1.63)', doc.getElementById('consoleStats').textContent === statsWhileOpen, doc.getElementById('consoleStats').textContent);
-check('console: drawer is a capped overlay, out of the layout flow (1.64)',
-  /#consoleDrawer\{position:absolute;[^}]*height:min\(340px,38vh\)/.test(fs.readFileSync(new URL('../css/style.css', import.meta.url), 'utf8')));
+check('console: drawer is pinned inside the stage, off both sidebars (1.65)',
+  doc.getElementById('consoleDrawer').parentElement.id === 'stage'
+  && !!doc.getElementById('consoleResize')
+  && /#consoleDrawer\{position:absolute;left:0;right:0;bottom:0;/.test(fs.readFileSync(new URL('../css/style.css', import.meta.url), 'utf8')));
+check('console: log lines carry coloured text tags, no emoji (1.65)',
+  !!doc.getElementById('consoleLog').querySelector('.console-tag')
+  && !/💤|⏰/.test(fs.readFileSync(new URL('../js/i18n.js', import.meta.url), 'utf8')));
 
 {
   const sel = doc.querySelector('#settingsBody select');

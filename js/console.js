@@ -14,6 +14,14 @@
  * tail) instead of a full rebuild every flush, and stats refresh
  * at 1 Hz.
  *
+ * 1.65 (Ryan's annotated screenshot): the drawer moves inside
+ * #stage, so its left/right edges are pinned to the canvas area
+ * between the two sidebars (neither sidebar is ever covered), its
+ * top edge can be dragged to resize it (clamped to the floor and
+ * ceiling Ryan marked on the shot), the dragged height is
+ * remembered, and log lines trade their emoji prefixes for
+ * coloured text tags per category.
+ *
  * ConsoleLog is the DOM-free model (unit-tested); mountLabConsole
  * builds the drawer UI and the event-batching intake. Engine
  * events can arrive dozens of times per second (a pile falling
@@ -43,6 +51,23 @@ export class ConsoleLog {
   }
 }
 
+/* Drawer height limits as fractions of the stage height (1.65).
+ * Ryan marked both ends on his screenshot: the ceiling is the
+ * cyan line he drew (console ≈40% of the screen at most) and the
+ * floor is the bottom of his annotation text (≈15% at least) —
+ * converted here to fractions of the stage, which is the
+ * drawer's offset parent. */
+export const CONSOLE_MIN_FRAC = 0.17;
+export const CONSOLE_MAX_FRAC = 0.45;
+export const CONSOLE_DEFAULT_FRAC = 0.36;
+
+export function clampDrawerHeight(px, stagePx) {
+  if (!stagePx || !(stagePx > 0)) return Math.max(0, Math.round(px) || 0);
+  const lo = Math.max(96, Math.round(stagePx * CONSOLE_MIN_FRAC));
+  const hi = Math.max(lo + 24, Math.round(stagePx * CONSOLE_MAX_FRAC));
+  return Math.min(hi, Math.max(lo, Math.round(px)));
+}
+
 const CATEGORIES = [
   ['all', 'console.filterAll'],
   ['impact', 'console.filterImpact'],
@@ -50,6 +75,13 @@ const CATEGORIES = [
   ['spawn', 'console.filterSpawn'],
   ['system', 'console.filterSystem'],
 ];
+
+const TAG_KEYS = {
+  impact: 'console.filterImpact',
+  sleep: 'console.filterSleep',
+  spawn: 'console.filterSpawn',
+  system: 'console.filterSystem',
+};
 
 const STAT_FIELDS = [
   ['fps', 'console.statFps', () => null], // filled from deps.getFps
@@ -124,6 +156,12 @@ export function mountLabConsole(section, deps) {
     step.className = 'console-step';
     step.textContent = l.step === null ? '' : '#' + l.step;
     div.appendChild(step);
+    // 1.65: a coloured text tag names the type (Ryan: the emoji
+    // prefixes rendered ugly) — colour lives on the tag only.
+    const tag = document.createElement('span');
+    tag.className = 'console-tag';
+    tag.textContent = t(TAG_KEYS[l.cat] || 'console.filterSystem');
+    div.appendChild(tag);
     div.appendChild(document.createTextNode(l.text));
     return div;
   }
@@ -221,10 +259,53 @@ export function mountLabConsole(section, deps) {
     render();
   }
 
+  // --- drag-to-resize (1.65): top-edge handle, vertical only.
+  // Left/right stay pinned to the stage edges by CSS. The height
+  // fraction (not the open state) is remembered between sessions.
+  const HEIGHT_KEY = 'motionlab.consoleh.v1';
+  let heightFrac = CONSOLE_DEFAULT_FRAC;
+  try {
+    const v = parseFloat(localStorage.getItem(HEIGHT_KEY));
+    if (Number.isFinite(v)) heightFrac = Math.min(CONSOLE_MAX_FRAC, Math.max(CONSOLE_MIN_FRAC, v));
+  } catch { /* storage unavailable */ }
+  const stageH = () => (section.offsetParent && section.offsetParent.clientHeight) || window.innerHeight || 0;
+  function applyHeight() {
+    const sh = stageH();
+    if (sh > 0) section.style.height = clampDrawerHeight(sh * heightFrac, sh) + 'px';
+  }
+  const resizeHandle = section.querySelector('#consoleResize');
+  if (resizeHandle) {
+    let drag = null;
+    resizeHandle.addEventListener('pointerdown', (e) => {
+      drag = { y: e.clientY, h: section.getBoundingClientRect().height || stageH() * heightFrac };
+      resizeHandle.classList.add('dragging');
+      try { resizeHandle.setPointerCapture(e.pointerId); } catch { /* older engines */ }
+      e.preventDefault();
+    });
+    resizeHandle.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const sh = stageH();
+      if (!sh) return;
+      const px = clampDrawerHeight(drag.h + (drag.y - e.clientY), sh);
+      section.style.height = px + 'px';
+      heightFrac = px / sh;
+    });
+    const endDrag = () => {
+      if (!drag) return;
+      drag = null;
+      resizeHandle.classList.remove('dragging');
+      try { localStorage.setItem(HEIGHT_KEY, String(heightFrac)); } catch { /* storage unavailable */ }
+    };
+    resizeHandle.addEventListener('pointerup', endDrag);
+    resizeHandle.addEventListener('pointercancel', endDrag);
+  }
+  window.addEventListener('resize', () => { if (open) applyHeight(); });
+
   function setOpen(v) {
     open = !!v;
     section.hidden = !open;
     if (open) {
+      applyHeight();
       flush();
       render();
       refreshStats();

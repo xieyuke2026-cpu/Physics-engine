@@ -9,7 +9,7 @@ globalThis.Matter = require('../vendor/matter.min.js');
 
 const { validateScene, defaultScene, sceneData, bodyData, constraintData, hingeData, fluidData, emitterData, presetScenes, jitteredScene, sceneJsonTooLarge, MAX_SCENE_JSON_BYTES } = await import('../js/scene.js');
 const { PhysicsWorld } = await import('../js/physics.js');
-const { ConsoleLog } = await import('../js/console.js');
+const { ConsoleLog, clampDrawerHeight } = await import('../js/console.js');
 
 let pass = 0, fail = 0;
 function check(name, cond, extra = '') {
@@ -751,6 +751,14 @@ check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b)
   check('console: ring buffer caps at capacity (oldest dropped)', log.lines.length === 5 && log.lines[0].text === 'hit', `first=${log.lines[0].text}`);
   log.clear();
   check('console: clear empties the buffer', log.lines.length === 0 && log.view('all').length === 0);
+}
+
+/* --- console drawer height clamp (1.65) --- */
+{
+  check('console: drawer height clamps at the floor Ryan marked (17% of stage)', clampDrawerHeight(40, 1000) === 170);
+  check('console: drawer height clamps at the ceiling Ryan marked (45% of stage)', clampDrawerHeight(900, 1000) === 450);
+  check('console: drawer height passes through inside the range', clampDrawerHeight(300, 1000) === 300);
+  check('console: drawer height tolerates a missing stage size', clampDrawerHeight(300, 0) === 300);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
