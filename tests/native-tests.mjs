@@ -752,5 +752,56 @@ function poolWorld() {
     `rebound=${rebound.toFixed(0)}px (ideal 205)`);
 }
 
+/* --- v1.13.1: hanging bodies sleep plumb (cradle sleep pose) ---
+   Ryan's report: the cradle row dozed mid-pose at ~7.5 degrees,
+   freezing the row in a tilted cluster. Two causes, both fixed
+   here. (1) The sleep rule required a recent contact as support,
+   but a settled hanging row has 1 px gaps and zero contacts, so
+   the row could only sleep while still swinging — a rigid link
+   to a fixed anchor now counts as support. (2) A hanging body
+   may not sleep while its hang direction is off the gravity
+   axis — the guard blocks sleep until the swing dies. The
+   approach-speed cap on the contact bias (biasVel never exceeds
+   the approach speed) keeps the row quiet enough to reach the
+   plumb rest instead of pumping energy. This test rebuilds the
+   preset geometry and requires all five balls asleep with every
+   sleeper within 2 degrees of plumb; the second check guards
+   the two-anchor exemption (a two-rope sign rests tilted by
+   design and must still be allowed to sleep). */
+{
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2, seed: 1 });
+  e.addBody({ kind: 'rect', x: 640, y: 62, width: 285, height: 14, isStatic: true });
+  const balls = [];
+  const n = 5, r = 22, L = 190, topY = 70, cx = 640;
+  for (let i = 0; i < n; i++) {
+    const ax = cx + (i - 2) * (r * 2 + 1);
+    let bx = ax, by = topY + L;
+    if (i === 0) { const a = 0.62; bx = ax - Math.sin(a) * L; by = topY + Math.cos(a) * L; }
+    balls.push({ b: e.addBody({ id: 'sb' + i, kind: 'circle', x: bx, y: by, radius: r, density: 0.004, friction: 0.05, frictionAir: 0.0005, restitution: 0.95 }), ax });
+    e.addConstraint({ bodyA: null, bodyB: 'sb' + i, pointA: { x: ax, y: topY }, pointB: { x: 0, y: 0 }, stiffness: 1, damping: 0, length: L });
+  }
+  const tilt = ({ b, ax }) => Math.atan2(b.position.x - ax, b.position.y - topY) * 180 / Math.PI;
+  let allAsleepAt = -1;
+  for (let s = 0; s < 9000; s++) {
+    e.advance(e.fixedDt);
+    if (balls.every(({ b }) => b.isSleeping)) { allAsleepAt = s; break; }
+  }
+  const maxTilt = Math.max(...balls.map((bb) => Math.abs(tilt(bb))));
+  check('v1.13.1: cradle row sleeps fully (anchor support counts)', allAsleepAt >= 0, `allAsleepAt=${allAsleepAt}`);
+  check('v1.13.1: sleeping cradle balls hang plumb (max tilt < 2 deg)', allAsleepAt >= 0 && maxTilt < 2, `maxTilt=${maxTilt.toFixed(2)} deg`);
+}
+{
+  // Two-rope sign: unequal rod lengths force a tilted rest pose.
+  // The hang-tilt guard exempts bodies with >= 2 fixed anchors,
+  // so the sign must still fall asleep despite its tilt.
+  const e = new NativeEngine({ enableSleeping: true, substeps: 2, seed: 1 });
+  const sign = e.addBody({ id: 'sign', kind: 'rect', x: 640, y: 280, width: 160, height: 30, density: 0.001, friction: 0.3 });
+  e.addConstraint({ bodyA: null, bodyB: 'sign', pointA: { x: 570, y: 100 }, pointB: { x: -70, y: 0 }, stiffness: 1, damping: 0, length: 180 });
+  e.addConstraint({ bodyA: null, bodyB: 'sign', pointA: { x: 710, y: 100 }, pointB: { x: 70, y: 0 }, stiffness: 1, damping: 0, length: 200 });
+  for (let s = 0; s < 3600; s++) { e.advance(e.fixedDt); if (sign.isSleeping) break; }
+  check('v1.13.1: two-anchor body may sleep tilted (guard exemption)', sign.isSleeping === true && Math.abs(sign.angle) > 0.03,
+    `sleeping=${sign.isSleeping} angle=${(sign.angle * 180 / Math.PI).toFixed(2)} deg`);
+}
+
 console.log(`\nNativeEngine tests: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

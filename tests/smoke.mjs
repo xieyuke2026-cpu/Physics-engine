@@ -60,7 +60,7 @@ check('boot: state is paused', stState().includes('已暂停'), stState());
 check('boot: scene panel visible', doc.getElementById('panelBody').textContent.includes('场景属性'));
 check('boot: toolbar icons rendered (svg)', doc.querySelectorAll('#topbar svg').length >= 8,
   `svgs=${doc.querySelectorAll('#topbar svg').length}`);
-check('boot: 12 tool buttons with svg icons', doc.querySelectorAll('#toolrail .tool-btn svg').length === 12,
+check('boot: 13 tool buttons with svg icons', doc.querySelectorAll('#toolrail .tool-btn svg').length === 13,
   `svgs=${doc.querySelectorAll('.tool-btn svg').length}`);
 check('renderer is drawing frames', drawCalls > 50, `drawCalls=${drawCalls}`);
 
@@ -198,8 +198,8 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.65')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.0')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.66')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.1')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
@@ -279,7 +279,7 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
 {
   const toolBtns = [...doc.querySelectorAll('#toolrail .tool-btn')];
   check('v1.23: every tool-rail button carries a hover tip (data-tip)',
-    toolBtns.length === 12 && toolBtns.every((b) => (b.getAttribute('data-tip') || '').length > 10),
+    toolBtns.length === 13 && toolBtns.every((b) => (b.getAttribute('data-tip') || '').length > 10),
     `buttons=${toolBtns.length}`);
   check('v1.23: scene panel exposes the gravitation entry',
     panelBody.textContent.includes('万有引力 Gravitation G') && !!panelBody.querySelector('input[data-key="gravitation"]'));
@@ -549,6 +549,57 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
     doc.getElementById('toast').textContent);
   window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
   await wait(40);
+}
+
+/* ---- v1.66: emitter tool on the rail + delete-tool coverage ----
+   The emitter used to be panel-only (added at a fixed spot, always
+   aiming down). The rail tool places it at the tap point and aims
+   it along the drag; the delete tool can now remove it too. The
+   drag is purely horizontal in client space, which stays horizontal
+   in world space under any pan/zoom, so the aimed angle is 0 deg. */
+{
+  const emitterBtn = doc.querySelector('[data-tool="emitter"]');
+  check('v1.66: emitter tool button exists with an icon', !!emitterBtn && !!emitterBtn.querySelector('svg'));
+  check('v1.66: emitter button sits in the create group after magnet',
+    !!emitterBtn && emitterBtn.previousElementSibling?.dataset.tool === 'magnet');
+  click(emitterBtn);
+  await wait(40);
+  check('v1.66: emitter hint shows', doc.getElementById('stageHint').textContent.includes('发射器'),
+    doc.getElementById('stageHint').textContent);
+  const countBefore = stCount();
+  pointer(canvas, 'pointerdown', 161, 216);
+  pointer(canvas, 'pointermove', 281, 216);
+  pointer(canvas, 'pointerup', 281, 216);
+  await wait(60);
+  const angleInput = doc.querySelector('input[data-key="eangle"]');
+  check('v1.66: drag creates an emitter aimed along the drag (0 deg)',
+    !!angleInput && Math.abs(Number(angleInput.value)) <= 2, `angle=${angleInput && angleInput.value}`);
+  check('v1.66: emitter is not a body (count unchanged)', stCount() === countBefore, `${countBefore} -> ${stCount()}`);
+  click(doc.querySelector('[data-tool="delete"]'));
+  pointer(canvas, 'pointerdown', 161, 216);
+  pointer(canvas, 'pointerup', 161, 216);
+  await wait(60);
+  click(doc.querySelector('[data-tool="select"]'));
+  pointer(canvas, 'pointerdown', 161, 216);
+  pointer(canvas, 'pointerup', 161, 216);
+  await wait(60);
+  check('v1.66: delete tool removes the emitter (nothing to select there)',
+    !doc.querySelector('input[data-key="eangle"]'));
+  check('v1.66: delete tap removed no body (count unchanged)', stCount() === countBefore, `${countBefore} -> ${stCount()}`);
+}
+
+/* ---- v1.66: lossless drag recording (static contract) ----
+   The pointermove filter is the only place a sub-pixel drag target
+   could be dropped before the recorder; both engines' servos
+   follow the exact pointer, so the filter must too. Node suites
+   cannot drive pointer events, so the contract is pinned on the
+   source, in the style of the 1.64/1.65 static checks above. */
+{
+  const appSrc = fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  check('v1.66: drag recording keeps every exact pointer change',
+    /w\.x !== recLastDrag\.x \|\| w\.y !== recLastDrag\.y/.test(appSrc));
+  check('v1.66: no distance threshold drops sub-pixel drag targets',
+    !/hypot\(w\.x - recLastDrag\.x/.test(appSrc));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

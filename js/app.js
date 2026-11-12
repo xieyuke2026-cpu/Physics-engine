@@ -813,7 +813,7 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   const w = toWorld(e);
-  if (tool === 'circle' || tool === 'rectangle' || tool === 'polygon' || tool === 'triangle' || tool === 'line' || tool === 'magnet') {
+  if (tool === 'circle' || tool === 'rectangle' || tool === 'polygon' || tool === 'triangle' || tool === 'line' || tool === 'magnet' || tool === 'emitter') {
     gesture = { kind: 'create', start: w, cur: w };
     updatePreview();
     return;
@@ -851,6 +851,18 @@ canvas.addEventListener('pointerdown', (e) => {
       if (selectedId === id) selectedId = null;
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
       toast(t('msg.bodyDeleted'));
+      return;
+    }
+    // 1.66: emitters were missing from the delete tool (only the
+    // panel could remove them). Point target, so it wins over the
+    // region picks below — same priority as selection.
+    const em = pickEmitter(w);
+    if (em) {
+      world.removeEmitter(em.id);
+      recRegions();
+      if (selectedEmitterId === em.id) selectedEmitterId = null;
+      refreshPanel(); pushHistorySoon(); scheduleAutosave();
+      toast(t('msg.emitterDeleted'));
       return;
     }
     const wn = pickWind(w);
@@ -968,7 +980,14 @@ canvas.addEventListener('pointermove', (e) => {
     if (running && world.dragging) {
       world.moveDrag(w.x, w.y);
       dragPoint = { x: w.x, y: w.y, bodyX: gesture.body.position.x, bodyY: gesture.body.position.y };
-      if (replayRec && dragRecActive && (!recLastDrag || Math.hypot(w.x - recLastDrag.x, w.y - recLastDrag.y) >= 1)) {
+      // 1.66: lossless drag recording. The old >= 1 px threshold
+      // dropped sub-pixel pointer moves that the drag servo DID
+      // follow (both engines' moveDrag takes the exact pointer),
+      // so hand-dragged replays diverged on chaotic scenes. Every
+      // exact change is now recorded; identical consecutive
+      // targets are still skipped — a no-op both live and in
+      // playback, where only the last target per step matters.
+      if (replayRec && dragRecActive && (!recLastDrag || w.x !== recLastDrag.x || w.y !== recLastDrag.y)) {
         recEvent('drag', { x: w.x, y: w.y });
         recLastDrag = { x: w.x, y: w.y };
       }
@@ -1022,7 +1041,7 @@ function updatePreview() {
   const { start: s, cur: c } = gesture;
   const dx = c.x - s.x, dy = c.y - s.y;
   if (tool === 'circle' || tool === 'polygon' || tool === 'triangle' || tool === 'magnet') preview = { kind: 'circle', x: s.x, y: s.y, r: Math.max(6, Math.hypot(dx, dy)) };
-  else if (tool === 'line') preview = { kind: 'line', x1: s.x, y1: s.y, x2: c.x, y2: c.y };
+  else if (tool === 'line' || tool === 'emitter') preview = { kind: 'line', x1: s.x, y1: s.y, x2: c.x, y2: c.y };
   else preview = { kind: 'rectangle', x: (s.x + c.x) / 2, y: (s.y + c.y) / 2, w: Math.max(6, Math.abs(dx)), h: Math.max(6, Math.abs(dy)) };
 }
 
@@ -1030,6 +1049,22 @@ function finalizeCreate() {
   const { start: s, cur: c } = gesture;
   const dx = c.x - s.x, dy = c.y - s.y;
   const dist = Math.hypot(dx, dy);
+  // 1.66: the emitter tool places a point spawner, not a body — a
+  // drag aims it (start -> cur), a tap uses the default downward
+  // angle. Same guards as the panel's onAddEmitter: run-phase
+  // challenge lock and the 8-emitter scene cap.
+  if (tool === 'emitter') {
+    preview = null;
+    if (challenge && challenge.phase === 'run') { toast(t('chal.needBuild')); return; }
+    if (world.emitterCount >= 8) { toast(t('msg.emitterLimit')); return; }
+    const em = world.addEmitter(emitterData({ x: s.x, y: s.y, angle: dist > 6 ? Math.atan2(dy, dx) : Math.PI / 2 }));
+    recRegions();
+    selectedEmitterId = em.id; selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null;
+    setTool('select');
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.emitterAdded'));
+    return;
+  }
   let d = null;
   if (tool === 'circle') d = bodyData({ type: 'circle', x: s.x, y: s.y, radius: dist > 6 ? dist : 30, restitution: 0.4, label: 'Ball' });
   else if (tool === 'magnet') d = bodyData({ type: 'circle', x: s.x, y: s.y, radius: dist > 6 ? dist : 26, isStatic: true, friction: 0.4, density: 0.008, magnet: 100, label: 'Magnet N 磁铁' });

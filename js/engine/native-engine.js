@@ -1503,6 +1503,17 @@ export class NativeEngine {
       // key only steers warm-start matching, so range spill is harmless.
       const key = ((c._oa * 8192 + c._ob) * 4096 + (Math.round(c.px / 8) + 2048)) * 4096 + (Math.round(c.py / 8) + 2048);
       c._cacheKey = key;
+      // 1.13.1: restitution and the Baumgarte bias answer contact
+      // BIRTH only. A contact point that already existed last
+      // substep is persistent, and re-firing either term on it
+      // every substep pumps energy into touching chains. The
+      // warm-start cache already keys last substep's contact
+      // points, so persistence is one lookup; a point that moved
+      // >8px (the quantisation) counts as new and gets one honest
+      // bounce — and the approach-speed cap in _solveContact
+      // bounds even that, so flickering re-touches cannot gain
+      // energy either.
+      c._persisted = this._contactCache.has(key);
       cacheSeen.add(key);
       const warm = warmStart ? this._contactCache.get(key) : null;
       if (warm) {
@@ -1601,6 +1612,48 @@ export class NativeEngine {
           if (hg.bodyB) { const B = this._byId.get(hg.bodyB); if (B) (drivenSet || (drivenSet = new Set())).add(B); }
         }
       }
+      // 1.13.1: hang-tilt guard — a body hanging from exactly one fixed
+      // anchor (a rod/spring/hinge pinned to empty space or a static
+      // body) must not doze while its hang direction is visibly off
+      // the gravity axis. The motion-only rule froze Newton's cradle
+      // mid-swing (~7° rod tilt): at a swing extreme the balls are
+      // slow enough to trip the fuse while the row is still tilted.
+      // The solver knows the constraint graph, so it can tell a
+      // pendulum caught at its extreme from a body at rest. Bodies
+      // with zero or several fixed anchors keep the old rule (a
+      // two-rope hanging sign rests tilted by design), and zero
+      // gravity opts out (no vertical to settle to). A rigid link
+      // to a fixed anchor also COUNTS AS SUPPORT for the sleep
+      // rule: a rod holds a body up without any contact, and
+      // without this a settled cradle row (1 px gaps, no contacts
+      // at all) could never sleep. Soft springs do not count as
+      // support — they stretch, so a bouncing spring body keeps
+      // the contact rule.
+      let hangMap = null;
+      const grav = this.gravity, gravLen = Math.hypot(grav.x, grav.y);
+      if (gravLen > 1e-9 && (this._cons.size || this._hinges.size)) {
+        hangMap = new Map(); // body id -> { n, x, y, rigid }: fixed-anchor count + first anchor + any rigid link
+        const note = (bodyId, ax, ay, rigid) => {
+          const cur = hangMap.get(bodyId);
+          if (cur) { cur.n++; cur.rigid = cur.rigid || rigid; }
+          else hangMap.set(bodyId, { n: 1, x: ax, y: ay, rigid: !!rigid });
+        };
+        const fixedAnchor = (desc, side) => {
+          const id = side === 'A' ? desc.bodyA : desc.bodyB;
+          if (!id) return true;
+          const b = this._byId.get(id);
+          return !!b && b.isStatic;
+        };
+        for (const desc of this._cons.values()) {
+          const rigid = desc.stiffness >= 0.99;
+          if (fixedAnchor(desc, 'A')) { const a = this._anchorWorld(desc, 'A'); note(desc.bodyB, a.x, a.y, rigid); }
+          if (desc.bodyA && fixedAnchor(desc, 'B')) { const a = this._anchorWorld(desc, 'B'); note(desc.bodyA, a.x, a.y, rigid); }
+        }
+        for (const hg of this._hinges.values()) {
+          if (fixedAnchor(hg, 'A')) { const a = this._anchorWorld(hg, 'A'); note(hg.bodyB, a.x, a.y, true); }
+          if (hg.bodyA && fixedAnchor(hg, 'B')) { const a = this._anchorWorld(hg, 'B'); note(hg.bodyA, a.x, a.y, true); }
+        }
+      }
       for (const b of this._byId.values()) {
         if (b.isStatic) continue;
         if (b._supportStamp === stamp) b._supportAge = 0; else b._supportAge = (b._supportAge ?? 9999) + 1;
@@ -1609,9 +1662,20 @@ export class NativeEngine {
           + b.angularVelocity * b.angularVelocity;
         b._motion = Math.max(inst, (b._motion || 0) * 0.9);
         const driven = b === dragBody || (drivenSet !== null && drivenSet.has(b));
-        const slow = b._motion < 0.1 && b._supportAge <= 45;
+        const hang = hangMap ? hangMap.get(b.plugin.pe.id) : null;
+        const supportAge = (hang && hang.rigid) ? 0 : b._supportAge;
+        const slow = b._motion < 0.1 && supportAge <= 45;
+        // Hang-tilt guard: a single-anchor body off-vertical stays
+        // awake — its sleep fuse resets every substep until the hang
+        // settles within 2° of the gravity axis (cos 2° ≈ 0.99939).
+        let tilted = false;
+        if (hang && hang.n === 1) {
+          const dx = b.position.x - hang.x, dy = b.position.y - hang.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 1e-6 && (dx * grav.x + dy * grav.y) / (d * gravLen) < 0.99939) tilted = true;
+        }
         // noSleep (1.12.7): flagged bodies (dominoes) never enter sleep.
-        if (!driven && slow && !(b.plugin && b.plugin.pe && b.plugin.pe.desc.noSleep)) {
+        if (!driven && slow && !tilted && !(b.plugin && b.plugin.pe && b.plugin.pe.desc.noSleep)) {
           b.sleepCounter++;
           if (b.sleepCounter >= 30) {
             b.isSleeping = true;
@@ -1661,15 +1725,42 @@ export class NativeEngine {
       // far beyond anything physical (measured vn = -61 on a pin
       // the ball reached at 2.4 px/step), and -e*vn then LAUNCHES
       // the light body (peak pin speed 19.6 px/step, ~4x the
-      // momentum ceiling). The Baumgarte penetration term is capped
-      // for the same reason: a deep one-step overlap (pen ~16)
-      // otherwise demands a separating velocity of 12+; the linear
-      // position correction below resolves deep overlap over a few
-      // steps instead. Honest fast impacts keep their full bounce:
-      // a restitution-0.8 drop still rebounds to e^2 * h.
+      // momentum ceiling). Honest fast impacts keep their full
+      // bounce: a restitution-0.8 drop still rebounds to e^2 * h.
+      // (The Baumgarte penetration term that used to sit beside
+      // restitution was removed in 1.13.1 — see below.)
+      // 1.13.1: restitution fires on contact birth only (see the
+      // persistence flag set in the warm-start loop). A persistent
+      // contact re-answering every substep is what pumped touching
+      // chains; resting contacts get no restitution boost at all.
       const ap = (c.preVn !== undefined ? c.preVn : c.restVn);
-      const rest = ap < -1 ? -c.e * ap : 0;
-      c.biasVel = rest + Math.min((0.2 * Math.max(0, c.pen - 0.01)) / Math.max(h, 0.05), 4);
+      const rest = (ap < -1 && !c._persisted) ? -c.e * ap : 0;
+      // 1.13.1: the Baumgarte penetration term fires on contact
+      // BIRTH only (see the persistence flag set in the warm-start
+      // loop). A velocity bias proportional to penetration injects
+      // energy into any contact that other constraints keep
+      // compressed: each substep the bias pushes the pair apart,
+      // the rods pull them back, and the cycle nets energy
+      // (Newton's cradle, sleeping off: KE 0.1 -> 9087 over 1200
+      // steps, row destroyed; bias removed: KE bounded, worst
+      // deviation 19 px). Birth-only keeps the gentle first-touch
+      // push-out that wedged stacks rely on, while persistent
+      // contacts resolve penetration via the linear position
+      // correction pass below (pen > 0.6 px); the velocity
+      // constraint alone still prevents further approach, so
+      // resting contacts keep a sub-pixel residual penetration
+      // and stay put.
+      const baum = c._persisted ? 0 : Math.min((0.2 * Math.max(0, c.pen - 0.01)) / Math.max(h, 0.05), 4);
+      // 1.13.1: the total separation demand never exceeds the
+      // approach speed. biasVel = rest + baum can top |ap| — a
+      // contact that separates a pair faster than it arrived is a
+      // perpetual-motion machine (cradle re-touch: 0.95|ap| +
+      // 0.4*pen > |ap| on every touch, KE 0.1 -> 9087 over 1200
+      // steps). Restitution keeps its exact share; only the
+      // Baumgarte excess is trimmed. Resting or separating
+      // contacts get no velocity push-out — penetration resolves
+      // via the position correction pass.
+      c.biasVel = rest + Math.min(baum, Math.max(0, -ap - rest));
     }
     // 1.12.12: a contact created against a sleeping body carries the
     // immovable-body effective mass. For gentle touches that frozen
@@ -1685,7 +1776,16 @@ export class NativeEngine {
     // creation, so a violent wake-touch is re-based on the honest
     // (live) effective mass for this substep; gentle ones keep
     // the frozen transfer.
-    if (first && c.wakeTouch && c.preVn !== undefined && c.preVn < -12) {
+    // 1.13.1: the re-base now applies to EVERY wake-touch, not
+    // just violent ones. It is a no-op for bodies still asleep
+    // at solve time (_invM/_invI return 0 for sleepers, so the
+    // recomputation yields the same frozen mass), and it is the
+    // honest mass for bodies the wake-on-impact pass already woke
+    // — with anchor-supported sleep (cradle balls asleep at rest
+    // before the first strike), the frozen solve ate the transfer
+    // instead (end-ball swing 60+ -> 23 px). Re-basing restores
+    // the clean transfer for gentle strikes too.
+    if (first && c.wakeTouch && c.preVn !== undefined) {
       this._stats.gateFirings++;
       const kia = this._invI(c.a), kib = this._invI(c.b);
       const gRaCn = c.rax * c.ny - c.ray * c.nx, gRbCn = c.rbx * c.ny - c.rby * c.nx;

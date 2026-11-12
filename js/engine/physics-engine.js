@@ -295,7 +295,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.13.0';
+export const VERSION = '1.13.1';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.

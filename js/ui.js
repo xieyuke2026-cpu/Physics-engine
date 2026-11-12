@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.65';
+export const APP_VERSION = '1.66';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);

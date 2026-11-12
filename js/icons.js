@@ -47,6 +47,7 @@ const PATHS = {
   lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="1.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
   layers: '<path d="m12 3.8 8.5 4.7L12 13.2 3.5 8.5Z"/><path d="m4.8 12.8 7.2 4 7.2-4M4.8 16.8l7.2 4 7.2-4"/>',
   magnet: '<path d="M6.5 4v6.5a5.5 5.5 0 0 0 11 0V4"/><path d="M6.5 4h3.6M13.9 4h3.6M6.5 7.8h3.6M13.9 7.8h3.6"/>',
+  emitter: '<circle cx="7" cy="17" r="2.4"/><path d="M9.2 14.8 12.6 11.4M10.6 16.8l4.6-1.2M8.2 13.6l1-4.4"/><circle cx="14.4" cy="9.6" r="0.4" fill="currentColor"/><circle cx="17.2" cy="14.4" r="0.4" fill="currentColor"/><circle cx="9.6" cy="7.4" r="0.4" fill="currentColor"/>',
   record: '<circle cx="12" cy="12" r="6.5" fill="currentColor" stroke="none"/>',
   hinge: '<circle cx="12" cy="12" r="2.6"/><circle cx="12" cy="12" r="0.5" fill="currentColor"/><path d="M12 9.4V4.8M12 19.2v-4.6M9.8 10.2 5.6 6.9M14.2 13.8l4.2 3.3M10.2 14.2l-3.3 4.2M13.8 9.8l3.3-4.2"/>',
 };
@@ -59,5 +60,5 @@ export function icon(name, size = 20) {
 
 export const TOOL_ICONS = {
   select: 'select', move: 'move', circle: 'circle', rectangle: 'rectangle',
-  polygon: 'polygon', triangle: 'triangle', line: 'line', magnet: 'magnet', spring: 'spring', hinge: 'hinge', blast: 'burst', delete: 'trash',
+  polygon: 'polygon', triangle: 'triangle', line: 'line', magnet: 'magnet', emitter: 'emitter', spring: 'spring', hinge: 'hinge', blast: 'burst', delete: 'trash',
 };
