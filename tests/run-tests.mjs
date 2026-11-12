@@ -323,6 +323,56 @@ for (const p of presets) {
   }
 }
 
+/* --- v1.67: scrubbing into a mid-drag checkpoint reproduces the run ---
+   Ryan's 1.66 report: record a medium scene while dragging, scrub the
+   playback bar into the middle of the drag, and the end verdict
+   diverges. The seek restores the nearest checkpoint snapshot; before
+   1.13.2 the snapshot dropped the drag (so every later drag event
+   was ignored) and, on Matter, the substep deltaTime, sleep counter
+   and constraint warm-start impulse. This simulates the app's exact
+   seek path — endDrag + loadSnapshot, then re-apply events with the
+   player's `if (dragging)` guard — and requires the scrubbed run to
+   hash-identical with the uninterrupted run, on both backends. */
+{
+  const { hashBodyStates, statesFromSnapshot } = await import('../js/replay.js');
+  function build(backend) {
+    const w = new PhysicsWorld(backend);
+    w.setSeed(7);
+    w.addBody({ id: 'ground', kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true, friction: 0.6 });
+    for (let r = 0; r < 6; r++) for (let i = 0; i < 6 - r; i++)
+      w.addBody({ id: `box-${r}-${i}`, kind: 'rect', x: 520 + i * 48 + r * 24, y: 517 - r * 46, width: 46, height: 46, density: 0.001, friction: 0.5, restitution: 0.05 });
+    w.addBody({ id: 'ball', kind: 'circle', x: 200, y: 180, radius: 26, density: 0.004, friction: 0.3, restitution: 0.4 });
+    return w;
+  }
+  const script = new Map();
+  for (let s = 60; s <= 240; s++) {
+    if (s === 60) script.set(s, [{ type: 'dragStart', id: 'ball', x: 200, y: 180 }]);
+    else if (s === 240) script.set(s, [{ type: 'dragEnd' }]);
+    else script.set(s, [{ type: 'drag', x: 200 + (s - 60) * 2, y: 180 }]);
+  }
+  const apply = (w, ev) => {
+    if (ev.type === 'dragStart') { const b = w.bodyById(ev.id); if (b) w.beginDrag(b, ev.x, ev.y); }
+    else if (ev.type === 'drag') { if (w.dragging) w.moveDrag(ev.x, ev.y); }
+    else if (ev.type === 'dragEnd') w.endDrag();
+  };
+  const stepN = (w, from, to) => { for (let s = from; s < to; s++) { for (const ev of (script.get(s) || [])) apply(w, ev); w.stepOnce(); } };
+  for (const backend of ['matter', 'native']) {
+    const live = build(backend);
+    stepN(live, 0, 360);
+    const hLive = hashBodyStates(statesFromSnapshot(live.snapshot()));
+    const scrub = build(backend);
+    stepN(scrub, 0, 120);
+    const cp = JSON.parse(JSON.stringify(scrub.snapshot()));
+    scrub.endDrag();
+    scrub.loadSnapshot(cp);
+    const dragAlive = scrub.dragging === true;
+    stepN(scrub, 120, 360);
+    const hScrub = hashBodyStates(statesFromSnapshot(scrub.snapshot()));
+    check(`replay: ${backend} mid-drag scrub keeps the drag alive`, dragAlive);
+    check(`replay: ${backend} mid-drag scrub reproduces the run exactly`, hLive === hScrub, `${hLive} vs ${hScrub}`);
+  }
+}
+
 /* --- v1.54: replay determinism for a WARM recording (the cradle case) ---
    The 1.50 proof above snapshots a cold scene. Real use presses record
    while the scene is already running: the live solver then carries

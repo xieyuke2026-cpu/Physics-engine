@@ -803,5 +803,43 @@ function poolWorld() {
     `sleeping=${sign.isSleeping} angle=${(sign.angle * 180 / Math.PI).toFixed(2)} deg`);
 }
 
+/* --- v1.13.2: snapshots carry the active drag servo ---
+   Twin of the Matter-side fix for Ryan's 1.66 report: a checkpoint
+   taken mid-drag must restore the drag, or scrubbing into a drag
+   drops every later drag event and the replay diverges. The native
+   servo is position-driven with no grab offset, so body + target
+   fully describe it. */
+{
+  const mk = () => new NativeEngine({ enableSleeping: true, substeps: 2, seed: 7 });
+  const e1 = mk();
+  e1.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true, friction: 0.6 });
+  const ball = e1.addBody({ id: 'ball', kind: 'circle', x: 200, y: 180, radius: 26, density: 0.004, friction: 0.3, restitution: 0.4 });
+  for (let i = 0; i < 60; i++) e1.advance(e1.fixedDt);
+  e1.beginDrag(ball, 200, 180);
+  for (let i = 0; i < 60; i++) { e1.moveDrag(200 + i * 2, 180); e1.advance(e1.fixedDt); }
+  const snap = JSON.parse(JSON.stringify(e1.snapshot()));
+  check('v1.13.2: snapshot carries the drag servo (body + target)',
+    snap.drag && snap.drag.id === 'ball' && snap.drag.x === 318 && snap.drag.y === 180, JSON.stringify(snap.drag));
+  const e2 = mk();
+  e2.load(snap);
+  check('v1.13.2: drag servo restored (dragging + same body + same target)',
+    e2.dragging === true && e2.dragBody && e2.idOf(e2.dragBody) === 'ball' && e2._drag.x === 318 && e2._drag.y === 180);
+  let same = true;
+  for (let i = 0; i < 120; i++) {
+    e1.moveDrag(318 + i * 2, 180); e2.moveDrag(318 + i * 2, 180);
+    e1.advance(e1.fixedDt); e2.advance(e2.fixedDt);
+    const a = e1.snapshot().bodies, b = e2.snapshot().bodies;
+    for (let j = 0; j < a.length; j++) {
+      if (Math.abs(a[j].x - b[j].x) > 1e-9 || Math.abs(a[j].y - b[j].y) > 1e-9 || Math.abs(a[j].angle - b[j].angle) > 1e-9) { same = false; break; }
+    }
+    if (!same) break;
+  }
+  check('v1.13.2: mid-drag checkpoint restore tracks the live world', same);
+  const e3 = mk();
+  e3.addBody({ kind: 'circle', x: 100, y: 100, radius: 10 });
+  check('v1.13.2: a drag-free snapshot carries drag: null and loads drag-free',
+    e3.snapshot().drag === null && (() => { const e4 = mk(); e4.load(JSON.parse(JSON.stringify(e3.snapshot()))); return e4.dragging === false; })());
+}
+
 console.log(`\nNativeEngine tests: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

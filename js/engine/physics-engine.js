@@ -295,7 +295,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.13.1';
+export const VERSION = '1.13.2';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -565,6 +565,14 @@ export class PhysicsEngine {
       vx: num(partial.vx, 0), vy: num(partial.vy, 0),
       va: num(partial.va, 0),
       sleeping: partial.sleeping === true,
+      // 1.13.2: sleep progress rides the descriptor so a snapshot
+      // round-trip restores it (see the addBody tail below).
+      sleepCounter: Math.max(0, Math.floor(num(partial.sleepCounter, 0))),
+      // 1.13.2: Matter's constraint warm-start impulse (see the
+      // addBody tail). Null for fresh bodies; snapshots carry it.
+      constraintImpulse: (partial.constraintImpulse && typeof partial.constraintImpulse === 'object')
+        ? { x: num(partial.constraintImpulse.x, 0), y: num(partial.constraintImpulse.y, 0), angle: num(partial.constraintImpulse.angle, 0) }
+        : null,
       noSleep: partial.noSleep === true,
       // Emitter tag (1.12.8): id of the emitter that spawned this body
       // ('' for hand-placed bodies). Rides describeBody/snapshots so an
@@ -591,6 +599,16 @@ export class PhysicsEngine {
     body.plugin = body.plugin || {};
     body.plugin.pe = { id: desc.id, kind, desc };
     if (Number.isFinite(body.inertia)) body._peInertia0 = body.inertia;
+    // Snapshot fidelity (1.13.2): this engine steps in substeps, so
+    // a live body's deltaTime is fixedDt/substeps — but a fresh
+    // body's is Matter's baseDelta, and Body.setVelocity scales by
+    // deltaTime/baseDelta. Restoring velocity onto a fresh body
+    // therefore wrote a positionPrev off by the substep ratio (2x
+    // at substeps 2), and a checkpoint restored mid-motion
+    // diverged on the very next step (single body, 0.0018 px at
+    // step 61 after a step-60 restore). Pin deltaTime first so
+    // the velocity round-trip lands exactly.
+    if (!desc.isStatic) body.deltaTime = this.fixedDt / this.substeps;
     if (!desc.isStatic && (desc.vx || desc.vy)) Body.setVelocity(body, { x: desc.vx, y: desc.vy });
     // Snapshot fidelity (1.12.6): spin and sleep state round-trip too.
     // Before this, a snapshot restored mid-motion silently zeroed both —
@@ -598,6 +616,24 @@ export class PhysicsEngine {
     // own recording (Newton's cradle: >14 px after 21 s).
     if (!desc.isStatic && Number.isFinite(desc.va) && desc.va !== 0) Body.setAngularVelocity(body, desc.va);
     if (!desc.isStatic && desc.sleeping) this.M.Sleeping.set(body, true);
+    // Snapshot fidelity (1.13.2): the sleep counter is solver state
+    // too — a body 118/120 of the way to sleep must not restart
+    // its count on restore, or sleep timing (and the replay hash)
+    // shifts. Restored after Sleeping.set so the count survives.
+    if (!desc.isStatic && Number.isFinite(desc.sleepCounter)) body.sleepCounter = Math.max(0, Math.floor(desc.sleepCounter));
+    // Snapshot fidelity (1.13.2): Matter's constraint warm-start
+    // impulse is persistent decaying state — postSolveAll
+    // multiplies it by _warming instead of zeroing it, and
+    // preSolveAll applies it at the next substep. A restored body
+    // with zero impulse misses the warm-start correction and a
+    // mid-drag checkpoint restore diverges. Restored last, after
+    // Sleeping.set, so the snapshot value survives verbatim.
+    const ci = desc.constraintImpulse;
+    if (ci && typeof ci === 'object') {
+      body.constraintImpulse.x = num(ci.x, 0);
+      body.constraintImpulse.y = num(ci.y, 0);
+      body.constraintImpulse.angle = num(ci.angle, 0);
+    }
     Composite.add(this.world, body);
     this._byId.set(desc.id, body);
     if (desc.lockRotation) this._locked.add(body);
@@ -740,6 +776,13 @@ export class PhysicsEngine {
       x: body.position.x, y: body.position.y, angle: body.angle,
       vx: body.velocity.x, vy: body.velocity.y, va: body.angularVelocity,
       sleeping: body.isSleeping === true,
+      // 1.13.2: sleep progress round-trips with the snapshot, so a
+      // checkpoint restored mid-count keeps the live sleep timing.
+      sleepCounter: body.sleepCounter || 0,
+      // 1.13.2: Matter's constraint warm-start impulse (see
+      // addBody). Without it, checkpoint restores lose the
+      // warm-start correction and diverge.
+      constraintImpulse: { x: body.constraintImpulse.x, y: body.constraintImpulse.y, angle: body.constraintImpulse.angle },
       density: body.density, friction: body.friction, frictionAir: body.frictionAir,
       restitution: body.restitution, isStatic: body.isStatic,
       lockRotation: rec.desc.lockRotation === true,
@@ -1023,6 +1066,22 @@ export class PhysicsEngine {
     for (const id of this._fluids.keys()) bump(id);
     for (const id of this._winds.keys()) bump(id);
     for (const id of this._emitters.keys()) bump(id);
+    // 1.13.2: restore the drag constraint a checkpoint captured,
+    // with its original grab offset and solver-tracked angleB
+    // (see snapshot()). A snapshot from the native backend
+    // carries no ox/oy/angleB; fall back to the beginDrag
+    // computation from the target, the best available.
+    const dg = data.drag;
+    if (dg && typeof dg === 'object') {
+      const db = this._byId.get(dg.id);
+      if (db && !db.isStatic) {
+        this.wake(db);
+        this._attachDrag(db, num(dg.x, db.position.x), num(dg.y, db.position.y),
+          Number.isFinite(dg.ox) ? dg.ox : num(dg.x, db.position.x) - db.position.x,
+          Number.isFinite(dg.oy) ? dg.oy : num(dg.y, db.position.y) - db.position.y,
+          dg.angleB);
+      }
+    }
     return { bodies, constraints, fluids, winds, hinges, emitters };
   }
   snapshot() {
@@ -1035,6 +1094,14 @@ export class PhysicsEngine {
       emitters: this.emitters(),
       rng: { seed: this._seed, state: this._rngState },
       simMs: this._simMs,
+      // 1.13.2: the active drag constraint, if any — target
+      // (pointA) plus the ORIGINAL grab offset (pointB) and the
+      // solver-tracked angleB. A checkpoint taken mid-drag must
+      // restore all three: recomputing pointB or angleB from the
+      // moved body changes the constraint and the replay diverges
+      // (Ryan's 1.66 report). Snapshots from <=1.13.1 carry no
+      // drag field and restore drag-free.
+      drag: this._drag ? { id: this.idOf(this._drag.bodyB), x: this._drag.pointA.x, y: this._drag.pointA.y, ox: this._drag.pointB.x, oy: this._drag.pointB.y, angleB: this._drag.angleB } : null,
     };
   }
 
@@ -1949,12 +2016,28 @@ export class PhysicsEngine {
     this.endDrag();
     if (!body || body.isStatic) return;
     this.wake(body);
+    // The grab offset is the pointer minus the body centre, in
+    // world-aligned coordinates (Matter rotates pointB by the body
+    // angle, so the offset is only exact for the angle at grab
+    // time — which is why a checkpoint restore must carry the
+    // original pointB instead of recomputing it; see load()).
+    this._attachDrag(body, wx, wy, wx - body.position.x, wy - body.position.y);
+  }
+  /** Create the drag constraint with an EXACT grab offset. beginDrag
+   *  computes the offset from the grab point; load() restores the
+   *  offset AND the solver-tracked angleB a snapshot captured —
+   *  angleB lags the body angle (it is only refreshed when the
+   *  constraint solves), so recomputing it from the current angle
+   *  rotates the grab offset by the lag and the replay diverges
+   *  by whole pixels on the next step (1.13.2). */
+  _attachDrag(body, ax, ay, ox, oy, angleB) {
     this._drag = this.M.Constraint.create({
-      pointA: { x: wx, y: wy },
+      pointA: { x: ax, y: ay },
       bodyB: body,
-      pointB: { x: wx - body.position.x, y: wy - body.position.y },
+      pointB: { x: ox, y: oy },
       stiffness: 0.12, damping: 0.08, length: 0,
     });
+    if (Number.isFinite(angleB)) this._drag.angleB = angleB;
     this.M.Composite.add(this.world, this._drag);
   }
   moveDrag(wx, wy) { if (this._drag) this._drag.pointA = { x: wx, y: wy }; }

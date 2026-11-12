@@ -978,6 +978,14 @@ export class NativeEngine {
       gravitation: this.gravitation,
       rng: { seed: this._seed, state: this._rngState },
       simMs: this._simMs,
+      // 1.13.2: the active drag servo, if any. A checkpoint taken
+      // mid-drag must restore it — without this, scrubbing into a
+      // drag drops every later drag event (the player guards drag
+      // on world.dragging) and the replay diverges (Ryan's 1.66
+      // report: medium scene, small deviation, drag + scrub).
+      // Snapshots from <=1.13.1 carry no drag field and restore
+      // drag-free, exactly as before.
+      drag: this._drag ? { id: this.idOf(this._drag.body), x: this._drag.x, y: this._drag.y } : null,
     };
   }
   load(data = {}) {
@@ -1007,6 +1015,18 @@ export class NativeEngine {
     for (const id of this._fluids.keys()) bump(id);
     for (const id of this._winds.keys()) bump(id);
     for (const id of this._emitters.keys()) bump(id);
+    // 1.13.2: restore the drag servo a checkpoint captured (see
+    // snapshot()). The servo is position-driven with no grab
+    // offset, so body + target fully describe it; the body is
+    // woken exactly as beginDrag would.
+    const dg = data.drag;
+    if (dg && typeof dg === 'object') {
+      const db = this._byId.get(dg.id);
+      if (db && !db.isStatic) {
+        this._drag = { body: db, x: num(dg.x, db.position.x), y: num(dg.y, db.position.y) };
+        this._wake(db);
+      }
+    }
     return { bodies, constraints, fluids, winds, hinges, emitters };
   }
 

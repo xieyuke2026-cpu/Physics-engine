@@ -15,7 +15,7 @@
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
 | MotionLab（应用） | 1.60 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.13.1 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| PhysicsEngine（2D 核心） | 1.13.2 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -294,6 +294,7 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
   'native' })` 直接构造；从零编写的顺序冲量求解器覆盖全部公开接口
   （堆叠/休眠/铰链马达/真实浮力/磁力/引力/阵风/快照/种子随机），力模型
   按固定步踢一次、子步下限 2；专属行为测试 43 项（tests/native-tests.mjs）
+- 1.13.2 — 快照保真：拖拽状态、子步 deltaTime、睡眠计数与暖启动冲量（MotionLab 1.67 回放 scrub 修复）：Ryan 报中型场景边拖边录、回放 scrub 后判定偏离。快照此前不带拖拽状态，scrub 恢复后拖拽伺服/约束消失、后续 drag 事件被 `world.dragging` 门禁丢弃；现快照带 drag 字段，Matter 侧连同原始抓取偏移与求解器跟踪的 angleB 一起恢复（angleB 滞后于物体角度，只恢复偏移会把抓取点甩偏数像素），Impulse 侧恢复伺服目标点。另三处 Matter 状态缺失一并补齐：建体时锁定 deltaTime 为子步 delta（否则 setVelocity 按 baseDelta 缩放、positionPrev 差一倍、次步即偏 0.0018px）；sleepCounter 与 constraintImpulse（postSolveAll 只衰减不归零）随快照走。实测：无拖拽 60 步恢复从偏离变精确，中途拖拽 scrub 双后端哈希一致，杆约束/铰链恢复亦精确。已知剩余限制：接触暖启动冲量在 Matter pairs 表里、未序列化，极混乱场景 scrub 后仍可能翻转睡眠/唤醒阈值。求解数值不变（发射器生成速度实测新旧一致），旧回放不受影响；旧快照缺新字段时按无拖拽恢复。引擎测试 +6、Native 测试 +4。
 - 1.13.1 — Native 睡姿与接触偏置封顶（MotionLab 1.66 牛顿摆睡姿）：刚性连杆/铰链连到固定锚点算作睡眠支撑，单锚点悬吊体偏离重力轴 2° 以上禁止入睡（双锚点除外）；回弹与 Baumgarte 偏置只在接触诞生时触发（暖启动缓存判存活）、总量不超过接近速度——此前偏置可超过接近速度，每拍给静触链条泵能量（关睡眠 KE 0.1 → 9087）；唤醒接触重定基从「仅接近速度 >12」放宽到全部唤醒接触（取代 1.12.12 的分档：重定基对仍睡着的物体是空操作，须先被冲击唤醒）。牛顿摆漂移：关睡眠 235 → 19、开睡眠 45 → 3，五球 5247 步全睡、最大倾角 0.71°；楔子/金字塔/摆动旧测试全过。求解数值有变，≤1.13.0 录的回放不再逐比特复现；Native 测试 +3 项。
 - 1.13.0 — 可观测性接口（MotionLab 1.61 控制台）：双后端同形 `stats`（步数/物体/睡着/接触 + Impulse 专属累计计数：闸门、预唤醒、唤醒、睡着、生成）与 Impulse 的 `onEvent` 事件流（impact/sleep/wake/spawn）；计数不入快照，`resetStats()` 清零；Matter 内部项为 null。本版不改求解数值。
 - 1.12.12 — Native 唤醒接触分档（金字塔二度修复）：1.59 线上验证发现快速分段跳拖（真实指针节奏）仍可引爆——冲击波经冻结首次接触逐层放大（34 → 58 → 132 → 210 px/步），静止塔层零穿透使预唤醒无从预见。接触记录 `wakeTouch`（恰一方在睡），求解首轮对接近速度 >12 px/步的唤醒接触按实时有效质量重算 imN/imT；温和唤醒接触保留冻结传递（牛顿摆偏离保持 45；关睡觉 235、全诚实 132 作对照）。分段跳拖峰值 210 → 42.7（同协议 Matter 87）；慢压/滚动/保龄球复测与 1.59 一致；Native 测试 +3 项。

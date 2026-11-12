@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.13.1');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.13.2');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -318,6 +318,75 @@ function galtonBins(seed) {
     if (!pileSame) break;
   }
   check('snapshot fidelity: restored pile tracks the original for 300 steps', pileSame);
+}
+
+/* --- v1.13.2: checkpoint restores carry the full solver state ---
+   Ryan's 1.66 report: a medium scene recorded with a drag, scrubbed
+   mid-drag during playback, ended with a diverged verdict. Three
+   separate gaps, all in the snapshot round-trip:
+   (1) the drag constraint was dropped entirely, so every later drag
+   event was ignored (the player guards drag on world.dragging);
+   (2) a fresh body's deltaTime is Matter's baseDelta while a live
+   body's is fixedDt/substeps, so setVelocity wrote a positionPrev
+   off by the substep ratio (2x) and the very next step diverged;
+   (3) sleepCounter and the constraint warm-start impulse were lost.
+   The drag restore must carry the LIVE pointB and angleB together:
+   angleB lags the body angle, and pairing the live offset with the
+   current angle swings the grab point by whole pixels.
+   Known remaining limit (documented, not fixed here): Matter's
+   CONTACT warm-start impulses live in the pairs table, which no
+   snapshot serializes — a restore solves the first step's contacts
+   cold. In gentle scenes that converges invisibly; in a chaotic
+   pile it can flip a sleep/wake threshold. Hence the tracking
+   check below uses a gentle scene (open ground, one box), where
+   the restore is exact, and not a metastable pyramid. */
+{
+  const mk = () => new PhysicsEngine({ enableSleeping: true, substeps: 2 });
+  const e1 = mk();
+  e1.addBody({ kind: 'rect', x: 640, y: 560, width: 1280, height: 40, isStatic: true, friction: 0.6 });
+  e1.addBody({ kind: 'rect', x: 700, y: 517, width: 46, height: 46, density: 0.001, friction: 0.5, restitution: 0.05 });
+  const ball = e1.addBody({ kind: 'circle', x: 200, y: 180, radius: 26, density: 0.004, friction: 0.3, restitution: 0.4 });
+  for (let i = 0; i < 60; i++) e1.advance(1000 / 60, 1);
+  e1.beginDrag(ball, 200, 180);
+  for (let i = 0; i < 60; i++) { e1.moveDrag(200 + i * 2, 180); e1.advance(1000 / 60, 1); }
+  const snap = JSON.parse(JSON.stringify(e1.snapshot()));
+  check('v1.13.2: snapshot carries the live drag state (target + offset + angleB)',
+    snap.drag && snap.drag.id === e1.idOf(ball) && snap.drag.x === 318 && snap.drag.y === 180
+    && Number.isFinite(snap.drag.ox) && Number.isFinite(snap.drag.oy) && Number.isFinite(snap.drag.angleB),
+    JSON.stringify(snap.drag));
+  const liveDrag = e1._drag;
+  const e2 = mk();
+  e2.load(snap);
+  const rb = e2.bodyById(e1.idOf(ball));
+  check('v1.13.2: drag constraint restored with the live offset and angleB',
+    e2.dragging === true && e2.dragBody === rb
+    && e2._drag.pointA.x === liveDrag.pointA.x && e2._drag.pointA.y === liveDrag.pointA.y
+    && e2._drag.pointB.x === liveDrag.pointB.x && e2._drag.pointB.y === liveDrag.pointB.y
+    && e2._drag.angleB === liveDrag.angleB);
+  check('v1.13.2: restored body deltaTime matches the substep delta',
+    rb.deltaTime === e1.fixedDt / e1.substeps, `deltaTime=${rb.deltaTime}`);
+  check('v1.13.2: sleepCounter and warm-start impulse round-trip',
+    rb.sleepCounter === ball.sleepCounter
+    && rb.constraintImpulse.x === ball.constraintImpulse.x
+    && rb.constraintImpulse.y === ball.constraintImpulse.y
+    && rb.constraintImpulse.angle === ball.constraintImpulse.angle,
+    `counter=${rb.sleepCounter}/${ball.sleepCounter}`);
+  // Continue both worlds with the same drag script: bit-identical.
+  let same = true;
+  for (let i = 0; i < 120; i++) {
+    e1.moveDrag(318 + i * 2, 180); e2.moveDrag(318 + i * 2, 180);
+    e1.advance(1000 / 60, 1); e2.advance(1000 / 60, 1);
+    const a = e1.snapshot().bodies, b = e2.snapshot().bodies;
+    for (let j = 0; j < a.length; j++) {
+      if (Math.abs(a[j].x - b[j].x) > 1e-9 || Math.abs(a[j].y - b[j].y) > 1e-9 || Math.abs(a[j].angle - b[j].angle) > 1e-9) { same = false; break; }
+    }
+    if (!same) break;
+  }
+  check('v1.13.2: mid-drag checkpoint restore tracks the live world bit-identically', same);
+  const e3 = mk();
+  e3.addBody({ kind: 'circle', x: 100, y: 100, radius: 10 });
+  check('v1.13.2: a drag-free snapshot carries drag: null and loads drag-free',
+    e3.snapshot().drag === null && (() => { const e4 = mk(); e4.load(JSON.parse(JSON.stringify(e3.snapshot()))); return e4.dragging === false; })());
 }
 
 /* --- v1.12.7: noSleep descriptor flag ---
