@@ -570,9 +570,12 @@ export function presetScenes() {
     out.push({ key: 'trampoline', name: '蹦床弹簧网', scene: sceneData({ name: '蹦床弹簧网 Trampoline', bodies, constraints }) });
   }
 
-  // Spring oscillator (1.68) — three identical hanging springs, three
-  // dampings: watch them start together and decay apart. Balls start
-  // 60 px below equilibrium, so the oscillation is visible on load.
+  // Spring oscillator (1.68, retuned 1.69) — three identical hanging
+  // springs, three dampings: watch them start together and decay apart.
+  // Balls start 120 px below the rest-length point (≈94 px below
+  // equilibrium), so the first swing is big: ~175 px on the undamped
+  // ball, still swinging past 10 s, while the heavy-damped one stops
+  // in ~2 s. Probe-measured on both backends (see TEST-REPORT 0bo).
   {
     const bodies = frameBodies();
     const constraints = [];
@@ -584,7 +587,7 @@ export function presetScenes() {
     ];
     for (const s of spots) {
       const id = `osc-ball-${s.x}`;
-      bodies.push(bodyData({ id, type: 'circle', x: s.x, y: 307, radius: 22, density: 0.002, label: s.label }));
+      bodies.push(bodyData({ id, type: 'circle', x: s.x, y: 367, radius: 22, density: 0.002, label: s.label }));
       constraints.push(constraintData({ bodyA: null, bodyB: id, pointA: { x: s.x, y: 97 }, pointB: { x: 0, y: 0 }, stiffness: 0.15, damping: s.damping, length: 150 }));
     }
     out.push({ key: 'oscillator', name: '弹簧振子', scene: sceneData({ name: '弹簧振子 Spring Oscillator', bodies, constraints }) });

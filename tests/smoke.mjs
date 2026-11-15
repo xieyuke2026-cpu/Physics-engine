@@ -198,7 +198,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.68')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.69')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.3')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -505,6 +505,9 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
     check('v1.68: spring editor keeps the stiffness slider after input', !!panelBody.querySelector('[data-key="sstiff"]'));
     check('v1.68: spring editor shows damping + rest length fields',
       !!panelBody.querySelector('[data-key="sdamp"]') && !!panelBody.querySelector('[data-key="slen"]'));
+    const feel = panelBody.querySelector('[data-key="sfeel"]');
+    check('v1.69: feel summary updates live while dragging stiffness',
+      !!feel && feel.textContent.includes('0.50'), feel ? feel.textContent.slice(0, 50) : '(no sfeel)');
   }
   // Escape closes the editor; tapping the spring line reopens it
   window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));

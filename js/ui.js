@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.68';
+export const APP_VERSION = '1.69';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -441,8 +441,12 @@ export class Panel {
     r.appendChild(sliderField(L('刚度 Stiffness', 'Stiffness'), 'sstiff', spring.stiffness, 0.01, 1, 0.01));
     r.appendChild(sliderField(L('阻尼 Damping', 'Damping'), 'sdamp', spring.damping, 0, 1, 0.01));
     r.appendChild(numField(L('自然长度 Rest Length', 'Rest Length'), 'slen', spring.length, { step: 5, min: 0, max: 2000 }));
-    const feel = spring.stiffness >= 0.99 ? L('刚性杆', 'rigid rod') : spring.stiffness < 0.2 ? L('软弹簧', 'soft spring') : L('弹簧', 'spring');
-    r.appendChild(el(`<p class="empty-note">${L(`当前：${feel}，刚度 ${spring.stiffness.toFixed(2)}，阻尼 ${spring.damping.toFixed(2)}，自然长度 ${Math.round(spring.length)} px。`, `Now: ${feel}, stiffness ${spring.stiffness.toFixed(2)}, damping ${spring.damping.toFixed(2)}, rest length ${Math.round(spring.length)} px.`)}</p>`));
+    const feelText = (stiff, damp, len) => {
+      const feel = stiff >= 0.99 ? L('刚性杆', 'rigid rod') : stiff < 0.2 ? L('软弹簧', 'soft spring') : L('弹簧', 'spring');
+      return L(`当前：${feel}，刚度 ${stiff.toFixed(2)}，阻尼 ${damp.toFixed(2)}，自然长度 ${Math.round(len)} px。`, `Now: ${feel}, stiffness ${stiff.toFixed(2)}, damping ${damp.toFixed(2)}, rest length ${Math.round(len)} px.`);
+    };
+    const sumEl = el(`<p class="empty-note" data-key="sfeel">${feelText(spring.stiffness, spring.damping, spring.length)}</p>`);
+    r.appendChild(sumEl);
     const rowBtns = el('<div class="btn-row"></div>');
     const presets = [[L('松软', 'Soft'), 0.08], [L('适中', 'Medium'), 0.3], [L('紧绷', 'Taut'), 0.85], [L('刚性杆', 'Rod'), 1]];
     for (const [label, v] of presets) {
@@ -456,10 +460,12 @@ export class Panel {
     const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除弹簧', ' Delete Spring')}</button>`);
     del.addEventListener('click', () => this.cb.onDeleteSpring(spring.id));
     r.appendChild(back); r.appendChild(del);
+    const cur = { stiffness: spring.stiffness, damping: spring.damping, length: spring.length };
     this._wireNumbers(r, (k, v) => {
-      if (k === 'sstiff') this.cb.onSpringProp(spring.id, 'stiffness', v);
-      else if (k === 'sdamp') this.cb.onSpringProp(spring.id, 'damping', v);
-      else if (k === 'slen') this.cb.onSpringProp(spring.id, 'length', v);
+      if (k === 'sstiff') { cur.stiffness = v; this.cb.onSpringProp(spring.id, 'stiffness', v); }
+      else if (k === 'sdamp') { cur.damping = v; this.cb.onSpringProp(spring.id, 'damping', v); }
+      else if (k === 'slen') { cur.length = v; this.cb.onSpringProp(spring.id, 'length', v); }
+      sumEl.textContent = feelText(cur.stiffness, cur.damping, cur.length);
     });
     this._collectInputs();
   }

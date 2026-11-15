@@ -826,6 +826,14 @@ check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b)
     const t = presetScenes().find((p) => p.key === 'trampoline');
     return t.scene.constraints.length === 7 && t.scene.constraints.every((x) => x.stiffness === 0.85);
   })());
+  check('v1.69: oscillator preset starts 120px below rest length for a visible swing', (() => {
+    const o = presetScenes().find((p) => p.key === 'oscillator');
+    if (!o || o.scene.constraints.length !== 3) return false;
+    const balls = o.scene.bodies.filter((b) => b.type === 'circle');
+    return o.scene.constraints.every((x) => x.stiffness === 0.15 && x.length === 150)
+      && balls.length === 3 && balls.every((b) => b.y === 367)
+      && o.scene.constraints.map((x) => x.damping).join(',') === '0,0.15,0.6';
+  })());
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
