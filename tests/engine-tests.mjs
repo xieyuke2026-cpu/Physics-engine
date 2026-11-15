@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.13.2');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.13.3');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -875,6 +875,32 @@ function galtonBins(seed) {
   nat.addBody({ kind: 'circle', x: 100, y: 0, radius: 10 });
   for (let i = 0; i < 60; i++) nat.advance(1000 / 60);
   check('backends: the native engine simulates through the same API (ball falls)', nat.allBodies()[0].position.y > 10, `y=${nat.allBodies()[0].position.y}`);
+}
+
+/* --- 1.13.3: Hooke-force springs on the Matter backend — same spring model
+   as the native twin, plus setConstraintProp with representation swap. --- */
+{
+  const pe = new PhysicsEngine({ enableSleeping: false });
+  pe.setGravity(0, 1);
+  const ball = pe.addBody({ kind: 'circle', x: 640, y: 300, radius: 20 });
+  pe.addConstraint({ bodyA: null, bodyB: pe.idOf(ball), pointA: { x: 640, y: 100 }, pointB: { x: 0, y: 0 }, stiffness: 0.22, damping: 0.5, length: 120 });
+  const ys = [];
+  for (let i = 0; i < 600; i++) { pe.stepOnce(); ys.push(ball.position.y); }
+  const sag = ys.slice(500).reduce((a, b) => a + b, 0) / 100 - 220;
+  check('1.13.3: Matter spring sags like the native twin (~7px)', sag > 4 && sag < 11, `sag=${sag.toFixed(1)}`);
+  const c = pe.describeConstraints()[0];
+  check('1.13.3: setConstraintProp updates damping', pe.setConstraintProp(c.id, 'damping', 0.3) === true && pe.describeConstraints()[0].damping === 0.3);
+  const nCons = () => Matter.Composite.allConstraints(pe.engine.world).length;
+  const nBefore = nCons();
+  pe.setConstraintProp(c.id, 'stiffness', 1);
+  check('1.13.3: stiffening to 1 creates a Matter constraint', nCons() === nBefore + 1, `${nBefore} -> ${nCons()}`);
+  pe.setConstraintProp(c.id, 'stiffness', 0.2);
+  check('1.13.3: softening back removes the Matter constraint', nCons() === nBefore, `${nBefore} -> ${nCons()}`);
+  check('1.13.3: setConstraintProp rejects unknown id/key', pe.setConstraintProp('nope', 'stiffness', 0.5) === false && pe.setConstraintProp(c.id, 'bogus', 1) === false);
+  check('1.13.3: soft addConstraint returns a desc copy (truthy)', (() => {
+    const r = pe.addConstraint({ bodyA: null, bodyB: pe.idOf(ball), pointA: { x: 640, y: 100 }, stiffness: 0.1, length: 120 });
+    return !!r && typeof r.id === 'string' && r.stiffness === 0.1;
+  })());
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

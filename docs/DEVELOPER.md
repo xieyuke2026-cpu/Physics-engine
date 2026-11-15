@@ -15,7 +15,7 @@
 | 组件 | 版本 | 单一事实源 |
 |---|---|---|
 | MotionLab（应用） | 1.60 | `js/ui.js` 的 `APP_VERSION` |
-| PhysicsEngine（2D 核心） | 1.13.2 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
+| PhysicsEngine（2D 核心） | 1.13.3 | `js/engine/physics-engine.js` 的 `VERSION` / `PhysicsEngine.VERSION` |
 | PF 引擎（平台格斗） | 1.1.0 | `js/pf/pf-config.js` 的 `PF_VERSION` / `PFEngine.VERSION` |
 | PhysicsEngine3D（3D 核心） | 1.0.0 | `js/engine/physics-engine-3d.js` 的 `VERSION` |
 | Matter.js（vendored） | 0.20.0 | 运行时读 `Matter.version`，不写死 |
@@ -294,6 +294,7 @@ Matter 碰撞组——同一台机器的零件互不碰撞、可互相穿过，�
   'native' })` 直接构造；从零编写的顺序冲量求解器覆盖全部公开接口
   （堆叠/休眠/铰链马达/真实浮力/磁力/引力/阵风/快照/种子随机），力模型
   按固定步踢一次、子步下限 2；专属行为测试 43 项（tests/native-tests.mjs）
+- 1.13.3 — 真弹簧：胡克力模型（MotionLab 1.68 弹簧约束升级）：此前软约束（stiffness < 1）进 30 次迭代求解器，每子步收敛成刚杆——悬吊探针实测 600 步零穿越，刚度 0.05→0.85、阻尼 0→0.5 毫无差别，弹簧名不副实。现 stiffness < 0.99 的约束不再迭代求解，改每子步施一次胡克力 F = −k·C − c·vn，k = stiffness × 0.22，c = damping × √(k/约化质量倒数），使 damping = 1 对任何弹簧/质量组合都近临界；0.99 以上仍走迭代求解、杆行为零回归（`_solveConstraint` 一字未动）。Impulse 在积分前施力（辛欧拉）；Matter 侧软约束不再建 M.Constraint、只留描述符，力在 `_subStep` 按 dt/fixedDt 缩放（`step()` 路径亦覆盖——曾漏在 `_stepOnce` 里被门面测试抓到）。实测：悬吊下垂 31.4/7.2/3.4/1.9px（刚度 0.05/0.22/0.5/0.85，恰为 g·m/k 平衡），阻尼 0 到 600 步仍在晃（晚期振幅 3.6–6.1px）、0.5 以上停稳；双后端下垂差 ≤0.5px、晚期振幅差 ≤0.2px。蹦床预设重调（网簧 0.22→0.85、落体密度降至 0.001）：浅 V 链的张力放大使旧参数在任何真实弹簧模型下都塌到底（最低体 538px），重调后网面承托且真回弹约 120px。新增 `setConstraintProp(id, key, value)`（刚度/阻尼/自然长度，跨软硬边界 live 切换表示；门面以 `Matter.Composite.allConstraints` 计数验证）。稳定性角落：r=3 小球拉长 300px 的 0.98 弹簧峰值速度 2278 但逐窗衰减、有界，非失控。求解数值有变，旧回放不再逐比特复现。引擎测试 +6、Native 测试 +7、门面 +4。
 - 1.13.2 — 快照保真：拖拽状态、子步 deltaTime、睡眠计数与暖启动冲量（MotionLab 1.67 回放 scrub 修复）：Ryan 报中型场景边拖边录、回放 scrub 后判定偏离。快照此前不带拖拽状态，scrub 恢复后拖拽伺服/约束消失、后续 drag 事件被 `world.dragging` 门禁丢弃；现快照带 drag 字段，Matter 侧连同原始抓取偏移与求解器跟踪的 angleB 一起恢复（angleB 滞后于物体角度，只恢复偏移会把抓取点甩偏数像素），Impulse 侧恢复伺服目标点。另三处 Matter 状态缺失一并补齐：建体时锁定 deltaTime 为子步 delta（否则 setVelocity 按 baseDelta 缩放、positionPrev 差一倍、次步即偏 0.0018px）；sleepCounter 与 constraintImpulse（postSolveAll 只衰减不归零）随快照走。实测：无拖拽 60 步恢复从偏离变精确，中途拖拽 scrub 双后端哈希一致，杆约束/铰链恢复亦精确。已知剩余限制：接触暖启动冲量在 Matter pairs 表里、未序列化，极混乱场景 scrub 后仍可能翻转睡眠/唤醒阈值。求解数值不变（发射器生成速度实测新旧一致），旧回放不受影响；旧快照缺新字段时按无拖拽恢复。引擎测试 +6、Native 测试 +4。
 - 1.13.1 — Native 睡姿与接触偏置封顶（MotionLab 1.66 牛顿摆睡姿）：刚性连杆/铰链连到固定锚点算作睡眠支撑，单锚点悬吊体偏离重力轴 2° 以上禁止入睡（双锚点除外）；回弹与 Baumgarte 偏置只在接触诞生时触发（暖启动缓存判存活）、总量不超过接近速度——此前偏置可超过接近速度，每拍给静触链条泵能量（关睡眠 KE 0.1 → 9087）；唤醒接触重定基从「仅接近速度 >12」放宽到全部唤醒接触（取代 1.12.12 的分档：重定基对仍睡着的物体是空操作，须先被冲击唤醒）。牛顿摆漂移：关睡眠 235 → 19、开睡眠 45 → 3，五球 5247 步全睡、最大倾角 0.71°；楔子/金字塔/摆动旧测试全过。求解数值有变，≤1.13.0 录的回放不再逐比特复现；Native 测试 +3 项。
 - 1.13.0 — 可观测性接口（MotionLab 1.61 控制台）：双后端同形 `stats`（步数/物体/睡着/接触 + Impulse 专属累计计数：闸门、预唤醒、唤醒、睡着、生成）与 Impulse 的 `onEvent` 事件流（impact/sleep/wake/spawn）；计数不入快照，`resetStats()` 清零；Matter 内部项为 null。本版不改求解数值。

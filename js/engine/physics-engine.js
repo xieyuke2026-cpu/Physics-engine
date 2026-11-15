@@ -8,7 +8,10 @@
      - fixed-timestep simulation with an accumulator (stable at any refresh
        rate, speed multiplier, spiral-of-death protection)
      - optional body sleeping for large resting scenes
-     - constraint (spring / rod) management with lifecycle cleanup
+     - constraint management with lifecycle cleanup: soft constraints
+       (stiffness < 0.99) are Hooke-force springs (F = -k*C - c*vn,
+       applied once per substep, no Matter constraint built), rigid
+       ones (stiffness >= 0.99) keep the iterative Matter solve
      - physics-based dragging (throwable bodies), picking, property setters
        that keep the engine as the single source of truth
 
@@ -279,6 +282,14 @@ function matter() {
 }
 
 /** Body-local offset -> world coordinates (accounts for body rotation). */
+/** Hooke-spring scale (1.13.3): twin of SPRING_K / SPRING_DAMP_F in
+ *  native-engine.js — soft constraints on BOTH backends are the same
+ *  Hooke-force model (k = stiffness * SPRING_K, c from damping scaled
+ *  to the pair's reduced mass), so a spring scene behaves the same
+ *  whichever backend simulates it. */
+const SPRING_K = 0.22;
+const SPRING_DAMP_F = 1;
+
 function localToWorld(M, body, pt) {
   const c = Math.cos(body.angle), s = Math.sin(body.angle);
   return { x: body.position.x + pt.x * c - pt.y * s, y: body.position.y + pt.x * s + pt.y * c };
@@ -295,7 +306,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.13.2';
+export const VERSION = '1.13.3';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -661,7 +672,7 @@ export class PhysicsEngine {
   }
 
   clear() {
-    for (const { constraint } of this._cons.values()) this.M.Composite.remove(this.world, constraint);
+    for (const { constraint } of this._cons.values()) if (constraint) this.M.Composite.remove(this.world, constraint);
     this._cons.clear();
     for (const { constraint } of this._hinges.values()) this.M.Composite.remove(this.world, constraint);
     this._hinges.clear();
@@ -795,6 +806,9 @@ export class PhysicsEngine {
    * desc: { id?, bodyA (id or null for a fixed world anchor), bodyB (id),
    *   pointA, pointB (body-local offsets; world coords when bodyA is null),
    *   stiffness 0..1 (1 = rigid rod), damping, length (null = current distance) }
+   * Stiffness >= 0.99 creates a Matter constraint (rigid rod); softer
+   * values are Hooke-force springs with no Matter constraint (1.13.3).
+   * Returns the Matter constraint for rods, a desc copy for springs.
    */
   addConstraint(partial = {}) {
     const M = this.M;
@@ -817,21 +831,61 @@ export class PhysicsEngine {
       const b = localToWorld(M, bodyB, desc.pointB);
       desc.length = Math.round(Math.hypot(b.x - a.x, b.y - a.y) * 100) / 100;
     }
-    const constraint = M.Constraint.create({
+    // Rigid constraints (stiffness >= 0.99) stay Matter constraints;
+    // soft ones are Hooke-force springs (1.13.3): Matter's iterative
+    // solve converges them to rigid rods, the same failure the native
+    // backend had. Springs get no Matter constraint — _applySpringForces
+    // applies F = -k*x - c*vn per substep instead.
+    const rigid = desc.stiffness >= 0.99;
+    const constraint = rigid ? this._makeMatterConstraint(desc) : null;
+    if (constraint) M.Composite.add(this.world, constraint);
+    this._cons.set(desc.id, { constraint, desc });
+    this._emitChange();
+    return rigid ? constraint : { ...desc, pointA: { ...desc.pointA }, pointB: { ...desc.pointB } };
+  }
+
+  _makeMatterConstraint(desc) {
+    const bodyA = desc.bodyA ? this._byId.get(desc.bodyA) : null;
+    const bodyB = this._byId.get(desc.bodyB);
+    return this.M.Constraint.create({
       bodyA: bodyA || undefined, bodyB,
       pointA: desc.pointA, pointB: desc.pointB,
       stiffness: desc.stiffness, damping: desc.damping, length: desc.length,
     });
-    M.Composite.add(this.world, constraint);
-    this._cons.set(desc.id, { constraint, desc });
+  }
+
+  /** Update one stored property of a constraint (spring editor) — twin of
+   *  NativeEngine.setConstraintProp. Crossing the 0.99 stiffness boundary
+   *  swaps the representation (Matter constraint <-> Hooke spring). */
+  setConstraintProp(id, key, value) {
+    const rec = this._cons.get(id);
+    if (!rec) return false;
+    const desc = rec.desc;
+    if (key === 'stiffness') desc.stiffness = Math.min(1, Math.max(0.001, num(value, desc.stiffness)));
+    else if (key === 'damping') desc.damping = Math.min(1, Math.max(0, num(value, desc.damping)));
+    else if (key === 'length') desc.length = Math.max(0, num(value, desc.length));
+    else return false;
+    const wantRigid = desc.stiffness >= 0.99;
+    const hasRigid = !!rec.constraint;
+    if (wantRigid && !hasRigid) {
+      rec.constraint = this._makeMatterConstraint(desc);
+      this.M.Composite.add(this.world, rec.constraint);
+    } else if (!wantRigid && hasRigid) {
+      this.M.Composite.remove(this.world, rec.constraint);
+      rec.constraint = null;
+    } else if (hasRigid) {
+      rec.constraint.stiffness = desc.stiffness;
+      rec.constraint.damping = desc.damping;
+      rec.constraint.length = desc.length;
+    }
     this._emitChange();
-    return constraint;
+    return true;
   }
 
   removeConstraint(id, emit = true) {
     const rec = this._cons.get(id);
     if (!rec) return false;
-    this.M.Composite.remove(this.world, rec.constraint);
+    if (rec.constraint) this.M.Composite.remove(this.world, rec.constraint);
     this._cons.delete(id);
     if (emit) this._emitChange();
     return true;
@@ -849,18 +903,69 @@ export class PhysicsEngine {
   constraintSegments(out = []) {
     out.length = 0;
     let k = 0;
-    for (const { constraint, desc } of this._cons.values()) {
+    for (const { desc } of this._cons.values()) {
       let seg = this._segPool[k];
       if (!seg) seg = this._segPool[k] = { id: '', a: { x: 0, y: 0 }, b: { x: 0, y: 0 }, stiffness: 0 };
       seg.id = desc.id;
       seg.stiffness = desc.stiffness;
-      if (constraint.bodyA) localToWorldInto(this.M, constraint.bodyA, desc.pointA, seg.a);
+      const bA = desc.bodyA ? this._byId.get(desc.bodyA) : null;
+      if (bA) localToWorldInto(this.M, bA, desc.pointA, seg.a);
       else { seg.a.x = desc.pointA.x; seg.a.y = desc.pointA.y; }
-      localToWorldInto(this.M, constraint.bodyB, desc.pointB, seg.b);
+      localToWorldInto(this.M, this._byId.get(desc.bodyB), desc.pointB, seg.b);
       out.push(seg);
       k++;
     }
     return out;
+  }
+
+
+  /* Hooke-force springs (1.13.3): twin of NativeEngine._applySpringForces.
+     Soft constraints get a velocity kick per substep, scaled by frac
+     (the substep's fraction of a fixed step), so a fixed step applies
+     the same total impulse as the native backend's two half-step kicks
+     — both backends share the spring model, sag, period and damping
+     behaviour. Sleeping/static bodies are skipped, same as the native
+     twin. Applied in _subStep (not _stepOnce) so step() callers get
+     spring forces too, as they did with Matter constraints. */
+  _applySpringForces(frac) {
+    const { Body } = this.M;
+    for (const { desc } of this._cons.values()) {
+      if (desc.stiffness >= 0.99) continue;
+      const B = this._byId.get(desc.bodyB);
+      if (!B) continue;
+      const A = desc.bodyA ? this._byId.get(desc.bodyA) : null;
+      const imb = (!B.isStatic && !B.isSleeping) ? B.inverseMass : 0;
+      const ima = (A && !A.isStatic && !A.isSleeping) ? A.inverseMass : 0;
+      const invRed = ima + imb;
+      if (invRed <= 0) continue;
+      const pa = A ? localToWorld(this.M, A, desc.pointA) : desc.pointA;
+      const pb = localToWorld(this.M, B, desc.pointB);
+      const dx = pb.x - pa.x, dy = pb.y - pa.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 1e-9) continue;
+      const nx = dx / dist, ny = dy / dist;
+      const C = dist - desc.length;
+      const rax = A ? pa.x - A.position.x : 0, ray = A ? pa.y - A.position.y : 0;
+      const rbx = pb.x - B.position.x, rby = pb.y - B.position.y;
+      const vax = A ? A.velocity.x - A.angularVelocity * ray : 0;
+      const vay = A ? A.velocity.y + A.angularVelocity * rax : 0;
+      const vbx = B.velocity.x - B.angularVelocity * rby;
+      const vby = B.velocity.y + B.angularVelocity * rbx;
+      const vn = (vbx - vax) * nx + (vby - vay) * ny;
+      const k = desc.stiffness * SPRING_K;
+      const cc = desc.damping * SPRING_DAMP_F * Math.sqrt(k / invRed);
+      const J = (-k * C - cc * vn) * frac;
+      if (ima > 0) {
+        Body.setVelocity(A, { x: A.velocity.x - J * nx * ima, y: A.velocity.y - J * ny * ima });
+        const iia = A.inverseInertia;
+        if (Number.isFinite(iia) && iia > 0) Body.setAngularVelocity(A, A.angularVelocity - iia * (rax * J * ny - ray * J * nx));
+      }
+      if (imb > 0) {
+        Body.setVelocity(B, { x: B.velocity.x + J * nx * imb, y: B.velocity.y + J * ny * imb });
+        const iib = B.inverseInertia;
+        if (Number.isFinite(iib) && iib > 0) Body.setAngularVelocity(B, B.angularVelocity + iib * (rbx * J * ny - rby * J * nx));
+      }
+    }
   }
 
   /* ---------------- hinges & motors (revolute joints, 1.7.0) ----------------
@@ -1260,6 +1365,9 @@ export class PhysicsEngine {
         }
       }
     }
+    // Hooke springs kick right before the update too (1.13.3), scaled
+    // by the substep fraction — see _applySpringForces.
+    if (this._cons.size) this._applySpringForces(dt / this.fixedDt);
     // Fluid forces must be applied right before the update: Matter clears
     // accumulated forces as part of every Engine.update.
     if (this._fluids.size) this._applyFluids();

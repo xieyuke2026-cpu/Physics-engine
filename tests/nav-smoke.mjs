@@ -137,14 +137,14 @@ check('nav: card has a thumbnail canvas', !!doc.querySelector('#sceneList .scene
 await wait(120); // thumbnails draw on rAF
 check('nav: thumbnail actually drawn', drawCalls > 0);
 check('nav: presets listed as cards with overview thumbnails',
-  doc.querySelectorAll('#presetList .preset-card').length === 21
+  doc.querySelectorAll('#presetList .preset-card').length === 22
   && !!doc.querySelector('#presetList .preset-card canvas.thumb'));
-check('nav: sidebar preset count shows 2D only while 3D is hidden', doc.getElementById('countPresets').textContent === '21');
+check('nav: sidebar preset count shows 2D only while 3D is hidden', doc.getElementById('countPresets').textContent === '22');
 
 /* --- v1.40: workbench overview (rows + inspector) --- */
 check('workbench: scene rows mirror the library', doc.querySelectorAll('#sceneRows .scene-row').length === 1
   && doc.querySelector('#sceneRows').textContent.includes('我的实验一号'));
-check('workbench: preset rows list all 21 presets', doc.querySelectorAll('#presetRows .scene-row').length === 21,
+check('workbench: preset rows list all 22 presets', doc.querySelectorAll('#presetRows .scene-row').length === 22,
   `rows=${doc.querySelectorAll('#presetRows .scene-row').length}`);
 check('workbench: inspector defaults to the newest saved scene',
   doc.getElementById('inspBody').textContent.includes('我的实验一号')

@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.67';
+export const APP_VERSION = '1.68';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -59,13 +59,15 @@ export class Panel {
    *        onFluidProp(id,key,value), onAddWind(), onSelectWind(id), onDeleteWind(id),
    *        onAddEmitter(), onSelectEmitter(id), onDeleteEmitter(id), onEmitterProp(id,key,value),
    *        onWindProp(id,key,value), onShowScene(), onAddMagnet(), onMaterialPreset(key),
-   *        onHingeProp(id,key,value), onDeleteHinge(id) } */
+   *        onHingeProp(id,key,value), onDeleteHinge(id),
+   *        onSpringProp(id,key,value), onDeleteSpring(id) } */
   constructor(root, cb) {
     this.root = root;
     this.cb = cb;
-    this.mode = null;       // 'body' | 'scene' | 'fluid' | 'wind' | 'hinge' | 'emitter'
+    this.mode = null;       // 'body' | 'scene' | 'fluid' | 'wind' | 'hinge' | 'emitter' | 'spring'
     this.selectedId = null;
     this.selectedHingeId = null;
+    this.selectedSpringId = null;
     this.selectedEmitterId = null;
     this.staticDragId = null; // body id with static-drag armed (set by the app)
     this.inputs = new Map();
@@ -112,7 +114,7 @@ export class Panel {
     const sig = list.map((b) => b.id).join(',') + '|' + flist.map((f) => `${f.id}:${f.density}`).join(',') + '|' + wlist.map((w) => `${w.id}:${w.vx},${w.vy}`).join(',') + '|' + elist.map((e) => `${e.id}:${e.rate},${e.kind},${e.enabled}`).join(',') + '|seed:' + (settings.seed ?? '') + '|be:' + (this.backendId || 'matter');
     if (this.mode === 'scene' && this.root.childElementCount && this._sceneSig === sig) { this.refreshScene(settings, list.length); return; }
     this._sceneSig = sig;
-    this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null;
+    this.mode = 'scene'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null; this.selectedSpringId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('场景属性 Scene', 'Scene Properties')));
     const ro = el(`<div class="readonly-grid"><span>${L('物体数量', 'Bodies')}</span><b data-ro="count">${list.length}</b>
@@ -246,7 +248,7 @@ export class Panel {
   showBody(data, live) {
     const sameTarget = this.mode === 'body' && this.selectedId === data.id;
     if (sameTarget) { this.refreshBody(live); return; }
-    this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null;
+    this.mode = 'body'; this.selectedId = data.id; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null; this.selectedSpringId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('物体属性 Object', 'Object Properties')));
     const head = el(`<div class="readonly-grid"><span>${L('类型 Type', 'Type')}</span><b>${typeLabel(data.type)}</b>
@@ -364,7 +366,7 @@ export class Panel {
   /** Wind-region editor: geometry + wind velocity/power, wired to onWindProp. */
   showWind(wind) {
     if (this.mode === 'wind' && this.selectedWindId === wind.id && this.root.childElementCount) return;
-    this.mode = 'wind'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = wind.id; this.selectedHingeId = null; this.selectedEmitterId = null;
+    this.mode = 'wind'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = wind.id; this.selectedHingeId = null; this.selectedEmitterId = null; this.selectedSpringId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('风场区域 Wind · 风', 'Wind Region')));
     r.appendChild(el(`<p class="empty-note">${L('区域内的物体被吹向风速 (vx, vy) 的方向：密度越小吹得越快（按 0.0012 ÷ 物体密度 放大），密实重物几乎不动。负数表示向左/向上吹。强度 Power 整体放大或减弱这个效果。也可以直接在画布上拖动这块区域来移动它。', 'Bodies inside are blended toward the wind velocity (vx, vy): the lower a body\'s density, the faster it goes (scaled by 0.0012 ÷ body density); dense blocks barely stir. Negative values blow left/up. Power scales the whole effect. You can also drag this region on the canvas to move it.')}</p>`));
@@ -398,7 +400,7 @@ export class Panel {
    *  onHingeProp / onDeleteHinge. aLabel is null for a fixed world mount. */
   showHinge(hinge, aLabel, bLabel) {
     if (this.mode === 'hinge' && this.selectedHingeId === hinge.id && this.root.childElementCount) return;
-    this.mode = 'hinge'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = hinge.id;
+    this.mode = 'hinge'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = hinge.id; this.selectedSpringId = null;
     this._hingeView = { hinge, aLabel, bLabel };
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('铰链 Hinge · 马达', 'Hinge · Motor')));
@@ -426,10 +428,46 @@ export class Panel {
     this._collectInputs();
   }
 
+  /** Spring editor (1.68): stiffness / damping / rest length, wired to
+   *  onSpringProp / onDeleteSpring. aLabel is null for a fixed world anchor. */
+  showSpring(spring, aLabel, bLabel) {
+    if (this.mode === 'spring' && this.selectedSpringId === spring.id && this.root.childElementCount) return;
+    this.mode = 'spring'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null; this.selectedSpringId = spring.id;
+    const r = this.root; r.innerHTML = '';
+    r.appendChild(title(L('弹簧 Spring · 刚度与阻尼', 'Spring · Stiffness & Damping')));
+    r.appendChild(el(`<p class="empty-note">${L('一根真的弹簧：按胡克定律拉伸回弹。刚度决定软硬——0.01 是软蹦极绳，1 是刚性杆（0.99 以上按杆算）；阻尼决定晃多久——0 几乎一直晃，1 一下就停。自然长度是弹簧不受力时的长度，改短等于预先拉紧。', 'A real spring: it pulls back following Hooke’s law. Stiffness sets soft vs hard — 0.01 is a soft bungee, 1 is a rigid rod (0.99 and up behaves as a rod); damping sets how long it keeps bouncing — 0 bounces almost forever, 1 stops at once. Rest length is the length with no force on it; shortening it pre-tensions the spring.')}</p>`));
+    const aName = aLabel === null || aLabel === undefined ? L('固定锚点（世界）', 'Fixed anchor (world)') : aLabel;
+    r.appendChild(el(`<p class="empty-note"><strong>${aName}</strong> ⟷ <strong>${bLabel || spring.bodyB}</strong></p>`));
+    r.appendChild(sliderField(L('刚度 Stiffness', 'Stiffness'), 'sstiff', spring.stiffness, 0.01, 1, 0.01));
+    r.appendChild(sliderField(L('阻尼 Damping', 'Damping'), 'sdamp', spring.damping, 0, 1, 0.01));
+    r.appendChild(numField(L('自然长度 Rest Length', 'Rest Length'), 'slen', spring.length, { step: 5, min: 0, max: 2000 }));
+    const feel = spring.stiffness >= 0.99 ? L('刚性杆', 'rigid rod') : spring.stiffness < 0.2 ? L('软弹簧', 'soft spring') : L('弹簧', 'spring');
+    r.appendChild(el(`<p class="empty-note">${L(`当前：${feel}，刚度 ${spring.stiffness.toFixed(2)}，阻尼 ${spring.damping.toFixed(2)}，自然长度 ${Math.round(spring.length)} px。`, `Now: ${feel}, stiffness ${spring.stiffness.toFixed(2)}, damping ${spring.damping.toFixed(2)}, rest length ${Math.round(spring.length)} px.`)}</p>`));
+    const rowBtns = el('<div class="btn-row"></div>');
+    const presets = [[L('松软', 'Soft'), 0.08], [L('适中', 'Medium'), 0.3], [L('紧绷', 'Taut'), 0.85], [L('刚性杆', 'Rod'), 1]];
+    for (const [label, v] of presets) {
+      const b = el(`<button class="btn">${label}</button>`);
+      b.addEventListener('click', () => { this.cb.onSpringProp(spring.id, 'stiffness', v); this.mode = null; this.showSpring({ ...spring, stiffness: v }, aLabel, bLabel); });
+      rowBtns.appendChild(b);
+    }
+    r.appendChild(rowBtns);
+    const back = el(`<button class="btn block">${L('返回场景属性', 'Back to Scene Properties')}</button>`);
+    back.addEventListener('click', () => this.cb.onShowScene());
+    const del = el(`<button class="btn danger block">${icon('trash', 16)}${L(' 删除弹簧', ' Delete Spring')}</button>`);
+    del.addEventListener('click', () => this.cb.onDeleteSpring(spring.id));
+    r.appendChild(back); r.appendChild(del);
+    this._wireNumbers(r, (k, v) => {
+      if (k === 'sstiff') this.cb.onSpringProp(spring.id, 'stiffness', v);
+      else if (k === 'sdamp') this.cb.onSpringProp(spring.id, 'damping', v);
+      else if (k === 'slen') this.cb.onSpringProp(spring.id, 'length', v);
+    });
+    this._collectInputs();
+  }
+
   /** Fluid-region editor: geometry + density/drag, wired to onFluidProp. */
   showFluid(fluid) {
     if (this.mode === 'fluid' && this.selectedFluidId === fluid.id && this.root.childElementCount) return;
-    this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null;
+    this.mode = 'fluid'; this.selectedId = null; this.selectedFluidId = fluid.id; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null; this.selectedSpringId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('流体区域 Fluid · 浮力', 'Fluid Region · Buoyancy')));
     r.appendChild(el(`<p class="empty-note">${L('区域上沿是液面。浮力按「流体密度 ÷ 物体密度 × 浸没比例」计算：物体密度小于流体就浮起，大于就沉底。默认水的密度约 0.0012。也可以直接在画布上拖动这块区域来移动它。', 'The top edge of the region is the surface. Buoyancy = fluid density ÷ body density × submerged fraction: bodies less dense than the fluid float, denser ones sink. Default water density ≈ 0.0012. You can also drag this region on the canvas to move it.')}</p>`));
@@ -462,7 +500,7 @@ export class Panel {
    *  onEmitterProp. Angle is edited in degrees, stored in radians. */
   showEmitter(em) {
     if (this.mode === 'emitter' && this.selectedEmitterId === em.id && this.root.childElementCount) return;
-    this.mode = 'emitter'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = em.id;
+    this.mode = 'emitter'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = em.id; this.selectedSpringId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('发射器 Emitter · 喷物体', 'Emitter · Spawner')));
     r.appendChild(el(`<p class="empty-note">${L('运行时按速率朝「方向」喷出物体，喷发节奏只跟模拟步走，所以录制的回放会一颗不差地重演。达到上限后最早喷出的会被回收。也可以直接在画布上拖动发射器改位置。', 'While running, it fires bodies along its Direction at the set Rate — the schedule follows simulation steps only, so recorded replays re-fire identically. At the Cap the oldest spawned body is recycled. You can also drag the emitter on the canvas to move it.')}</p>`));
@@ -524,7 +562,7 @@ export class Panel {
     this._chalPhase = vm.phase;
     if (this.mode === 'challenge' && this._chalSig === sig && this.root.childElementCount) { this.updateChallengeStats(vm); return; }
     this._chalSig = sig;
-    this.mode = 'challenge'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null;
+    this.mode = 'challenge'; this.selectedId = null; this.selectedFluidId = null; this.selectedWindId = null; this.selectedHingeId = null; this.selectedEmitterId = null; this.selectedSpringId = null;
     const r = this.root; r.innerHTML = '';
     r.appendChild(title(L('挑战 Challenge', 'Challenge')));
     r.appendChild(el(`<div class="chal-name">${vm.title}</div>`));

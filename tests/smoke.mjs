@@ -141,7 +141,7 @@ check('scenes modal lists saved scene', doc.getElementById('sceneList').textCont
 
 /* --- v1.1/v1.6: presets (cards with overview thumbnails since 1.6) --- */
 const presetBtns = doc.querySelectorAll('#presetList .preset-card');
-check('v1.9: twenty-one preset cards rendered', presetBtns.length === 21, `got ${presetBtns.length}`);
+check('v1.9: twenty-two preset cards rendered', presetBtns.length === 22, `got ${presetBtns.length}`);
 check('v1.6: preset cards carry overview thumbnails', !!presetBtns[0].querySelector('canvas.thumb'));
 click(presetBtns[0].querySelector('.mini-btn')); // Newton's cradle (auto-runs)
 await wait(500);
@@ -198,8 +198,8 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.67')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.2')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.68')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.3')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
@@ -475,6 +475,51 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   await wait(120);
   check('v1.28: delete tool removes the hinge (editor closes)',
     !panelBody.querySelector('[data-key="hmotor"]'));
+  click(doc.getElementById('btnPlay'));
+}
+
+/* ---- v1.68: spring tool + spring editor ---- */
+{
+  // start from a fresh scene: the default Ball sits on the y=200 line, so
+  // the flow uses the empty lower-left area (world x 250-420, y ~300)
+  click(doc.getElementById('btnNewScene'));
+  await wait(100);
+  click(doc.querySelector('[data-tool="circle"]'));
+  pointer(canvas, 'pointerdown', 250, 350); pointer(canvas, 'pointerup', 250, 350);
+  await wait(60);
+  click(doc.querySelector('[data-tool="circle"]'));
+  pointer(canvas, 'pointerdown', 400, 350); pointer(canvas, 'pointerup', 400, 350);
+  await wait(60);
+  click(doc.querySelector('[data-tool="spring"]'));
+  pointer(canvas, 'pointerdown', 250, 350); pointer(canvas, 'pointerup', 250, 350);
+  await wait(60);
+  pointer(canvas, 'pointerdown', 400, 350); pointer(canvas, 'pointerup', 400, 350);
+  await wait(120);
+  const stiff = panelBody.querySelector('[data-key="sstiff"]');
+  check('v1.68: spring tool creates a spring and opens its editor', !!stiff,
+    panelBody.textContent.slice(0, 60));
+  if (stiff) {
+    stiff.value = '0.5';
+    stiff.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await wait(60);
+    check('v1.68: spring editor keeps the stiffness slider after input', !!panelBody.querySelector('[data-key="sstiff"]'));
+    check('v1.68: spring editor shows damping + rest length fields',
+      !!panelBody.querySelector('[data-key="sdamp"]') && !!panelBody.querySelector('[data-key="slen"]'));
+  }
+  // Escape closes the editor; tapping the spring line reopens it
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  await wait(60);
+  check('v1.68: Escape closes the spring editor', !panelBody.querySelector('[data-key="sstiff"]'));
+  click(doc.querySelector('[data-tool="select"]'));
+  pointer(canvas, 'pointerdown', 325, 350); pointer(canvas, 'pointerup', 325, 350);
+  await wait(120);
+  check('v1.68: tapping the spring line reopens its editor', !!panelBody.querySelector('[data-key="sstiff"]'));
+  // delete tool removes the spring by its line
+  click(doc.querySelector('[data-tool="delete"]'));
+  pointer(canvas, 'pointerdown', 325, 350); pointer(canvas, 'pointerup', 325, 350);
+  await wait(120);
+  check('v1.68: delete tool removes the spring (editor closes)',
+    !panelBody.querySelector('[data-key="sstiff"]'));
   click(doc.getElementById('btnPlay'));
 }
 

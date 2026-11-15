@@ -1,9 +1,9 @@
 # MotionLab — 2D Physics Sandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.13.2-blue.svg)
+![PhysicsEngine](https://img.shields.io/badge/PhysicsEngine-1.13.3-blue.svg)
 ![Matter.js](https://img.shields.io/badge/Matter.js-0.20.0-lightgrey.svg)
-![Tests](https://img.shields.io/badge/tests-719%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-799%20passing-brightgreen.svg)
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
@@ -71,7 +71,7 @@ Interactive · Responsive · Lightweight——黑白灰为主、低饱和蓝为�
 
 ### 场景与分享
 
-- **21 个预设**：牛顿摆、多米诺、金字塔、斜坡、高弹阵列、双摆、桥梁、钉板、蹦床、漏斗、过山车、保龄球、万有引力轨道、浮力池、磁铁阵列、风洞、材质实验室、磁铁秋千、马达风车、摩天轮、纯风风车——首页带缩略图，一键载入。
+- **22 个预设**：牛顿摆、多米诺、金字塔、斜坡、高弹阵列、双摆、桥梁、钉板、蹦床、漏斗、过山车、保龄球、万有引力轨道、浮力池、磁铁阵列、风洞、材质实验室、磁铁秋千、马达风车、摩天轮、纯风风车、弹簧振子——首页带缩略图，一键载入。
 - 场景库（localStorage 保存/复制/重命名/搜索）+ 自动保存与恢复；主界面为工作台布局（场景/预设列表 + 详情检查器）。
 - **JSON 导入/导出**（格式 `motionlab-scene` v2，旧版 v1 可导入）：导入有 2 MB 上限与逐项校验（数量预算、坐标与尺寸范围），坏文件整体拒绝并说明原因，不伤当前场景。
 - **分享链接**：整个场景压缩进一条 `#s=` 链接，对方打开即进入该场景。

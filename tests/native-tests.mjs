@@ -841,5 +841,43 @@ function poolWorld() {
     e3.snapshot().drag === null && (() => { const e4 = mk(); e4.load(JSON.parse(JSON.stringify(e3.snapshot()))); return e4.dragging === false; })());
 }
 
+/* --- v1.13.3: Hooke-force springs — soft constraints are real springs now,
+   not iteration-converged rods. Hang a mass, measure sag / oscillation. --- */
+{
+  const hang = (stiffness, damping, steps = 600) => {
+    const e = new NativeEngine({ enableSleeping: false });
+    e.setGravity(0, 1);
+    const ball = e.addBody({ kind: 'circle', x: 640, y: 300, radius: 20 });
+    e.addConstraint({ bodyA: null, bodyB: ball.plugin.pe.id, pointA: { x: 640, y: 100 }, pointB: { x: 0, y: 0 }, stiffness, damping, length: 120 });
+    const ys = [];
+    for (let i = 0; i < steps; i++) { e.stepOnce(); ys.push(ball.position.y); }
+    return ys;
+  };
+  const sagOf = (s) => { const ys = hang(s, 0.5); return ys.slice(500).reduce((a, b) => a + b, 0) / 100 - 220; };
+  const sag05 = sagOf(0.05), sag22 = sagOf(0.22), sag85 = sagOf(0.85);
+  check('v1.13.3: softer springs sag more (31 / 7 / 2 px)', sag05 > 25 && sag05 < 38 && sag22 > 4 && sag22 < 11 && sag85 > 0.5 && sag85 < 4,
+    `sag=${sag05.toFixed(1)}/${sag22.toFixed(1)}/${sag85.toFixed(1)}`);
+  const ampOf = (s, d) => { const ys = hang(s, d); const late = ys.slice(500); const m = late.reduce((a, b) => a + b, 0) / late.length; return Math.max(...late.map((y) => Math.abs(y - m))); };
+  check('v1.13.3: undamped spring still oscillates late', ampOf(0.22, 0) > 2);
+  check('v1.13.3: damped spring settles (late amp < 0.5px)', ampOf(0.22, 0.5) < 0.5);
+  const mkSpring = () => {
+    const e = new NativeEngine({ enableSleeping: false, seed: 9 });
+    e.setGravity(0, 1);
+    const b = e.addBody({ kind: 'circle', x: 640, y: 300, radius: 20 });
+    e.addConstraint({ bodyA: null, bodyB: b.plugin.pe.id, pointA: { x: 640, y: 100 }, pointB: { x: 0, y: 0 }, stiffness: 0.22, damping: 0.05, length: 120 });
+    return e;
+  };
+  const t1 = mkSpring(), t2 = mkSpring();
+  for (let i = 0; i < 300; i++) { t1.stepOnce(); t2.stepOnce(); }
+  const p1 = t1.snapshot().bodies[0], p2 = t2.snapshot().bodies[0];
+  check('v1.13.3: spring twin worlds are bit-identical', p1.x === p2.x && p1.y === p2.y);
+  const e = new NativeEngine();
+  const b = e.addBody({ kind: 'circle', x: 100, y: 100, radius: 10 });
+  const cid = e.addConstraint({ bodyA: null, bodyB: b.plugin.pe.id, pointA: { x: 100, y: 50 }, stiffness: 0.2, damping: 0.05, length: 50 }).id;
+  check('v1.13.3: setConstraintProp updates stiffness', e.setConstraintProp(cid, 'stiffness', 0.6) === true && e.describeConstraints()[0].stiffness === 0.6);
+  check('v1.13.3: setConstraintProp clamps stiffness to (0,1]', e.setConstraintProp(cid, 'stiffness', 5) === true && e.describeConstraints()[0].stiffness === 1);
+  check('v1.13.3: setConstraintProp rejects unknown id/key', e.setConstraintProp('nope', 'stiffness', 0.5) === false && e.setConstraintProp(cid, 'bogus', 1) === false);
+}
+
 console.log(`\nNativeEngine tests: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

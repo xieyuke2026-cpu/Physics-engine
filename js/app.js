@@ -60,6 +60,7 @@ let staticDragId = null; // body id armed for direct static dragging (panel togg
 let selectedFluidId = null;
 let selectedWindId = null;
 let selectedHingeId = null;
+let selectedSpringId = null;
 let selectedEmitterId = null;
 let initialSnapshot = null;   // for Reset: state at load / last save
 let preview = null;
@@ -106,6 +107,7 @@ function loadScene(scene, { markInitial = true } = {}) {
   selectedFluidId = null;
   selectedWindId = null;
   selectedHingeId = null;
+  selectedSpringId = null;
   selectedEmitterId = null;
   springStart = null; springCur = null;
   hingeStart = null; hingeCur = null;
@@ -211,7 +213,7 @@ function addMagnetAt(x, y, radius = 26) {
   recEvent('add', { body: world.serializeBody(b) });
   if (challenge) challenge.added.add(world.dataIdOf(b));
   selectedId = world.dataIdOf(b);
-  selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null;
+  selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null; selectedSpringId = null;
   refreshPanel(); pushHistorySoon(); scheduleAutosave();
   toast(t('msg.magnetAdded'));
   return b;
@@ -262,6 +264,7 @@ const panel = new Panel($('panelBody'), {
     selectedFluidId = null;
     selectedWindId = null;
     selectedHingeId = null;
+    selectedSpringId = null;
     selectedEmitterId = null;
     refreshPanel();
   },
@@ -353,13 +356,13 @@ const panel = new Panel($('panelBody'), {
     if (challenge && challenge.phase === 'run') { toast(t('chal.needBuild')); return; }
     const f = world.addFluid(fluidData({}));
     recRegions();
-    selectedFluidId = f.id; selectedId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null;
+    selectedFluidId = f.id; selectedId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null; selectedSpringId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.fluidAdded'));
   },
   onSelectFluid(id) {
     if (!world.fluidById(id)) return;
-    selectedFluidId = id; selectedId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null;
+    selectedFluidId = id; selectedId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null; selectedSpringId = null;
     refreshPanel();
   },
   onDeleteFluid(id) {
@@ -378,13 +381,13 @@ const panel = new Panel($('panelBody'), {
     if (challenge && challenge.phase === 'run') { toast(t('chal.needBuild')); return; }
     const w = world.addWind(windData({}));
     recRegions();
-    selectedWindId = w.id; selectedId = null; selectedFluidId = null; selectedHingeId = null; selectedEmitterId = null;
+    selectedWindId = w.id; selectedId = null; selectedFluidId = null; selectedHingeId = null; selectedEmitterId = null; selectedSpringId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.windAdded'));
   },
   onSelectWind(id) {
     if (!world.windById(id)) return;
-    selectedWindId = id; selectedId = null; selectedFluidId = null; selectedHingeId = null; selectedEmitterId = null;
+    selectedWindId = id; selectedId = null; selectedFluidId = null; selectedHingeId = null; selectedEmitterId = null; selectedSpringId = null;
     refreshPanel();
   },
   onDeleteWind(id) {
@@ -404,13 +407,13 @@ const panel = new Panel($('panelBody'), {
     if (world.emitterCount >= 8) { toast(t('msg.emitterLimit')); return; }
     const e = world.addEmitter(emitterData({}));
     recRegions();
-    selectedEmitterId = e.id; selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null;
+    selectedEmitterId = e.id; selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedSpringId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.emitterAdded'));
   },
   onSelectEmitter(id) {
     if (!world.emitterById(id)) return;
-    selectedEmitterId = id; selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null;
+    selectedEmitterId = id; selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedSpringId = null;
     refreshPanel();
   },
   onDeleteEmitter(id) {
@@ -425,7 +428,7 @@ const panel = new Panel($('panelBody'), {
     recRegions();
     pushHistorySoon(); scheduleAutosave();
   },
-  onShowScene() { chalDismissed = true; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null; refreshPanel(); },
+  onShowScene() { chalDismissed = true; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null; selectedSpringId = null; refreshPanel(); },
   onHingeProp(id, key, value) {
     if (key === 'motorSpeed') { world.setHingeMotor(id, value); recEvent('hingeMotor', { id, value }); }
     pushHistorySoon(); scheduleAutosave();
@@ -436,6 +439,18 @@ const panel = new Panel($('panelBody'), {
     if (selectedHingeId === id) selectedHingeId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.hingeDeleted'));
+  },
+  onSpringProp(id, key, value) {
+    world.setConstraintProp(id, key, value);
+    recEvent('springProp', { id, key, value });
+    pushHistorySoon(); scheduleAutosave();
+  },
+  onDeleteSpring(id) {
+    recEvent('removeConstraint', { id });
+    world.removeConstraint(id);
+    if (selectedSpringId === id) selectedSpringId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.springDeleted'));
   },
   onAddMagnet() {
     // Centre of the world stage (the camera frames 0..1280 × 0..600).
@@ -524,6 +539,15 @@ function refreshPanel() {
     }
     selectedHingeId = null;
   }
+  if (selectedSpringId) {
+    const c = world.constraintById(selectedSpringId);
+    if (c) {
+      const labelOf = (id) => { const bb = world.bodyById(id); return bb ? (world.serializeBody(bb).label || id) : id; };
+      panel.showSpring(c, c.bodyA ? labelOf(c.bodyA) : null, labelOf(c.bodyB));
+      return;
+    }
+    selectedSpringId = null;
+  }
   if (selectedFluidId) {
     const f = world.fluidById(selectedFluidId);
     if (f) { panel.showFluid(f); return; }
@@ -552,6 +576,14 @@ function deleteSelected() {
     selectedHingeId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.hingeDeleted'));
+    return;
+  }
+  if (selectedSpringId) {
+    recEvent('removeConstraint', { id: selectedSpringId });
+    world.removeConstraint(selectedSpringId);
+    selectedSpringId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
+    toast(t('msg.springDeleted'));
     return;
   }
   if (selectedEmitterId) {
@@ -713,7 +745,9 @@ function handleSpringTap(w) {
   }
   if (world.addConstraint(data)) {
     recEvent('addConstraint', { constraint: data });
-    pushHistorySoon(); scheduleAutosave();
+    selectedSpringId = data.id;
+    selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedEmitterId = null;
+    refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.springCreated'));
   } else toast(t('msg.springFailed'));
 }
@@ -762,7 +796,7 @@ function handleHingeTap(w) {
   if (created) recEvent('addHinge', { hinge: world.hingeById(created.id) || data });
   if (created) {
     selectedHingeId = created.id;
-    selectedId = null; selectedFluidId = null; selectedWindId = null; selectedEmitterId = null;
+    selectedId = null; selectedFluidId = null; selectedWindId = null; selectedEmitterId = null; selectedSpringId = null;
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.hingeCreated'));
   } else toast(t('msg.hingeFailed'));
@@ -837,6 +871,7 @@ canvas.addEventListener('pointerdown', (e) => {
     if (seg) {
       recEvent('removeConstraint', { id: seg.id });
       world.removeConstraint(seg.id);
+      if (selectedSpringId === seg.id) selectedSpringId = null;
       refreshPanel(); pushHistorySoon(); scheduleAutosave();
       toast(t('msg.springDeleted'));
       return;
@@ -891,7 +926,7 @@ canvas.addEventListener('pointerdown', (e) => {
     const hg = pickHinge(w.x, w.y);
     if (hg) {
       selectedHingeId = hg.id;
-      selectedId = null; selectedFluidId = null; selectedWindId = null; selectedEmitterId = null;
+      selectedId = null; selectedFluidId = null; selectedWindId = null; selectedEmitterId = null; selectedSpringId = null;
       refreshPanel();
       gesture = { kind: 'none' };
       return;
@@ -909,6 +944,7 @@ canvas.addEventListener('pointerdown', (e) => {
     selectedFluidId = null;
     selectedWindId = null;
     selectedHingeId = null;
+    selectedSpringId = null;
     selectedEmitterId = null;
     refreshPanel();
     if (b.isStatic && staticDragId === selectedId) {
@@ -932,10 +968,12 @@ canvas.addEventListener('pointerdown', (e) => {
       // and since 1.26 it can be dragged on the canvas to move it.
       if (challenge) { gesture = { kind: 'none' }; return; }
       const em = pickEmitter(w);
-      const wn = em ? null : pickWind(w);
-      const f = (em || wn) ? null : pickFluid(w);
+      const sp = em ? null : pickSpring(w.x, w.y);
+      const wn = (em || sp) ? null : pickWind(w);
+      const f = (em || sp || wn) ? null : pickFluid(w);
       selectedId = null;
       selectedHingeId = null;
+      selectedSpringId = sp ? sp.id : null;
       selectedEmitterId = em ? em.id : null;
       selectedWindId = wn ? wn.id : null;
       selectedFluidId = f ? f.id : null;
@@ -1059,7 +1097,7 @@ function finalizeCreate() {
     if (world.emitterCount >= 8) { toast(t('msg.emitterLimit')); return; }
     const em = world.addEmitter(emitterData({ x: s.x, y: s.y, angle: dist > 6 ? Math.atan2(dy, dx) : Math.PI / 2 }));
     recRegions();
-    selectedEmitterId = em.id; selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null;
+    selectedEmitterId = em.id; selectedId = null; selectedFluidId = null; selectedWindId = null; selectedHingeId = null; selectedSpringId = null;
     setTool('select');
     refreshPanel(); pushHistorySoon(); scheduleAutosave();
     toast(t('msg.emitterAdded'));
@@ -2195,7 +2233,7 @@ function initChrome() {
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); }
     else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); toggleRun(); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedId || selectedHingeId)) { deleteSelected(); }
-    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; selectedEmitterId = null; selectedHingeId = null; staticDragId = null; springStart = null; springCur = null; hingeStart = null; hingeCur = null; refreshPanel(); }
+    else if (e.key === 'Escape') { selectedId = null; selectedFluidId = null; selectedWindId = null; selectedEmitterId = null; selectedHingeId = null; selectedSpringId = null; staticDragId = null; springStart = null; springCur = null; hingeStart = null; hingeCur = null; refreshPanel(); }
     else if (selectedId && e.key.startsWith('Arrow')) {
       e.preventDefault();
       const b = selectedBody(); if (!b) return;
@@ -2541,6 +2579,7 @@ function applyReplayEvent(ev) {
     case 'addHinge': world.addHinge(hingeData(ev.hinge)); break;
     case 'removeHinge': world.removeHinge(ev.id); break;
     case 'hingeMotor': world.setHingeMotor(ev.id, ev.value); break;
+    case 'springProp': world.setConstraintProp(ev.id, ev.key, ev.value); break;
     case 'settings':
       settings = { ...settings, ...ev.settings };
       world.applySettings(settings); updateStatus();
@@ -2736,6 +2775,7 @@ function loop(now) {
     selectedWindId,
     selectedEmitterId,
     selectedHingeId,
+    selectedSpringId,
     hinges: world.hingeAnchors(),
     showGrid: settings.showGrid,
     showVectors: settings.showVectors,

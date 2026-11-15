@@ -83,6 +83,8 @@ export class PhysicsWorld {
   get constraintCount() { return this.core.constraintCount; }
   constraintSegments(out) { return this.core.constraintSegments(out); }
   serializeConstraints() { return this.core.describeConstraints().map((c) => constraintData(c)); }
+  constraintById(id) { return this.serializeConstraints().find((c) => c.id === id) || null; }
+  setConstraintProp(id, key, value) { return this.core.setConstraintProp(id, key, value); }
 
   /* ---------- hinges & motors (1.28 / core 1.7.0) ---------- */
   addHinge(data) { return this.core.addHinge(hingeData(data)); }

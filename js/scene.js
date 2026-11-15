@@ -557,14 +557,37 @@ export function presetScenes() {
       }));
     }
     const spring = (a, b, pa, pb, len) => constraints.push(constraintData({
-      bodyA: a, bodyB: b, pointA: pa, pointB: pb, stiffness: 0.22, damping: 0.05, length: len,
+      // 1.13.3: retuned for Hooke-force springs — 0.22 chained springs sag
+      // to the ground under the load (probe: lowest body 538); 0.85 holds
+      // the net and bounces (rebound ~120 px), light loads keep it lively.
+      bodyA: a, bodyB: b, pointA: pa, pointB: pb, stiffness: 0.85, damping: 0.05, length: len,
     }));
     spring('tramp-post-l', 'tramp-seg-0', { x: 13, y: -84 }, { x: -segW / 2, y: 0 }, 6);
     for (let i = 0; i < n - 1; i++) spring(`tramp-seg-${i}`, `tramp-seg-${i + 1}`, { x: segW / 2, y: 0 }, { x: -segW / 2, y: 0 }, step - segW);
     spring('tramp-post-r', `tramp-seg-${n - 1}`, { x: -13, y: -84 }, { x: segW / 2, y: 0 }, 6);
-    bodies.push(bodyData({ type: 'circle', x: 640, y: 190, radius: 27, density: 0.003, restitution: 0.15, frictionAir: 0.002, label: 'Jumper' }));
-    bodies.push(bodyData({ type: 'rectangle', x: 760, y: 120, width: 44, height: 44, density: 0.002, restitution: 0.1, label: 'Box' }));
+    bodies.push(bodyData({ type: 'circle', x: 640, y: 190, radius: 27, density: 0.001, restitution: 0.15, frictionAir: 0.002, label: 'Jumper' }));
+    bodies.push(bodyData({ type: 'rectangle', x: 760, y: 120, width: 44, height: 44, density: 0.001, restitution: 0.1, label: 'Box' }));
     out.push({ key: 'trampoline', name: '蹦床弹簧网', scene: sceneData({ name: '蹦床弹簧网 Trampoline', bodies, constraints }) });
+  }
+
+  // Spring oscillator (1.68) — three identical hanging springs, three
+  // dampings: watch them start together and decay apart. Balls start
+  // 60 px below equilibrium, so the oscillation is visible on load.
+  {
+    const bodies = frameBodies();
+    const constraints = [];
+    bodies.push(bodyData({ id: 'osc-beam', type: 'rectangle', x: 640, y: 90, width: 700, height: 14, isStatic: true, label: 'Beam' }));
+    const spots = [
+      { x: 440, damping: 0, label: 'No Damping' },
+      { x: 640, damping: 0.15, label: 'Light Damping' },
+      { x: 840, damping: 0.6, label: 'Heavy Damping' },
+    ];
+    for (const s of spots) {
+      const id = `osc-ball-${s.x}`;
+      bodies.push(bodyData({ id, type: 'circle', x: s.x, y: 307, radius: 22, density: 0.002, label: s.label }));
+      constraints.push(constraintData({ bodyA: null, bodyB: id, pointA: { x: s.x, y: 97 }, pointB: { x: 0, y: 0 }, stiffness: 0.15, damping: s.damping, length: 150 }));
+    }
+    out.push({ key: 'oscillator', name: '弹簧振子', scene: sceneData({ name: '弹簧振子 Spring Oscillator', bodies, constraints }) });
   }
 
   // Funnel — small balls pour through a V funnel into the bin below.

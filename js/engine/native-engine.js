@@ -5,8 +5,9 @@
    Written from scratch for MotionLab 1.41: no physics library inside.
    Fixed-timestep simulation (advance / stepOnce, substeps split the
    integration + collision pass), sequential-impulse contacts with
-   friction and restitution, distance constraints (springs & rods),
-   revolute hinges with motors, sleeping, and the engine-level force
+   friction and restitution, distance constraints (Hooke-force springs
+   for soft constraints, iterative rods for rigid ones), revolute
+   hinges with motors, sleeping, and the engine-level force
    models the API promises — pairwise gravitation, magnetism, fluid
    buoyancy (true clipped submerged area, centre of buoyancy, underside
    seal) and gusting wind regions — with the same constants and
@@ -47,6 +48,14 @@ const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 /** Per-step gravity velocity gain at gravity 1 (matches the Matter
  *  backend's measured ≈0.28 px/step per step: g · 0.001 · (1000/60)²). */
 const GRAVITY_STEP = 0.001 * (1000 / 60) * (1000 / 60);
+/** Hooke-spring scale (1.13.3): a soft constraint's stiffness 0..1 maps
+ *  linearly to a spring constant k = stiffness * SPRING_K. Calibrated so
+ *  a 0.08 spring sags ~20 px under a unit mass at gravity 1
+ *  (equilibrium stretch = g_step * m / k). */
+const SPRING_K = 0.22;
+/** Damping scale: c = damping * SPRING_DAMP_F * sqrt(k * m_reduced), so
+ *  damping = 1 is ~critical for any spring stiffness / body mass. */
+const SPRING_DAMP_F = 1;
 // Shared scratch vectors for the contact solver (1.12.5): _solveContact
 // runs 10 iterations x every contact x every substep; allocating two
 // objects per call was a steady GC drip at high body counts. Safe: the
@@ -449,6 +458,19 @@ export class NativeEngine {
     const ok = this._cons.delete(id);
     if (ok) this._changed();
     return ok;
+  }
+  /** Update one stored property of a constraint (spring editor). Keys:
+   *  stiffness (clamped to (0, 1]), damping (>= 0), length (>= 0).
+   *  Returns false for an unknown id or key. */
+  setConstraintProp(id, key, value) {
+    const c = this._cons.get(id);
+    if (!c) return false;
+    if (key === 'stiffness') c.stiffness = clamp(num(value, c.stiffness), 0.001, 1);
+    else if (key === 'damping') c.damping = Math.max(0, num(value, c.damping));
+    else if (key === 'length') c.length = Math.max(0, num(value, c.length));
+    else return false;
+    this._changed();
+    return true;
   }
   get constraintCount() { return this._cons.size; }
   describeConstraints() {
@@ -1445,6 +1467,10 @@ export class NativeEngine {
       this._wake(dragBody);
       dragBody.sleepCounter = 0;
     }
+    // Hooke springs: velocity kicks from the current state, before the
+    // positions below integrate them (same order as the gravity kick
+    // in _stepOnce, but per substep for spring stability).
+    if (this._cons.size) this._applySpringForces(h);
     for (const b of this._byId.values()) {
       if (b.isStatic || b.isSleeping) continue;
       if (b !== dragBody) {
@@ -1564,7 +1590,9 @@ export class NativeEngine {
       // with the iteration raise below; flat ~45 out to 3600 steps.
       if (it % 2 === 0) { for (const c of contacts) this._solveContact(c, h, it === 0); }
       else { for (let ci = contacts.length - 1; ci >= 0; ci--) this._solveContact(contacts[ci], h, false); }
-      for (const c of this._cons.values()) this._solveConstraint(c);
+      // Rigid constraints only: soft ones are Hooke forces, solved
+      // once per substep in _applySpringForces (see below).
+      for (const c of this._cons.values()) if (c.stiffness >= 0.99) this._solveConstraint(c);
       for (const hg of this._hinges.values()) this._solveHinge(hg);
     }
     // Linear position correction — only for genuinely deep residual
@@ -1834,6 +1862,47 @@ export class NativeEngine {
     c.accT = newAccT;
     this._applyImpulse(c.a, -lt * tx, -lt * ty, c.rax, c.ray);
     this._applyImpulse(c.b, lt * tx, lt * ty, c.rbx, c.rby);
+  }
+
+
+  /* Hooke-force springs (1.13.3). Soft constraints (stiffness < 0.99)
+     are NOT solved in the 30-iteration loop: 30 passes converge any
+     soft constraint to a rigid rod — measured on a hanging mass, a
+     0.05 spring settled exactly at rest length with zero oscillation
+     for every stiffness/damping value, stiffness effectively ignored.
+     Instead each soft constraint applies a real spring force once per
+     substep: F = -k*x - c*vn along its axis, at both anchor points
+     (off-centre anchors get torque, like the iterative solve). k comes
+     from stiffness (SPRING_K), c from damping scaled to the pair's
+     reduced mass so damping = 1 is ~critical for any spring/mass.
+     Sleeping/static bodies are skipped, same as _solveConstraint. */
+  _applySpringForces(h) {
+    for (const c of this._cons.values()) {
+      if (c.stiffness >= 0.99) continue;
+      const B = this._byId.get(c.bodyB);
+      if (!B) continue;
+      const A = c.bodyA ? this._byId.get(c.bodyA) : null;
+      const pa = this._anchorWorld(c, 'A'), pb = this._anchorWorld(c, 'B');
+      const dx = pb.x - pa.x, dy = pb.y - pa.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 1e-9) continue;
+      const nx = dx / dist, ny = dy / dist;
+      const C = dist - c.length;
+      const rax = A ? pa.x - A.position.x : 0, ray = A ? pa.y - A.position.y : 0;
+      const rbx = pb.x - B.position.x, rby = pb.y - B.position.y;
+      const ima = A ? this._invM(A) : 0, imb = this._invM(B);
+      const invRed = ima + imb;
+      if (invRed <= 0) continue;
+      const va = { x: 0, y: 0 }, vb = { x: 0, y: 0 };
+      if (A) this._pointVel(A, rax, ray, va);
+      this._pointVel(B, rbx, rby, vb);
+      const vn = (vb.x - va.x) * nx + (vb.y - va.y) * ny;
+      const k = c.stiffness * SPRING_K;
+      const cc = c.damping * SPRING_DAMP_F * Math.sqrt(k / invRed);
+      const J = (-k * C - cc * vn) * h;
+      if (A) this._applyImpulse(A, -J * nx, -J * ny, rax, ray);
+      this._applyImpulse(B, J * nx, J * ny, rbx, rby);
+    }
   }
 
   _solveConstraint(c) {

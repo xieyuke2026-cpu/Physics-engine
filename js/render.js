@@ -74,7 +74,7 @@ export class Renderer {
 
   draw(world, opts) {
     const { ctx, view, camera } = this;
-    const { selectedId = null, selectedFluidId = null, selectedWindId = null, selectedHingeId = null, selectedEmitterId = null, hinges = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null, goalZone = null, goalTarget = null } = opts;
+    const { selectedId = null, selectedFluidId = null, selectedWindId = null, selectedHingeId = null, selectedSpringId = null, selectedEmitterId = null, hinges = null, showGrid = true, showVectors = false, showTrails = false, preview = null, dragPoint = null, springPreview = null, blast = null, goalZone = null, goalTarget = null } = opts;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (this._cacheOff || !this._blitBackdrop(showGrid)) {
       ctx.fillStyle = '#fafafa';
@@ -120,7 +120,7 @@ export class Renderer {
     else for (const b of world.allBodies()) bodies.push(b);
     if (showTrails) this._trails(world, bodies);
     else if (this.trails.size) this.trails.clear();
-    for (const seg of world.constraintSegments(this._segs)) this._spring(seg);
+    for (const seg of world.constraintSegments(this._segs)) this._spring(seg, seg.id === selectedSpringId);
     // viewport culling: skip bodies fully outside the visible world rect
     const tl = camera.screenToWorld(0, 0, view);
     const br = camera.screenToWorld(view.w, view.h, view);
@@ -628,11 +628,11 @@ export class Renderer {
   }
 
   /** Spring drawn as a coil zig-zag; near-rigid constraints (stiffness >= 0.9) as a straight rod. */
-  _spring(seg) {
+  _spring(seg, selected = false) {
     const { ctx, camera } = this;
     const { a, b, stiffness } = seg;
-    ctx.strokeStyle = '#6d7278';
-    ctx.lineWidth = 1.4 / Math.sqrt(camera.zoom);
+    ctx.strokeStyle = selected ? COLORS.accent : '#6d7278';
+    ctx.lineWidth = (selected ? 2.4 : 1.4) / Math.sqrt(camera.zoom);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     if (stiffness >= 0.9) {
@@ -651,9 +651,10 @@ export class Renderer {
       ctx.lineTo(b.x, b.y);
     }
     ctx.stroke();
-    ctx.fillStyle = '#6d7278';
-    ctx.beginPath(); ctx.arc(a.x, a.y, 2.4 / Math.sqrt(camera.zoom), 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(b.x, b.y, 2.4 / Math.sqrt(camera.zoom), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = selected ? COLORS.accent : '#6d7278';
+    const dotR = (selected ? 3.6 : 2.4) / Math.sqrt(camera.zoom);
+    ctx.beginPath(); ctx.arc(a.x, a.y, dotR, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(b.x, b.y, dotR, 0, Math.PI * 2); ctx.fill();
   }
 
   _trails(world, bodies) {

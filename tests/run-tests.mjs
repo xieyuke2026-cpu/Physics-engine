@@ -220,7 +220,7 @@ check('stop motion zeroes velocity', lk.velocity.x === 0 && lk.velocity.y === 0 
 
 /* --- v1.1/v1.6: presets --- */
 const presets = presetScenes();
-check('twenty-one presets exist', presets.length === 21, `got ${presets.length}`);
+check('twenty-two presets exist', presets.length === 22, `got ${presets.length}`);
 for (const p of presets) {
   check(`preset ${p.key} validates`, validateScene(JSON.parse(JSON.stringify(p.scene))).ok);
 }
@@ -809,6 +809,23 @@ check('cradle balls stay suspended (none on ground)', wcr.allBodies().filter((b)
   check('console: drawer height clamps at the ceiling Ryan marked (45% of stage)', clampDrawerHeight(900, 1000) === 450);
   check('console: drawer height passes through inside the range', clampDrawerHeight(300, 1000) === 300);
   check('console: drawer height tolerates a missing stage size', clampDrawerHeight(300, 0) === 300);
+}
+
+/* --- v1.13.3: spring editor plumbing through PhysicsWorld --- */
+{
+  const w = new PhysicsWorld();
+  w.loadScene(sceneData({
+    bodies: [bodyData({ id: 'a', type: 'circle', x: 100, y: 100, radius: 15 })],
+    constraints: [constraintData({ bodyA: null, bodyB: 'a', pointA: { x: 100, y: 50 }, stiffness: 0.2, damping: 0.05, length: 50 })],
+  }));
+  const c = w.serializeConstraints()[0];
+  check('spring editor: setConstraintProp reaches the engine', w.setConstraintProp(c.id, 'stiffness', 0.7) === true && w.serializeConstraints()[0].stiffness === 0.7);
+  check('spring editor: constraintById finds the spring', w.constraintById(c.id) !== null && w.constraintById(c.id).stiffness === 0.7);
+  check('spring editor: unknown id returns false/null', w.setConstraintProp('nope', 'stiffness', 0.5) === false && w.constraintById('nope') === null);
+  check('spring editor: trampoline preset uses retuned stiff springs', (() => {
+    const t = presetScenes().find((p) => p.key === 'trampoline');
+    return t.scene.constraints.length === 7 && t.scene.constraints.every((x) => x.stiffness === 0.85);
+  })());
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
