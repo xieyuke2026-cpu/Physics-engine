@@ -1,11 +1,11 @@
 /* MotionLab jsdom smoke test — run: node tests/smoke.mjs
    Boots the real app (index.html DOM + js/app.js modules) with a stubbed 2D
    canvas context, then drives the actual UI: play, create, edit, save, undo.
-   jsdom is borrowed from the sibling webos project's node_modules. */
+   jsdom comes from the repo's own devDependencies (run npm install once). */
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 
-const require = createRequire('/home/hatch/workspace/webos/package.json');
+const require = createRequire(import.meta.url);
 const localRequire = createRequire(import.meta.url);
 const { JSDOM } = require('jsdom');
 

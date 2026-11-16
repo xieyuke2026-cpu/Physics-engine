@@ -31,7 +31,7 @@ python3 -m http.server 8000   # 然后打开 http://localhost:8000
 
 ## 跑测试
 
-需要 Node.js（仅测试用，应用本身零依赖、零构建）：
+需要 Node.js（仅测试用，应用本身零依赖、零构建）。首次跑测试前，先在仓库根目录装一次测试依赖：`npm install`（装好后不用重复装；CI 上用 `npm ci`）：
 
 ```bash
 cd tests

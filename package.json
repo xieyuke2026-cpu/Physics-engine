@@ -1,0 +1,8 @@
+{
+  "description": "Test dependencies only. The MotionLab app itself has zero dependencies and no build step.",
+  "devDependencies": {
+    "jsdom": "24.1.3"
+  },
+  "name": "motionlab",
+  "private": true
+}

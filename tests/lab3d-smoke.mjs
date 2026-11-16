@@ -5,7 +5,7 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 
-const require = createRequire('/home/hatch/workspace/webos/package.json');
+const require = createRequire(import.meta.url);
 const localRequire = createRequire(import.meta.url);
 const { JSDOM } = require('jsdom');
 
