@@ -1,0 +1,36 @@
+# MotionLab automated tests — runs on every push and pull request to main.
+# No build step: the app is dependency-free static files; only the tests need Node.
+# soak.mjs is intentionally excluded: it needs jsdom (npm install) and --expose-gc,
+# and its heap thresholds are tuned for local runs, not CI runners.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run test suites
+        working-directory: tests
+        run: |
+          node engine-tests.mjs
+          node engine3d-tests.mjs
+          node run-tests.mjs
+          node pf-smoke.mjs
+          node smoke.mjs
+          node nav-smoke.mjs
+          node landing-smoke.mjs
+          node pf-ui-smoke.mjs
+          node lab3d-smoke.mjs
+          node native-tests.mjs
+          node render-tests.mjs
+          node native-render.mjs
+          node spread-model.mjs
