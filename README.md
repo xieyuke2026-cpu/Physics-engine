@@ -7,7 +7,7 @@
 
 [![MotionLab 演示 — 万有引力轨道：两颗行星在两两引力下绕恒星运行（动画轨迹为 PhysicsEngine 实时模拟数据，点击在线试玩）](docs/demo.svg)](https://xieyuke2026-cpu.github.io/Physics-engine/)
 
-**📬 联系 / Contact**：反馈邮箱 **motionlabphysics@agent.qq.com**（由维护者的 AI 助手 Muse 收件、整理并转交） · Reddit [**u/MotionLab-Physics**](https://www.reddit.com/user/MotionLab-Physics)
+**📬 联系 / Contact**：反馈邮箱 **motionlabphysics@agent.qq.com** / **motionlab-@agentmail.to**（由维护者的 AI 助手 Muse 收件、整理并转交） · Reddit [**u/MotionLab-Physics**](https://www.reddit.com/user/MotionLab-Physics)
 
 ## English
 
@@ -17,7 +17,7 @@ It runs on **two switchable solver backends** behind one API: the battle-tested 
 
 Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics core designed for reuse in other projects (see *Reuse* below). A platform-fighter prototype, **PFLab**, is included as a demonstration of what the same API can build.
 
-- **Live demo**: https://xieyuke2026-cpu.github.io/Physics-engine/
+- **Live demo**: https://xieyuke2026-cpu.github.io/Physics-engine/ · Mirror (Cloudflare): https://physics-engine-4ep.pages.dev
 - **Examples**: [Orbital gravitation](https://xieyuke2026-cpu.github.io/Physics-engine/examples/orbit.html) · [Fluid buoyancy](https://xieyuke2026-cpu.github.io/Physics-engine/examples/buoyancy.html) · [Seeded Galton board](https://xieyuke2026-cpu.github.io/Physics-engine/examples/galton.html) · [Fluid spreading — dam breach](https://xieyuke2026-cpu.github.io/Physics-engine/examples/spread.html)
 - **Developer docs**: [docs/DEVELOPER-EN.md](docs/DEVELOPER-EN.md) （中文版：[docs/DEVELOPER.md](docs/DEVELOPER.md))
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md) · **License**: MIT
@@ -30,7 +30,7 @@ Its physics layer, **PhysicsEngine**, is a standalone open-source 2D physics cor
 Interactive · Responsive · Lightweight——黑白灰为主、低饱和蓝为强调色的科学软件风格，
 全部图标为统一线条风格的 SVG。
 
-- **在线试玩**：https://xieyuke2026-cpu.github.io/Physics-engine/
+- **在线试玩**：https://xieyuke2026-cpu.github.io/Physics-engine/ · Cloudflare 镜像：https://physics-engine-4ep.pages.dev
 - **本地运行**：任意静态服务器即可，如 `python3 -m http.server 8000`；无后端、无构建、无 API Key。
 - **开发者文档**：[docs/DEVELOPER.md](docs/DEVELOPER.md)（English: [docs/DEVELOPER-EN.md](docs/DEVELOPER-EN.md)）——PhysicsEngine 与 PF 引擎的完整 API 与接入方式。
 - **更新记录**：[CHANGELOG.md](CHANGELOG.md)（功能列表不再塞版本日志，历史都在那里）。
@@ -161,7 +161,7 @@ UI、物理引擎、场景管理三层分离：`ui.js` 不直接接触 Matter，
 
 ## 部署
 
-纯静态站点：仓库 Settings → Pages → Source 选 `Deploy from a branch`、分支 `main`、目录 `/ (root)` 即可，无需 Actions 构建。
+纯静态站点：仓库 Settings → Pages → Source 选 `Deploy from a branch`、分支 `main`、目录 `/ (root)` 即可，无需 Actions 构建。另有 Cloudflare Pages 部署（连接 GitHub 仓库自动部署）：https://physics-engine-4ep.pages.dev。
 
 ## 已知问题
 
@@ -180,8 +180,8 @@ UI、物理引擎、场景管理三层分离：`ui.js` 不直接接触 Matter，
 ## 联系与反馈 / Contact & Feedback
 
 - 功能建议、bug 反馈与玩法分享：Discussions、Issues，或发邮件到项目反馈邮箱
-  **motionlabphysics@agent.qq.com**（由维护者的 AI 助手 Muse 收件、整理并转交维护者）
+  **motionlabphysics@agent.qq.com** 或 **motionlab-@agentmail.to**（由维护者的 AI 助手 Muse 收件、整理并转交维护者）
 - For suggestions, bug reports, or ideas, you can also email the project inbox:
-  **motionlabphysics@agent.qq.com** (received and triaged by Muse, the maintainer's AI
+  **motionlabphysics@agent.qq.com** or **motionlab-@agentmail.to** (received and triaged by Muse, the maintainer's AI
   assistant, and forwarded to the maintainer)
 - Reddit：[u/MotionLab-Physics](https://www.reddit.com/user/MotionLab-Physics)（发帖与更新动态都在那里）
