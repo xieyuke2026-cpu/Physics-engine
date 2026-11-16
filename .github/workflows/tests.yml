@@ -1,7 +1,7 @@
 # MotionLab automated tests — runs on every push and pull request to main.
 # No build step: the app is dependency-free static files; only the tests need Node.
-# soak.mjs is intentionally excluded: it needs jsdom (npm install) and --expose-gc,
-# and its heap thresholds are tuned for local runs, not CI runners.
+# soak.mjs is intentionally excluded: it needs --expose-gc, and its heap
+# thresholds are tuned for local runs, not CI runners.
 name: Tests
 
 on:
@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install test dependencies
+        run: npm ci
       - name: Run test suites
         working-directory: tests
         run: |
