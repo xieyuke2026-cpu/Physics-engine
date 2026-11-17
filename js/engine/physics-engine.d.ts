@@ -92,7 +92,7 @@ export interface ConstraintDescriptor {
   pointA?: Vec;
   /** Local offset on B. */
   pointB?: Vec;
-  /** 0–1; ≥ 0.9 renders/acts as a rigid rod. */
+  /** 0–1; below 0.99 a Hooke-force spring, 0.99 and above a rigid rod. */
   stiffness?: number;
   damping?: number;
   /** Rest length (px); defaults to the current distance. */
@@ -382,8 +382,20 @@ export declare class PhysicsEngine {
   findNonFiniteBodies(): Body[];
 
   // ----- constraints & hinges -----
-  addConstraint(desc: ConstraintDescriptor): Constraint | null;
+  /**
+   * Adds a constraint. Rigid constraints (stiffness >= 0.99) return the
+   * Matter constraint; soft ones return a copy of the descriptor, since
+   * no Matter constraint is built for a Hooke-force spring.
+   */
+  addConstraint(desc: ConstraintDescriptor): Constraint | ConstraintDescriptor | null;
   removeConstraint(id: string): boolean;
+  /**
+   * Updates one constraint property (stiffness, damping or rest length),
+   * clamped to its valid range. Crossing the 0.99 stiffness boundary
+   * swaps the representation live (Matter constraint <-> Hooke spring).
+   * Returns false when no constraint with that id exists.
+   */
+  setConstraintProp(id: string, key: 'stiffness' | 'damping' | 'length', value: number): boolean;
   describeConstraints(): ConstraintDescriptor[];
   /** World-space segments for rendering, one per constraint. */
   constraintSegments(): { a: Vec; b: Vec; stiffness: number }[];
