@@ -67,7 +67,16 @@ check('renderer is drawing frames', drawCalls > 50, `drawCalls=${drawCalls}`);
 click(doc.getElementById('btnPlay'));
 await wait(2200); // jsdom rAF is throttled under load; the FPS check needs a full update window
 check('play: state becomes running', stState().includes('运行中'), stState());
-check('play: FPS counter live', /FPS [1-9]/.test(doc.getElementById('stFps').textContent), doc.getElementById('stFps').textContent);
+// The FPS text refreshes on a 500 ms window and jsdom rAF stalls under load,
+// so poll for it (up to ~6 s) instead of asserting after one fixed sleep.
+// A genuinely dead counter still fails, just after the deadline.
+let fpsText = '';
+for (let i = 0; i < 60 && !/FPS [1-9]/.test(fpsText); i++) {
+  fpsText = doc.getElementById('stFps').textContent;
+  if (/FPS [1-9]/.test(fpsText)) break;
+  await wait(100);
+}
+check('play: FPS counter live', /FPS [1-9]/.test(fpsText), fpsText);
 check('play: bodies still 9 after settling', stCount().includes('9'), stCount());
 click(doc.getElementById('btnPause'));
 await wait(60);
@@ -610,6 +619,12 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   check('v1.66: emitter tool button exists with an icon', !!emitterBtn && !!emitterBtn.querySelector('svg'));
   check('v1.66: emitter button sits in the create group after magnet',
     !!emitterBtn && emitterBtn.previousElementSibling?.dataset.tool === 'magnet');
+  // Pause first: a live emitter spawns at 4/s while the scene runs, so a
+  // spawned body can land between the count snapshot below and the checks
+  // and flip the count 9 -> 10 (flaky on ~half the runs). Paused, the
+  // emitter is inert and the count checks are deterministic.
+  click(doc.getElementById('btnPause'));
+  await wait(60);
   click(emitterBtn);
   await wait(40);
   check('v1.66: emitter hint shows', doc.getElementById('stageHint').textContent.includes('发射器'),
@@ -634,6 +649,7 @@ check('v1.24: language choice survives a factory reset', window.localStorage.get
   check('v1.66: delete tool removes the emitter (nothing to select there)',
     !doc.querySelector('input[data-key="eangle"]'));
   check('v1.66: delete tap removed no body (count unchanged)', stCount() === countBefore, `${countBefore} -> ${stCount()}`);
+  click(doc.getElementById('btnPlay')); // restore the running state
 }
 
 /* ---- v1.66: lossless drag recording (static contract) ----
