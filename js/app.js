@@ -32,9 +32,23 @@ const canvas = $('world');
 /* The solver backend is a device preference (1.41), not scene data:
    scenes stay solver-neutral and can be replayed on either engine. */
 function savedBackend() {
-  try { return localStorage.getItem('motionlab.backend') === 'native' ? 'native' : 'matter'; } catch { return 'matter'; }
+  try {
+    const id = localStorage.getItem('motionlab.backend');
+    return id === 'native' || id === 'native-jitter' ? id : 'matter';
+  } catch { return 'matter'; }
 }
-let world = new PhysicsWorld(savedBackend());
+/* Sleeping is a device preference too (1.70): the resting jitter is
+   only visible with sleeping off, so the setting lets the fork
+   backend's mitigation be tested in the app. Default on. */
+function sleepingEnabled() {
+  try { return localStorage.getItem('motionlab.sleeping') !== 'off'; } catch { return true; }
+}
+/** Display name for a backend id, from the engine registry (1.70). */
+function backendDisplayName(id) {
+  const b = PhysicsEngine.BACKENDS.find((x) => x.id === id);
+  return b ? b.name : id;
+}
+let world = new PhysicsWorld(savedBackend(), { enableSleeping: sleepingEnabled() });
 
 /* Console (1.61, read-only): mounted in init below; engine events are
    re-bound after every world recreation (backend switch / playback). */
@@ -1958,22 +1972,35 @@ $('btnDuplicateScene').addEventListener('click', () => {
 /** Switch the solver backend (1.41): persist the choice, rebuild the
  *  world on the new solver and replay the current scene into it. */
 function setEngineBackend(id) {
-  if (id !== 'matter' && id !== 'native') return;
+  if (id !== 'matter' && id !== 'native' && id !== 'native-jitter') return;
   try { localStorage.setItem('motionlab.backend', id); } catch { /* storage unavailable */ }
   if (world.core.backendId === id) return;
   const snap = currentScene();
-  world = new PhysicsWorld(id);
+  world = new PhysicsWorld(id, { enableSleeping: sleepingEnabled() });
   bindConsoleToWorld();
   loadScene(snap);
-  if (labConsole) labConsole.sys(t('console.sysBackend', { name: id === 'native' ? 'Impulse' : 'Matter.js' }));
+  if (labConsole) labConsole.sys(t('console.sysBackend', { name: backendDisplayName(id) }));
   resetHistory();
-  toast(t('msg.backendSwitched', { name: id === 'native' ? 'Impulse' : 'Matter.js' }));
+  toast(t('msg.backendSwitched', { name: backendDisplayName(id) }));
+}
+
+/** Switch sleeping on/off (1.70): persist, rebuild the world on the
+ *  same solver with the new setting and replay the current scene. */
+function setEngineSleeping(on) {
+  try { localStorage.setItem('motionlab.sleeping', on ? 'on' : 'off'); } catch { /* storage unavailable */ }
+  const snap = currentScene();
+  world = new PhysicsWorld(world.core.backendId, { enableSleeping: on });
+  bindConsoleToWorld();
+  loadScene(snap);
+  resetHistory();
 }
 
 function openSettings() {
   renderSettings($('settingsBody'), settings, {
     backendId: world.core.backendId,
+    sleepingEnabled: sleepingEnabled(),
     onEngineBackend(id) { setEngineBackend(id); },
+    onEngineSleep(on) { setEngineSleeping(on); },
     onUISetting(key, value) {
       settings[key] = value;
       scheduleAutosave();
@@ -2165,7 +2192,7 @@ function initChrome() {
     onToggle: () => bindConsoleToWorld(),
   });
   bindConsoleToWorld();
-  labConsole.sys(t('console.sysReady', { name: world.core.backendId === 'native' ? 'Impulse' : 'Matter.js' }));
+  labConsole.sys(t('console.sysReady', { name: backendDisplayName(world.core.backendId) }));
   $('btnConsole').addEventListener('click', () => labConsole.toggle());
   $('btnPanel').addEventListener('click', () => {
     const p = $('panel');
@@ -2536,7 +2563,7 @@ function exitPlayback() {
   const back = savedPlaybackBackend;
   world.endDrag();
   teardownPlayback();
-  if (back && world.core.backendId !== back) { world = new PhysicsWorld(back); bindConsoleToWorld(); }
+  if (back && world.core.backendId !== back) { world = new PhysicsWorld(back, { enableSleeping: sleepingEnabled() }); bindConsoleToWorld(); }
   if (restore) { try { loadScene(JSON.parse(restore)); } catch { /* keep current world */ } }
   refreshPanel();
 }
@@ -2550,7 +2577,7 @@ function openPlayback(rec) {
     savedPlaybackBackend = world.core.backendId;
   }
   setRunning(false);
-  if (world.core.backendId !== v.replay.backend) { world = new PhysicsWorld(v.replay.backend); bindConsoleToWorld(); }
+  if (world.core.backendId !== v.replay.backend) { world = new PhysicsWorld(v.replay.backend, { enableSleeping: sleepingEnabled() }); bindConsoleToWorld(); }
   if (v.replay.settings) {
     settings = { ...settings, ...v.replay.settings };
     world.applySettings(settings);

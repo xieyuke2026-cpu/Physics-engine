@@ -854,10 +854,11 @@ function galtonBins(seed) {
 
 /* --- v1.11.0/v1.12.0: backend registry; native experimental since 1.12.0 --- */
 {
-  check('backends: registry lists matter (active) + native/Impulse (stable since 1.12.10)',
-    Array.isArray(BACKENDS) && BACKENDS.length === 2
+  check('backends: registry lists matter (active) + native/Impulse (stable since 1.12.10) + native-jitter fork (experimental since 1.70)',
+    Array.isArray(BACKENDS) && BACKENDS.length === 3
     && BACKENDS[0].id === 'matter' && BACKENDS[0].status === 'active'
-    && BACKENDS[1].id === 'native' && BACKENDS[1].status === 'stable' && BACKENDS[1].name === 'Impulse');
+    && BACKENDS[1].id === 'native' && BACKENDS[1].status === 'stable' && BACKENDS[1].name === 'Impulse'
+    && BACKENDS[2].id === 'native-jitter' && BACKENDS[2].status === 'experimental' && BACKENDS[2].name === 'Impulse 缓解版');
   check('backends: class exposes the same registry', PhysicsEngine.BACKENDS === BACKENDS);
   const def = PhysicsEngine.create();
   check('backends: create() defaults to the matter backend', def instanceof PhysicsEngine && def.backendId === 'matter');

@@ -27,16 +27,19 @@ function mlToDesc(d) {
 }
 
 export class PhysicsWorld {
-  constructor(backend = 'matter') {
+  constructor(backend = 'matter', opts = {}) {
     // Sleeping on: resting stacks (pyramids, settled piles) stop costing CPU.
     // Bodies wake automatically on collision, edits and dragging.
     // substeps 2 = anti-tunnelling: fast bodies cannot jump thin colliders
     // (user dragging stays exempt — it is position-driven by design).
     // The solver is chosen through the registry (1.41): 'matter' is the
-    // default; 'native' is the self-developed experimental backend. The
+    // default; 'native' is the self-developed experimental backend;
+    // 'native-jitter' is its experimental mitigation fork (1.70). The
     // scene format is identical either way, so worlds can be rebuilt on
-    // the other solver and replayed.
-    this.core = PhysicsEngine.create({ backend, enableSleeping: true, substeps: 2 });
+    // the other solver and replayed. opts.enableSleeping defaults to
+    // true; the app passes its persisted sleep preference (1.70) so the
+    // resting jitter — visible only with sleeping off — can be tested.
+    this.core = PhysicsEngine.create({ backend, enableSleeping: opts.enableSleeping !== false, substeps: 2 });
     this.collisionFlash = 0;
     this.core.onCollision(() => { this.collisionFlash = performance.now(); });
   }

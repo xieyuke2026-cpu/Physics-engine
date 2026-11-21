@@ -207,7 +207,7 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.69')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.70')
   && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.3')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
@@ -231,9 +231,9 @@ check('console: log lines carry coloured text tags, no emoji (1.65)',
 
 {
   const sel = doc.querySelector('#settingsBody select');
-  check('v1.41: settings offers the backend picker (Matter default, Impulse stable)',
-    !!sel && sel.options.length === 2 && sel.value === 'matter'
-    && sel.textContent.includes('Impulse') && sel.textContent.includes('冲量'),
+  check('v1.41: settings offers the backend picker (Matter default, Impulse stable, jitter fork experimental)',
+    !!sel && sel.options.length === 3 && sel.value === 'matter'
+    && sel.textContent.includes('Impulse') && sel.textContent.includes('冲量') && sel.textContent.includes('缓解版'),
     sel ? sel.textContent : 'no select');
   sel.value = 'native';
   sel.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -245,6 +245,16 @@ check('console: log lines carry coloured text tags, no emoji (1.65)',
   check('v1.43: scene panel Engine row follows the live backend',
     (doc.querySelector('[data-ro="engine"]') || {}).textContent === 'Impulse（冲量 · 自研）',
     (doc.querySelector('[data-ro="engine"]') || {}).textContent);
+  sel.value = 'native-jitter';
+  sel.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(400);
+  check('v1.70: switching to the jitter fork persists the choice and keeps the scene',
+    window.localStorage.getItem('motionlab.backend') === 'native-jitter'
+    && /物体 [1-9]/.test(doc.getElementById('stCount').textContent),
+    window.localStorage.getItem('motionlab.backend') + ' / ' + doc.getElementById('stCount').textContent);
+  check('v1.70: scene panel Engine row follows the fork backend',
+    (doc.querySelector('[data-ro="engine"]') || {}).textContent === 'Impulse 缓解版',
+    (doc.querySelector('[data-ro="engine"]') || {}).textContent);
   sel.value = 'matter';
   sel.dispatchEvent(new window.Event('change', { bubbles: true }));
   await wait(120);
@@ -253,6 +263,18 @@ check('console: log lines carry coloured text tags, no emoji (1.65)',
   check('v1.43: scene panel Engine row returns to Matter.js',
     (doc.querySelector('[data-ro="engine"]') || {}).textContent === 'Matter.js',
     (doc.querySelector('[data-ro="engine"]') || {}).textContent);
+  const sleepBox = [...doc.querySelectorAll('#settingsBody input[type=checkbox]')].find((i) => i.closest('.switch-row')?.textContent.includes('睡眠'));
+  check('v1.70: settings offers the sleep switch (on by default)', !!sleepBox && sleepBox.checked === true, sleepBox ? String(sleepBox.checked) : 'no sleep switch');
+  sleepBox.checked = false;
+  sleepBox.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(400);
+  check('v1.70: switching sleep off persists the choice',
+    window.localStorage.getItem('motionlab.sleeping') === 'off', window.localStorage.getItem('motionlab.sleeping'));
+  sleepBox.checked = true;
+  sleepBox.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(400);
+  check('v1.70: switching sleep back on persists the choice',
+    window.localStorage.getItem('motionlab.sleeping') === 'on', window.localStorage.getItem('motionlab.sleeping'));
 }
 {
   // Stylesheet integrity guard: a truncated rule once left an unclosed block
