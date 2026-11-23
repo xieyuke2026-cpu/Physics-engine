@@ -33,12 +33,13 @@ export class PhysicsWorld {
     // substeps 2 = anti-tunnelling: fast bodies cannot jump thin colliders
     // (user dragging stays exempt — it is position-driven by design).
     // The solver is chosen through the registry (1.41): 'matter' is the
-    // default; 'native' is the self-developed experimental backend;
-    // 'native-jitter' is its experimental mitigation fork (1.70). The
-    // scene format is identical either way, so worlds can be rebuilt on
-    // the other solver and replayed. opts.enableSleeping defaults to
-    // true; the app passes its persisted sleep preference (1.70) so the
-    // resting jitter — visible only with sleeping off — can be tested.
+    // default; 'native' is the self-developed experimental backend
+    // (2x2 normal+friction block solve since engine 1.13.4, graduated
+    // from the 1.70 mitigation fork). The scene format is identical
+    // either way, so worlds can be rebuilt on the other solver and
+    // replayed. opts.enableSleeping defaults to true; the app passes
+    // its persisted sleep preference (1.70) so the resting jitter —
+    // visible only with sleeping off — can be tested.
     this.core = PhysicsEngine.create({ backend, enableSleeping: opts.enableSleeping !== false, substeps: 2 });
     this.collisionFlash = 0;
     this.core.onCollision(() => { this.collisionFlash = performance.now(); });

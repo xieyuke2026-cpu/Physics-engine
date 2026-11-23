@@ -272,7 +272,6 @@
    ========================================================================== */
 
 import { NativeEngine } from './native-engine.js';
-import { NativeEngineJitter } from './native-engine-jitter.js';
 
 let _M = null;
 function matter() {
@@ -307,7 +306,7 @@ const num = (v, fb) => (Number.isFinite(Number(v)) ? Number(v) : fb);
 export const BODY_KINDS = ['circle', 'rect', 'polygon'];
 
 /** PhysicsEngine core version — the single source of truth for the core. */
-export const VERSION = '1.13.3';
+export const VERSION = '1.13.4';
 
 /* ============================================================================
    Backends (1.11.0) — the solver behind this API is pluggable.
@@ -332,11 +331,7 @@ export const BACKENDS = [
   },
   {
     id: 'native', name: 'Impulse', status: 'stable', since: '1.12.0',
-    summary: 'A self-developed solver written for this API (sequential impulses, warm starting, sleeping, SAT + face-clipping contacts). Experimental since 1.12.0: covers the full API surface, validated by its own behaviour suite; Matter remains the default.',
-  },
-  {
-    id: 'native-jitter', name: 'Impulse 缓解版', status: 'experimental', since: '1.70',
-    summary: 'Fork of the Impulse solver (engine 1.13.3) with the 2x2 normal+friction block solve: the resting-stack creep is slower (pyramid topple ~3600 → ~6000 steps with sleeping off; 2-box 2400-step drift 41.9px → 12.0px). A mitigation, not a cure. Sleeping-on behaviour is unchanged.',
+    summary: 'A self-developed solver written for this API (sequential impulses with a 2x2 normal+friction block solve since 1.13.4, warm starting, sleeping, SAT + face-clipping contacts). Experimental since 1.12.0: covers the full API surface, validated by its own behaviour suite; Matter remains the default.',
   },
 ];
 
@@ -406,7 +401,6 @@ export class PhysicsEngine {
     const backend = opts.backend || 'matter';
     if (backend === 'matter') return new PhysicsEngine(opts);
     if (backend === 'native') return new NativeEngine(opts);
-    if (backend === 'native-jitter') return new NativeEngineJitter(opts);
     const known = BACKENDS.find((b) => b.id === backend);
     if (known) {
       throw new Error(`PhysicsEngine: backend "${backend}" (${known.name}) is registered but not available in ${VERSION} — status: ${known.status}`);

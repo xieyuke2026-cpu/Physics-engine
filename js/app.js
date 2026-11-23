@@ -34,17 +34,22 @@ const canvas = $('world');
 function savedBackend() {
   try {
     const id = localStorage.getItem('motionlab.backend');
-    return id === 'native' || id === 'native-jitter' ? id : 'matter';
+    // 1.71: the 1.70 mitigation fork graduated into the main engine —
+    // a stored 'native-jitter' choice becomes plain 'native'.
+    if (id === 'native-jitter') { try { localStorage.setItem('motionlab.backend', 'native'); } catch { /* storage unavailable */ } return 'native'; }
+    return id === 'native' ? id : 'matter';
   } catch { return 'matter'; }
 }
 /* Sleeping is a device preference too (1.70): the resting jitter is
-   only visible with sleeping off, so the setting lets the fork
-   backend's mitigation be tested in the app. Default on. */
+   only visible with sleeping off, so the setting lets the block-solve
+   mitigation (graduated from the 1.70 fork) be tested in the app.
+   Default on. */
 function sleepingEnabled() {
   try { return localStorage.getItem('motionlab.sleeping') !== 'off'; } catch { return true; }
 }
 /** Display name for a backend id, from the engine registry (1.70). */
 function backendDisplayName(id) {
+  if (id === 'native-jitter') id = 'native'; // 1.71: fork graduated
   const b = PhysicsEngine.BACKENDS.find((x) => x.id === id);
   return b ? b.name : id;
 }
@@ -1972,7 +1977,8 @@ $('btnDuplicateScene').addEventListener('click', () => {
 /** Switch the solver backend (1.41): persist the choice, rebuild the
  *  world on the new solver and replay the current scene into it. */
 function setEngineBackend(id) {
-  if (id !== 'matter' && id !== 'native' && id !== 'native-jitter') return;
+  if (id === 'native-jitter') id = 'native'; // 1.71: fork graduated
+  if (id !== 'matter' && id !== 'native') return;
   try { localStorage.setItem('motionlab.backend', id); } catch { /* storage unavailable */ }
   if (world.core.backendId === id) return;
   const snap = currentScene();

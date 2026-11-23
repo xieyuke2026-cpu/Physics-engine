@@ -18,7 +18,7 @@ const near = (a, b, eps = 2) => Math.abs(a - b) <= eps;
 
 /* --- basic creation + gravity through the fixed-step accumulator --- */
 const pe = new PhysicsEngine();
-check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.13.3');
+check('version: PhysicsEngine.VERSION matches the exported VERSION constant', PhysicsEngine.VERSION === VERSION && VERSION === '1.13.4');
 check('rigid machines get extra constraint iterations by default', new PhysicsEngine().engine.constraintIterations === 4);
 check('engine constructs with defaults', pe.count === 0 && pe.fixedDt === 1000 / 60);
 const ball = pe.addBody({ kind: 'circle', x: 100, y: 50, radius: 20 });
@@ -854,11 +854,10 @@ function galtonBins(seed) {
 
 /* --- v1.11.0/v1.12.0: backend registry; native experimental since 1.12.0 --- */
 {
-  check('backends: registry lists matter (active) + native/Impulse (stable since 1.12.10) + native-jitter fork (experimental since 1.70)',
-    Array.isArray(BACKENDS) && BACKENDS.length === 3
+  check('backends: registry lists matter (active) + native/Impulse (stable since 1.12.10)',
+    Array.isArray(BACKENDS) && BACKENDS.length === 2
     && BACKENDS[0].id === 'matter' && BACKENDS[0].status === 'active'
-    && BACKENDS[1].id === 'native' && BACKENDS[1].status === 'stable' && BACKENDS[1].name === 'Impulse'
-    && BACKENDS[2].id === 'native-jitter' && BACKENDS[2].status === 'experimental' && BACKENDS[2].name === 'Impulse 缓解版');
+    && BACKENDS[1].id === 'native' && BACKENDS[1].status === 'stable' && BACKENDS[1].name === 'Impulse');
   check('backends: class exposes the same registry', PhysicsEngine.BACKENDS === BACKENDS);
   const def = PhysicsEngine.create();
   check('backends: create() defaults to the matter backend', def instanceof PhysicsEngine && def.backendId === 'matter');
@@ -869,6 +868,9 @@ function galtonBins(seed) {
   let unknownErr = '';
   try { PhysicsEngine.create({ backend: 'bullet' }); } catch (e) { unknownErr = e.message; }
   check('backends: unknown backend id refuses', /unknown backend/.test(unknownErr), unknownErr);
+  let goneErr = '';
+  try { PhysicsEngine.create({ backend: 'native-jitter' }); } catch (e) { goneErr = e.message; }
+  check('backends: the 1.70 fork id is gone in 1.71 (unknown backend, not a silent fallback)', /unknown backend/.test(goneErr), goneErr);
   const sim = PhysicsEngine.create({ backend: 'matter' });
   sim.addBody({ kind: 'circle', x: 100, y: 0, radius: 10 });
   for (let i = 0; i < 60; i++) sim.advance(1000 / 60);

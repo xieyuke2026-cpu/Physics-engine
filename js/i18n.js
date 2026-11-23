@@ -219,7 +219,7 @@ const DICT = {
   'hub.whatsnew': ['本版更新', "What's New"],
   'hub.whatsnew.b1': ['弹簧振子调明显了：起摆拉得更开，第一摆接近 180px，无阻尼的球 10 秒后还在晃，三种阻尼的差别一眼看清', 'The Spring Oscillator swings bigger now: balls start further out, the first swing nears 180 px, and the undamped ball is still swinging past 10 seconds — the three dampings are easy to tell apart'],
   'hub.whatsnew.b2': ['弹簧编辑器底部那行摘要现在跟着滑块实时变了，不用重开面板', 'The summary line at the bottom of the spring editor now follows the sliders live, no need to reopen the panel'],
-  'hub.whatsnew.b3': ['全量测试 801 项通过；引擎仍是 PhysicsEngine 1.13.3，求解数值不变、旧回放不受影响', 'All 801 checks pass; engine stays PhysicsEngine 1.13.3, solver numerics unchanged — older replays are unaffected'],
+  'hub.whatsnew.b3': ['全量测试 797 项通过；引擎 PhysicsEngine 1.13.4（2x2 联立求解转正），求解数值有变、旧回放不再逐位复现', 'All 797 checks pass; engine PhysicsEngine 1.13.4 (2x2 block solve graduated), solver numerics changed — older replays no longer verify bit-exactly'],
   'hub.rel.now': ['刚刚', 'just now'],
   'hub.rel.min': ['{n} 分钟前', '{n} min ago'],
   'hub.rel.hour': ['{n} 小时前', '{n} hr ago'],

@@ -4,8 +4,9 @@
 
    Written from scratch for MotionLab 1.41: no physics library inside.
    Fixed-timestep simulation (advance / stepOnce, substeps split the
-   integration + collision pass), sequential-impulse contacts with
-   friction and restitution, distance constraints (Hooke-force springs
+   integration + collision pass), sequential-impulse contacts (normal + friction solved
+   together as a 2x2 block per contact point since 1.13.4) with
+   restitution, distance constraints (Hooke-force springs
    for soft constraints, iterative rods for rigid ones), revolute
    hinges with motors, sleeping, and the engine-level force
    models the API promises — pairwise gravitation, magnetism, fluid
@@ -34,6 +35,11 @@
    chain — touching path to a non-sleeping body, a constraint/hinge
    attachment, or a fluid overlap — are woken, so deleting or
    dragging away a support can no longer leave bodies hovering.
+   1.13.4 graduates the 1.70 fork's 2x2 block solve into the main
+   solver (the fork backend is deleted): resting-stack creep is slower
+   (pyramid topple ~3600 → ~6000 steps with sleeping off; 2-box
+   2400-step drift 41.9px → 12.0px) — a mitigation, not a cure.
+   Solver numerics changed; older replays no longer verify bit-exactly.
    Bodies expose the field shape
    the hosts read (position / velocity / angle / vertices / bounds /
    circleRadius / plugin.pe.desc), so existing renderers work as-is.
@@ -1844,24 +1850,94 @@ export class NativeEngine {
       c.imN = gKn > 0 ? 1 / gKn : 0;
       c.imT = gKt > 0 ? 1 / gKt : 0;
     }
-    let lambda = (c.biasVel - vn) * c.imN;
-    const newAcc = Math.max(0, c.accN + lambda);
-    lambda = newAcc - c.accN;
-    c.accN = newAcc;
-    this._applyImpulse(c.a, -lambda * c.nx, -lambda * c.ny, c.rax, c.ray);
-    this._applyImpulse(c.b, lambda * c.nx, lambda * c.ny, c.rbx, c.rby);
-    // Friction (Coulomb, clamped by the accumulated normal impulse).
-    this._pointVel(c.a, c.rax, c.ray, va);
-    this._pointVel(c.b, c.rbx, c.rby, vb);
+    // 1.13.4: wake-touch contacts keep the sequential solve. The
+    // 2x2 block solve couples friction to the pre-impulse velocity,
+    // so a violent first touch bites harder: fast chunked drag into
+    // a slept stack measures peak 63 (sequential 57, Matter 87) and
+    // launches a box to y=56 (sequential 250, Matter 172). Resting
+    // creep lives in persistent non-wake contacts, so the block
+    // solve still applies exactly where it is needed.
+    if (c.wakeTouch) {
+      let lambda = (c.biasVel - vn) * c.imN;
+      const newAcc = Math.max(0, c.accN + lambda);
+      lambda = newAcc - c.accN;
+      c.accN = newAcc;
+      this._applyImpulse(c.a, -lambda * c.nx, -lambda * c.ny, c.rax, c.ray);
+      this._applyImpulse(c.b, lambda * c.nx, lambda * c.ny, c.rbx, c.rby);
+      // Friction (Coulomb, clamped by the accumulated normal impulse).
+      this._pointVel(c.a, c.rax, c.ray, va);
+      this._pointVel(c.b, c.rbx, c.rby, vb);
+      const wtx = -c.ny, wty = c.nx;
+      const wvt = (vb.x - va.x) * wtx + (vb.y - va.y) * wty;
+      let lt = -wvt * c.imT;
+      const maxF = c.mu * c.accN;
+      const newAccT = clamp(c.accT + lt, -maxF, maxF);
+      lt = newAccT - c.accT;
+      c.accT = newAccT;
+      this._applyImpulse(c.a, -lt * wtx, -lt * wty, c.rax, c.ray);
+      this._applyImpulse(c.b, lt * wtx, lt * wty, c.rbx, c.rby);
+      return;
+    }
+    // 1.13.4: 2x2 block solve — graduated from the 1.70 fork backend
+    // (native-engine-jitter.js, now deleted). Normal + friction together.
+    // The sequential normal-then-friction solve leaves a systematic
+    // residual because the two are coupled through rotation: for a box
+    // corner contact Knt/Knn ~ 0.6, so each friction pass re-opens the
+    // normal constraint and vice versa. That residual is the resting
+    // creep driver (with box-box friction off, the 2-box stack is dead
+    // still: angle 0.000 at 2400 steps). Solving the 2x2 system
+    // [[Knn,Knt],[Knt,Ktt]] * [Jn,Jt] = [biasVel - vn, -vt] satisfies
+    // both at once; the accumulated clamps (accN >= 0, |accT| <=
+    // mu*accN) are kept, with one re-solve of the normal if friction
+    // clamps. Measured: pyramid topple ~3600 → ~6000 steps (sleep
+    // OFF), 2-box 2400-step drift 41.9px (toppled) → 12.0px.
     const tx = -c.ny, ty = c.nx;
     const vt = (vb.x - va.x) * tx + (vb.y - va.y) * ty;
-    let lt = -vt * c.imT;
-    const maxF = c.mu * c.accN;
-    const newAccT = clamp(c.accT + lt, -maxF, maxF);
-    lt = newAccT - c.accT;
-    c.accT = newAccT;
-    this._applyImpulse(c.a, -lt * tx, -lt * ty, c.rax, c.ray);
-    this._applyImpulse(c.b, lt * tx, lt * ty, c.rbx, c.rby);
+    const knn = c.imN > 0 ? 1 / c.imN : 0;
+    const ktt = c.imT > 0 ? 1 / c.imT : 0;
+    const iia = this._invI(c.a), iib = this._invI(c.b);
+    const raCn = c.rax * c.ny - c.ray * c.nx, rbCn = c.rbx * c.ny - c.rby * c.nx;
+    const raCt = c.rax * ty - c.ray * tx, rbCt = c.rbx * ty - c.rby * tx;
+    const knt = iia * raCn * raCt + iib * rbCn * rbCt;
+    const det = knn * ktt - knt * knt;
+    let jn, jt;
+    if (det > 1e-12 && knn > 0 && ktt > 0) {
+      const bN = c.biasVel - vn, bT = -vt;
+      jn = (bN * ktt - bT * knt) / det;
+      jt = (bT * knn - bN * knt) / det;
+      let newAcc = Math.max(0, c.accN + jn);
+      jn = newAcc - c.accN;
+      const maxF = c.mu * newAcc;
+      let newAccT = clamp(c.accT + jt, -maxF, maxF);
+      const jtClamped = newAccT - c.accT;
+      if (jtClamped !== jt) {
+        jt = jtClamped;
+        jn = (bN - knt * jt) / knn;
+        newAcc = Math.max(0, c.accN + jn);
+        jn = newAcc - c.accN;
+      }
+      c.accN = newAcc;
+      c.accT = newAccT;
+    } else {
+      // Degenerate effective mass: fall back to the sequential solve.
+      let lambda = (c.biasVel - vn) * c.imN;
+      const newAcc = Math.max(0, c.accN + lambda);
+      lambda = newAcc - c.accN;
+      c.accN = newAcc;
+      jn = lambda;
+      this._pointVel(c.a, c.rax, c.ray, va);
+      this._pointVel(c.b, c.rbx, c.rby, vb);
+      const vt2 = (vb.x - va.x) * tx + (vb.y - va.y) * ty;
+      let lt = -vt2 * c.imT;
+      const maxF = c.mu * c.accN;
+      const newAccT = clamp(c.accT + lt, -maxF, maxF);
+      lt = newAccT - c.accT;
+      c.accT = newAccT;
+      jt = lt;
+    }
+    const jx = jn * c.nx + jt * tx, jy = jn * c.ny + jt * ty;
+    this._applyImpulse(c.a, -jx, -jy, c.rax, c.ray);
+    this._applyImpulse(c.b, jx, jy, c.rbx, c.rby);
   }
 
 

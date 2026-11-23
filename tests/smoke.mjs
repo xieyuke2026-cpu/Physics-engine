@@ -207,8 +207,8 @@ await wait(80);
 const resetBtn = [...doc.querySelectorAll('#settingsBody .btn')].find((b) => b.textContent.includes('重置数据'));
 check('v1.11: settings shows the reset-data button', !!resetBtn);
 check('v1.13: About line shows all three versions (app / engine / Matter)',
-  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.70')
-  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.3')
+  doc.getElementById('settingsBody').textContent.includes('MotionLab 1.71')
+  && doc.getElementById('settingsBody').textContent.includes('PhysicsEngine 1.13.4')
   && doc.getElementById('settingsBody').textContent.includes('Matter.js 0.20.0')
   && doc.getElementById('settingsBody').textContent.includes('PFLab 1.1.0'),
   doc.getElementById('settingsBody').textContent.slice(-260));
@@ -231,9 +231,9 @@ check('console: log lines carry coloured text tags, no emoji (1.65)',
 
 {
   const sel = doc.querySelector('#settingsBody select');
-  check('v1.41: settings offers the backend picker (Matter default, Impulse stable, jitter fork experimental)',
-    !!sel && sel.options.length === 3 && sel.value === 'matter'
-    && sel.textContent.includes('Impulse') && sel.textContent.includes('冲量') && sel.textContent.includes('缓解版'),
+  check('v1.41: settings offers the backend picker (Matter default, Impulse stable)',
+    !!sel && sel.options.length === 2 && sel.value === 'matter'
+    && sel.textContent.includes('Impulse') && sel.textContent.includes('冲量'),
     sel ? sel.textContent : 'no select');
   sel.value = 'native';
   sel.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -244,16 +244,6 @@ check('console: log lines carry coloured text tags, no emoji (1.65)',
     window.localStorage.getItem('motionlab.backend') + ' / ' + doc.getElementById('stCount').textContent);
   check('v1.43: scene panel Engine row follows the live backend',
     (doc.querySelector('[data-ro="engine"]') || {}).textContent === 'Impulse（冲量 · 自研）',
-    (doc.querySelector('[data-ro="engine"]') || {}).textContent);
-  sel.value = 'native-jitter';
-  sel.dispatchEvent(new window.Event('change', { bubbles: true }));
-  await wait(400);
-  check('v1.70: switching to the jitter fork persists the choice and keeps the scene',
-    window.localStorage.getItem('motionlab.backend') === 'native-jitter'
-    && /物体 [1-9]/.test(doc.getElementById('stCount').textContent),
-    window.localStorage.getItem('motionlab.backend') + ' / ' + doc.getElementById('stCount').textContent);
-  check('v1.70: scene panel Engine row follows the fork backend',
-    (doc.querySelector('[data-ro="engine"]') || {}).textContent === 'Impulse 缓解版',
     (doc.querySelector('[data-ro="engine"]') || {}).textContent);
   sel.value = 'matter';
   sel.dispatchEvent(new window.Event('change', { bubbles: true }));

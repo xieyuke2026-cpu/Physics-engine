@@ -8,7 +8,7 @@ import { PF_VERSION } from './pf/pf-config.js';
 import { L, getLang } from './i18n.js';
 
 /** MotionLab app version — the single source of truth for the app version. */
-export const APP_VERSION = '1.70';
+export const APP_VERSION = '1.71';
 
 const fmt = (n, d = 2) => {
   const v = Number(n);
@@ -103,7 +103,7 @@ export class Panel {
     // The scene panel's Engine row names the CURRENT solver backend
     // (app.js keeps panel.backendId in sync) — it used to hardcode
     // "Matter.js", which stayed wrong after switching to Native.
-    return this.backendId === 'native-jitter' ? L('Impulse 缓解版', 'Impulse (jitter mitigation)') : this.backendId === 'native' ? L('Impulse（冲量 · 自研）', 'Impulse (self-developed)') : 'Matter.js';
+    return this.backendId === 'native' ? L('Impulse（冲量 · 自研）', 'Impulse (self-developed)') : 'Matter.js';
   }
 
   showScene(settings, bodies, fluids, winds, emitters) {
